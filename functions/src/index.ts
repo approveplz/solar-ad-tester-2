@@ -16,10 +16,10 @@ const metaAdCreatorService = new MetaAdCreatorService({
     appSecret: process.env.FACEBOOK_APP_SECRET || '',
     accessToken: process.env.FACEBOOK_ACCESS_TOKEN || '',
     accountId: process.env.FACEBOOK_ACCOUNT_ID || '',
-    apiVersion: '19.0',
+    apiVersion: '20.0',
 });
 
-export const handleCreateAdFromUIClick = onRequest(
+export const createAdFromClick = onRequest(
     {
         cors: true,
         timeoutSeconds: 60,
@@ -75,8 +75,6 @@ export const handleCreateAdFromUIClick = onRequest(
                     name: `${adCreativeId}-Campaign-UI-Click`,
                 });
 
-            console.log({ campaign });
-
             //@ts-ignore
             const {
                 scrapedAdInfo,
@@ -95,9 +93,9 @@ export const handleCreateAdFromUIClick = onRequest(
             // });
 
             res.status(200).send({ code: 'CREATED' });
-        } catch (e) {
-            console.log(e);
-            res.status(500).send(e);
+        } catch (error) {
+            console.log(error);
+            res.status(500).send(error);
         }
     }
 );

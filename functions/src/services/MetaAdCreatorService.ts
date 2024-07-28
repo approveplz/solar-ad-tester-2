@@ -64,7 +64,7 @@ export default class MetaAdCreatorService {
 
         this.adAccount = new AdAccount(`act_${this.accountId}`);
 
-        console.log('Initialized FacebookAdsCreatorService');
+        console.log('Initialized MetaAdCreatorService');
     }
 
     async createVideoAdAndAddToCampaign(params: {
