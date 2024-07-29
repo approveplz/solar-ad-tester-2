@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ad Campaign Form</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Ad Campaign Form</h1>
+        <form id="adCampaignForm">
+            <h2>Campaign Params</h2>
+            <label for="objective">Objective:</label>
+            <input type="text" id="objective" name="objective">
+            
+            <label for="status">Status:</label>
+            <input type="text" id="status" name="status">
+            
+            <h2>Ad Set Params</h2>
+            <label for="bidAmountCents">Bid Amount (Cents):</label>
+            <input type="number" id="bidAmountCents" name="bidAmountCents">
+            
+            <label for="states">States:</label>
+            <input type="text" id="states" name="states">
+            
+            <label for="dailyBudgetCents">Daily Budget (Cents):</label>
+            <input type="number" id="dailyBudgetCents" name="dailyBudgetCents">
+            
+            <label for="bidStrategy">Bid Strategy:</label>
+            <input type="text" id="bidStrategy" name="bidStrategy">
+            
+            <label for="optimizationGoal">Optimization Goal:</label>
+            <input type="text" id="optimizationGoal" name="optimizationGoal">
+            
+            <label for="billingEvent">Billing Event:</label>
+            <input type="text" id="billingEvent" name="billingEvent">
+            
+            <label for="zipcodes">Zipcodes:</label>
+            <input type="text" id="zipcodes" name="zipcodes">
+            
+            <h2>Promoted Object Params</h2>
+            <label for="pixelId">Pixel ID:</label>
+            <input type="text" id="pixelId" name="pixelId">
+            
+            <label for="customEventType">Custom Event Type:</label>
+            <input type="text" id="customEventType" name="customEventType">
+            
+            <h2>Object Story Spec Params</h2>
+            <label for="pageId">Page ID:</label>
+            <input type="text" id="pageId" name="pageId">
+            
+            <label for="instagramActorId">Instagram Actor ID:</label>
+            <input type="text" id="instagramActorId" name="instagramActorId">
+            
+            <label for="videoTitle">Video Title:</label>
+            <input type="text" id="videoTitle" name="videoTitle">
+            
+            <label for="message">Message:</label>
+            <input type="text" id="message" name="message">
+            
+            <label for="linkDescription">Link Description:</label>
+            <input type="text" id="linkDescription" name="linkDescription">
+            
+            <label for="callToActionType">Call to Action Type:</label>
+            <input type="text" id="callToActionType" name="callToActionType">
+            
+            <label for="callToActionValue">Call to Action Value:</label>
+            <input type="text" id="callToActionValue" name="callToActionValue">
+            
+            <button type="button" id="submitButton">Send Data</button>
+        </form>
+    </div>
+    <script src="./script.js" type="module"></script>
+</body>
+</html>
