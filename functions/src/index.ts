@@ -19,7 +19,7 @@ const metaAdCreatorService = new MetaAdCreatorService({
     apiVersion: '20.0',
 });
 
-export const createAdFromClick = onRequest(
+export const createAdFromClickRequest = onRequest(
     {
         cors: true,
         timeoutSeconds: 60,
