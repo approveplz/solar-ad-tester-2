@@ -33,7 +33,6 @@ import { saveFbAdSettings, getFbAdSettings } from './firebase.js';
 //     },
 // };
 
-
 function showButtonSpinner(button) {
     button.innerHTML = '<span class="spinner"></span> Saving...';
     button.classList.add('loading');
@@ -43,7 +42,6 @@ function hideButtonSpinner(button) {
     button.innerHTML = 'Save Changes';
     button.classList.remove('loading');
 }
-
 
 function populateForm(data) {
     document.getElementById('objective').value = data.campaignParams.objective;
@@ -84,10 +82,15 @@ async function main() {
     const fbAdSettings = await getFbAdSettings(uuid);
     populateForm(fbAdSettings);
 
-    document
-        .getElementById('submitButton')
-        .addEventListener('click', async function () {
-            const fbAdSettings = {
+    const submitButton = document.getElementById('submitButton');
+
+    submitButton.addEventListener('click', async function () {
+        // Disable the button and show spinner
+        submitButton.disabled = true;
+        showButtonSpinner(submitButton);
+
+        try {
+            const updatedFbAdSettings = {
                 campaignParams: {
                     objective: document.getElementById('objective').value,
                     status: document.getElementById('status').value,
@@ -126,20 +129,20 @@ async function main() {
                     },
                 },
             };
-            console.log(fbAdSettings);
-            await saveFbAdSettings(uuid, fbAdSettings);
+            console.log(updatedFbAdSettings);
+            await saveFbAdSettings(uuid, updatedFbAdSettings);
 
-            // fetch('YOUR_SERVER_URL', {
-            //     method: 'POST',
-            //     headers: {
-            //         'Content-Type': 'application/json',
-            //     },
-            //     body: JSON.stringify(adCampaign),
-            // })
-            //     .then((response) => response.json())
-            //     .then((data) => console.log('Success:', data))
-            //     .catch((error) => console.error('Error:', error));
-        });
+            // Show success alert
+            alert('Changes saved successfully!');
+        } catch (error) {
+            console.error('Error saving ad settings:', error);
+            alert('Error saving changes. Please try again.');
+        } finally {
+            // Hide spinner and re-enable the button
+            hideButtonSpinner(submitButton);
+            submitButton.disabled = false;
+        }
+    });
 }
 
-main();
+document.addEventListener('DOMContentLoaded', main);

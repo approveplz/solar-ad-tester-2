@@ -34,6 +34,7 @@ export async function saveFbAdSettings(uuid, fbAdSettings) {
         );
     } catch (error) {
         console.error(`Error adding document: ${error}`);
+        throw error;
     }
 }
 
