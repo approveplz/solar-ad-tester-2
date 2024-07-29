@@ -21,7 +21,7 @@ import {
     FbApiCreateCampaignRequest,
     FbApiCreateAdVideoRequest,
     PromotedObject,
-} from '../models/IMetaAdCreatorService';
+} from '../models/MetaApiSchema';
 import { ParsedFbAdInfo } from '../models/ParsedFbAdInfo';
 import { CreatedFbAdInfo } from '../models/CreatedFbAdInfo';
 
