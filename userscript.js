@@ -7,6 +7,7 @@
 // @run-at       document-start
 // @grant        GM_xmlhttpRequest
 // @connect      127.0.0.1
+// @connect      createadfromclickrequest-txyabkufvq-uc.a.run.app
 // ==/UserScript==
 
 // Will need to add domain of prod cloud function
@@ -14,8 +15,11 @@
 (function () {
     'use strict';
 
+    // const CLOUD_FUNCTION_URL =
+    //     'http://127.0.0.1:5001/solar-ad-tester/us-central1/handleCreateAdFromUIClick';
+
     const CLOUD_FUNCTION_URL =
-        'http://127.0.0.1:5001/solar-ad-tester/us-central1/handleCreateAdFromUIClick';
+        'https://createadfromclickrequest-txyabkufvq-uc.a.run.app';
 
     const DUPLICATE = 'DUPLICATE';
 
