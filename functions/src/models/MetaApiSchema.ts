@@ -8,32 +8,35 @@ export interface FbApiCreateAdVideoRequest {
 
 export interface FbApiCreateCampaignRequest {
     name: string;
-    objective: 'OUTCOME_LEADS';
+    objective: string;
     bid_strategy?: string;
     daily_budget?: string;
     special_ad_categories: string[];
-    status: 'PAUSED';
+    status: string;
     promoted_object?: PromotedObject;
 }
-
 // https://developers.facebook.com/docs/marketing-api/reference/ad-campaign/#fields
 export interface FbApiCreateAdSetRequest {
     name: string;
     campaign_id: string;
     bid_amount: string;
-    billing_event: 'IMPRESSIONS';
-    start_time: string;
-    bid_strategy: 'COST_CAP' | 'LOWEST_COST_WITH_BID_CAP';
-    end_time: string;
-    optimization_goal: 'OFFSITE_CONVERSIONS' | 'IMPRESSIONS'; // TODO: remove impressions after testing
-    status: 'PAUSED';
-    targeting: FbApiAdSetTargeting;
-    is_dynamic_creative: boolean;
-    // Only one: either daily_budget OR lifetime_budget
+    billing_event: string;
+    start_time?: string;
+    bid_strategy?: string;
+    end_time?: string;
+    optimization_goal: string;
+    status?: string;
+    targeting?: FbApiAdSetTargeting;
+    is_dynamic_creative?: boolean;
+    /* Only one: either daily_budget OR lifetime_budget */
     lifetime_budget?: string;
     daily_budget?: string;
     destination_type?: string;
     promoted_object?: PromotedObject; // TODO: change back to required after testing
+    attribution_spec?: {
+        event_type: string;
+        window_days: number;
+    }[];
 }
 
 export interface FbApiCreateAdRequest {
@@ -42,7 +45,7 @@ export interface FbApiCreateAdRequest {
     creative: {
         creative_id: string;
     };
-    status?: 'PAUSED';
+    status?: string;
 }
 
 // Facebook API Objects
@@ -52,10 +55,12 @@ export interface FbApiAdSetTargeting {
     age_min: number;
     excluded_custom_audiences?: { id: string }[];
     geo_locations?: {
-        // Countries and Regions cant overlap
-        countries?: string[];
-        regions?: {
+        zips: {
             key: string;
+            name: string;
+            primary_city_id: number;
+            region_id: number;
+            country: string;
         }[];
     };
     targeting_automation?: {
@@ -65,8 +70,7 @@ export interface FbApiAdSetTargeting {
 }
 
 export interface FbApiAdCreativeObjStorySpec {
-    page_id: string;
-    // TODO: add this back in after testing?
+    page_id?: string;
     instagram_actor_id?: string;
     video_data: {
         video_id: string;
@@ -82,8 +86,8 @@ export interface FbApiAdCreativeObjStorySpec {
         };
     };
 }
-
 export interface PromotedObject {
     pixel_id: string;
-    custom_event_type: 'LEAD';
+    custom_event_type: string;
+    page_id?: string;
 }

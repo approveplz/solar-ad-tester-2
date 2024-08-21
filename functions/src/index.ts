@@ -3,9 +3,20 @@ import { initializeApp } from 'firebase-admin/app';
 import { config } from 'dotenv';
 import MetaAdCreatorService from './services/MetaAdCreatorService.js';
 import { ParsedFbAdInfo } from './models/ParsedFbAdInfo';
-// @ts-ignore
 import { CreatedFbAdInfo } from './models/CreatedFbAdInfo';
-import { Campaign } from 'facebook-nodejs-business-sdk';
+import {
+    Ad,
+    AdCreative,
+    AdSet,
+    AdVideo,
+    //@ts-ignore
+    Campaign,
+} from 'facebook-nodejs-business-sdk';
+import {
+    //@ts-ignore
+    getFbAdSettingFirestore,
+    saveFbAdFirestore,
+} from './firestoreCloud.js';
 
 config();
 
@@ -28,7 +39,6 @@ export const createAdFromClickRequest = onRequest(
     async (req, res) => {
         const {
             adArchiveId,
-            adCreativeId,
             videoHdUrl,
             videoSdUrl,
             videoPreviewImageUrl,
@@ -44,10 +54,8 @@ export const createAdFromClickRequest = onRequest(
             publisherPlatform,
         } = req.body;
 
-        //@ts-ignore
         const scrapedAd: ParsedFbAdInfo = {
             adArchiveId,
-            adCreativeId,
             videoHdUrl,
             videoSdUrl,
             videoPreviewImageUrl,
@@ -70,27 +78,102 @@ export const createAdFromClickRequest = onRequest(
             //     return;
             // }
 
-            const campaign: Campaign =
-                await metaAdCreatorService.createCampaign({
-                    name: `${adCreativeId}-Campaign-UI-Click`,
-                });
+            const campaignParams = {
+                objective: 'OUTCOME_LEADS',
+                status: 'PAUSED',
+            };
 
-            //@ts-ignore
-            const {
-                scrapedAdInfo,
-                createdFbAdInfo,
-            }: {
-                scrapedAdInfo: ParsedFbAdInfo;
-                createdFbAdInfo: CreatedFbAdInfo;
-            } = await metaAdCreatorService.createVideoAdAndAddToCampaign({
-                campaign,
-                scrapedAd,
+            const promotedObjectParams = {
+                pixelId: '700671091822152',
+                customEventType: 'LEAD',
+                pageId: '117903068075583',
+            };
+
+            const adSetParams = {
+                bidAmountCents: 2200,
+                optimizationGoal: 'OFFSITE_CONVERSIONS',
+                billingEvent: 'IMPRESSIONS',
+                dailyBudgetCents: '2000',
+                lifetimeBudgetCents: '2000',
+                bidStrategy: 'COST_CAP',
+            };
+
+            const ctaLinkValue =
+                'https://www.greenenergycollective.org/s/no-cost-solar-v3';
+            const videoMessage = `Homeowners, would you trade 30 seconds for $8,500?
+
+The recently revamped "2024 Solar Incentive Program" means you can now have solar panels installed at no cost on your roof, and make a major cut in your energy bills
+
+All you have to do is click the link below to find out if you qualify (takes 30 seconds or less)
+
+${ctaLinkValue}`;
+
+            const adCreativeParams = {
+                videoTitle:
+                    'Homeowners In Your Area Are Getting Paid to Go Solar',
+                videoMessage,
+                linkDescription: 'Less than 30 seconds to Qualify',
+                ctaType: 'LEARN_MORE',
+                ctaLinkValue,
+            };
+
+            const fbAdSettings = {
+                campaignParams,
+                promotedObjectParams,
+                adSetParams,
+                adCreativeParams,
+            };
+
+            // Create Campaign
+
+            // const campaignName = `[facebook] - [Solar] - [AZ] - [MOM] - [ALL] - [SOLAR-SHS-V3] - APP - 1`;
+            // const campaign: Campaign =
+            //     await metaAdCreatorService.createCampaign({
+            //         name: campaignName,
+            //         fbAdSettings,
+            //     });
+
+            // const campaignId = campaign.id; // Campaign ID if we create it here
+            // const campaignId = '120210470839980108'; // Real Campaign ID
+            const campaignId = '120210773404130108'; // Test Campaign ID
+
+            const adSetNameAndAdName = `AZ-S-${scrapedAd.adArchiveId}`;
+
+            const adSet: AdSet = await metaAdCreatorService.createAdSet({
+                name: adSetNameAndAdName,
+                campaignId,
+                fbAdSettings,
             });
 
-            // await saveFbSolarAdFirestore({
-            //     scrapedAdInfo,
-            //     createdFbAdInfo,
-            // });
+            // Create Ad Video
+            const adVideo: AdVideo = await metaAdCreatorService.uploadAdVideo({
+                scrapedAdArchiveId: scrapedAd.adArchiveId,
+                videoFileUrl: scrapedAd.videoHdUrl || scrapedAd.videoSdUrl,
+            });
+
+            const adCreative: AdCreative =
+                await metaAdCreatorService.createAdCreative({
+                    name: `Creative-${adSetNameAndAdName}`,
+                    video: adVideo,
+                    imageUrl: scrapedAd.videoPreviewImageUrl,
+                    fbAdSettings,
+                });
+
+            const ad: Ad = await metaAdCreatorService.createAd({
+                name: adSetNameAndAdName,
+                adSet,
+                adCreative,
+            });
+
+            const createdFbAd: CreatedFbAdInfo = {
+                campaignId,
+                adSetId: adSet.id,
+                creativeId: adCreative.id,
+                adId: ad.id,
+                videoId: adVideo.id,
+            };
+
+            await saveFbAdFirestore('SOLAR', scrapedAd, createdFbAd);
 
             res.status(200).send({ code: 'CREATED' });
         } catch (error) {
