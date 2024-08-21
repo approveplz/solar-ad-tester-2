@@ -55,6 +55,6 @@ export async function saveFbAdFirestore(
 
     return await db
         .collection(collectionName)
-        .doc(createdFbAdInfo.adId)
+        .doc(scrapedFbAdInfo.adArchiveId)
         .set(data);
 }
