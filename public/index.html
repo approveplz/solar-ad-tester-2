@@ -12,10 +12,20 @@
         <form id="adCampaignForm">
             <h2>Campaign Params</h2>
             <label for="objective">Objective:</label>
-            <input type="text" id="objective" name="objective">
+            <select id="objective" name="objective">
+                <option value="AWARENESS">Awareness</option>
+                <option value="TRAFFIC">Traffic</option>
+                <option value="ENGAGEMENT">Engagement</option>
+                <option value="OUTCOME_LEADS">Outcome Leads</option>
+                <option value="APP_INSTALLS">App Installs</option>
+                <option value="CONVERSIONS">Conversions</option>
+            </select>
             
             <label for="status">Status:</label>
-            <input type="text" id="status" name="status">
+            <select id="status" name="status">
+                <option value="ACTIVE">Active</option>
+                <option value="PAUSED">Paused</option>
+            </select>
             
             <h2>Ad Set Params</h2>
             <label for="bidAmountCents">Bid Amount (Cents):</label>
@@ -28,13 +38,30 @@
             <input type="number" id="dailyBudgetCents" name="dailyBudgetCents">
             
             <label for="bidStrategy">Bid Strategy:</label>
-            <input type="text" id="bidStrategy" name="bidStrategy">
+            <select id="bidStrategy" name="bidStrategy">
+                <option value="LOWEST_COST_WITHOUT_CAP">Lowest Cost without Cap</option>
+                <option value="LOWEST_COST_WITH_BID_CAP">Lowest Cost with Bid Cap</option>
+                <option value="COST_CAP">Cost Cap</option>
+            </select>
             
             <label for="optimizationGoal">Optimization Goal:</label>
-            <input type="text" id="optimizationGoal" name="optimizationGoal">
+            <select id="optimizationGoal" name="optimizationGoal">
+                <option value="APP_INSTALLS">App Installs</option>
+                <option value="IMPRESSIONS">Impressions</option>
+                <option value="LINK_CLICKS">Link Clicks</option>
+                <option value="REACH">Reach</option>
+                <option value="POST_ENGAGEMENT">Post Engagement</option>
+                <option value="PAGE_LIKES">Page Likes</option>
+                <option value="OFFSITE_CONVERSIONS">Offsite Conversions</option>
+            </select>
             
             <label for="billingEvent">Billing Event:</label>
-            <input type="text" id="billingEvent" name="billingEvent">
+            <select id="billingEvent" name="billingEvent">
+                <option value="IMPRESSIONS">Impressions</option>
+                <option value="LINK_CLICKS">Link Clicks</option>
+                <option value="APP_INSTALLS">App Installs</option>
+                <option value="CONVERSIONS">Conversions</option>
+            </select>
             
             <label for="zipcodes">Zipcodes:</label>
             <input type="text" id="zipcodes" name="zipcodes">
