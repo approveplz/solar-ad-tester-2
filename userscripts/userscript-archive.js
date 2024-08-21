@@ -15,17 +15,18 @@
 (function () {
     'use strict';
 
-    // const CLOUD_FUNCTION_URL =
-    //     'http://127.0.0.1:5001/solar-ad-tester/us-central1/handleCreateAdFromUIClick';
-
     const CLOUD_FUNCTION_URL =
-        'https://createadfromclickrequest-txyabkufvq-uc.a.run.app';
+        'http://127.0.0.1:5001/solar-ad-tester-2/us-central1/createAdFromClickRequest';
+
+    // const CLOUD_FUNCTION_URL =
+    //     'https://createadfromclickrequest-txyabkufvq-uc.a.run.app';
 
     const DUPLICATE = 'DUPLICATE';
 
     const adsFromSearchApi = {};
 
     enhanceXMLHttpRequest();
+    console.log('XMLHttpRequest successfully enhanced');
 
     // Setup the observer to detect video elements
     window.addEventListener('load', setupObserver);
@@ -37,10 +38,12 @@
         const originalXMLOpen = XMLHttpRequest.prototype.open;
 
         XMLHttpRequest.prototype.open = function (method, url) {
+            console.log(`XMLHttpRequest opened: ${method} ${url}`);
             if (
                 method.toUpperCase() === 'POST' &&
                 url.includes('/ads/library/async/search_ads/')
             ) {
+                console.log('Matching XMLHttpRequest found');
                 this.addEventListener(
                     'load',
                     // this is the XMLHttpRequest object
