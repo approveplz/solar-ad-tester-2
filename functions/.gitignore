@@ -15,3 +15,6 @@ node_modules/
 # Firebase
 ui-debug.log
 firebase-debug.log
+
+# service key for using cloud storage in cloud functions
+solar-ad-tester-2-firebase-adminsdk-3iokc-bd8ce8732d.json
