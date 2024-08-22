@@ -17,7 +17,7 @@ import {
     FbApiCreateCampaignRequest,
     FbApiCreateAdVideoRequest,
     PromotedObject,
-} from '../models/MetaApiSchema';
+} from '../models/MetaApiSchema.js';
 
 export default class MetaAdCreatorService {
     // @ts-ignore
