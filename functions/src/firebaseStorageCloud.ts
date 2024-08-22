@@ -3,7 +3,7 @@ import stream from 'stream';
 import { getStorage } from 'firebase-admin/storage';
 
 export async function uploadVideoToStorage(
-    destFileName: string,
+    destFileName: string, // Must include filetype, ex: .mp4
     uploadFileUri: string
 ) {
     console.log(
@@ -45,5 +45,7 @@ export async function uploadVideoToStorage(
         throw error;
     }
 
-    return { destFileName, uploadFileUri };
+    const fileCloudStorageUri = `gs://solar-ad-tester-2.appspot.com/${destFileName}`;
+
+    return { fileCloudStorageUri, uploadFileUri };
 }

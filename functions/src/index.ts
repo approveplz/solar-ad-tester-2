@@ -173,20 +173,21 @@ ${ctaLinkValue}`;
                 adCreative,
             });
 
+            const { fileCloudStorageUri } = await uploadVideoToStorage(
+                `${adSetNameAndAdName}.mp4`,
+                scrapedVideoFileUrl
+            );
+
             const createdFbAd: CreatedFbAdInfo = {
                 campaignId,
                 adSetId: adSet.id,
                 creativeId: adCreative.id,
                 adId: ad.id,
                 videoId: adVideo.id,
+                videoCloudStorageUri: fileCloudStorageUri,
             };
 
             await saveFbAdFirestore('SOLAR', scrapedAd, createdFbAd);
-
-            await uploadVideoToStorage(
-                `${adSetNameAndAdName}.mp4`,
-                scrapedVideoFileUrl
-            );
 
             res.status(200).send({ code: 'CREATED' });
         } catch (error) {
