@@ -1,9 +1,10 @@
 import { onRequest } from 'firebase-functions/v2/https';
-import { initializeApp } from 'firebase-admin/app';
+import { initializeApp, cert } from 'firebase-admin/app';
+import serviceAccount from './solar-ad-tester-2-firebase-adminsdk-3iokc-bd8ce8732d.json' assert { type: 'json' };
 import { config } from 'dotenv';
 import MetaAdCreatorService from './services/MetaAdCreatorService.js';
-import { ParsedFbAdInfo } from './models/ParsedFbAdInfo';
-import { CreatedFbAdInfo } from './models/CreatedFbAdInfo';
+import { ParsedFbAdInfo } from './models/ParsedFbAdInfo.js';
+import { CreatedFbAdInfo } from './models/CreatedFbAdInfo.js';
 import {
     Ad,
     AdCreative,
@@ -17,10 +18,14 @@ import {
     getFbAdSettingFirestore,
     saveFbAdFirestore,
 } from './firestoreCloud.js';
+import { uploadVideoToStorage } from './firebaseStorageCloud.js';
 
 config();
 
-initializeApp();
+initializeApp({
+    credential: cert(serviceAccount as any),
+    storageBucket: 'solar-ad-tester-2.appspot.com',
+});
 
 const metaAdCreatorService = new MetaAdCreatorService({
     appId: process.env.FACEBOOK_APP_ID || '',
@@ -132,10 +137,10 @@ ${ctaLinkValue}`;
             //         name: campaignName,
             //         fbAdSettings,
             //     });
-
             // const campaignId = campaign.id; // Campaign ID if we create it here
-            // const campaignId = '120210470839980108'; // Real Campaign ID
-            const campaignId = '120210773404130108'; // Test Campaign ID
+
+            const campaignId = '120210470839980108'; // Real Campaign ID
+            // const campaignId = '120210773404130108'; // Test Campaign ID
 
             const adSetNameAndAdName = `AZ-S-${scrapedAd.adArchiveId}`;
 
@@ -145,10 +150,13 @@ ${ctaLinkValue}`;
                 fbAdSettings,
             });
 
+            const scrapedVideoFileUrl =
+                scrapedAd.videoHdUrl || scrapedAd.videoSdUrl;
+
             // Create Ad Video
             const adVideo: AdVideo = await metaAdCreatorService.uploadAdVideo({
                 scrapedAdArchiveId: scrapedAd.adArchiveId,
-                videoFileUrl: scrapedAd.videoHdUrl || scrapedAd.videoSdUrl,
+                videoFileUrl: scrapedVideoFileUrl,
             });
 
             const adCreative: AdCreative =
@@ -174,6 +182,11 @@ ${ctaLinkValue}`;
             };
 
             await saveFbAdFirestore('SOLAR', scrapedAd, createdFbAd);
+
+            await uploadVideoToStorage(
+                `${adSetNameAndAdName}.mp4`,
+                scrapedVideoFileUrl
+            );
 
             res.status(200).send({ code: 'CREATED' });
         } catch (error) {
