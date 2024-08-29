@@ -10,7 +10,8 @@
         "target": "ES2022",
         "resolveJsonModule": true,
         "allowSyntheticDefaultImports": true,
-        "skipLibCheck": true
+        "skipLibCheck": true,
+        "esModuleInterop": true
     },
     "compileOnSave": true,
     "include": ["src"],
