@@ -14,10 +14,12 @@ export async function generateVideoHash(
 ) {
     const response = await fetch(videoUrl);
     if (!response.ok) {
-        throw new Error();
+        throw new Error(
+            `HTTP error: ${response.status} ${response.statusText}`
+        );
     }
     if (!response.body) {
-        throw new Error();
+        throw new Error('Network error: Response body is null');
     }
 
     const readableStream = Readable.from(response.body);
@@ -55,6 +57,12 @@ export async function generateVideoHash(
             })
             .on('error', (error) => {
                 console.error(`Output stream error`, error);
+                reject(error);
             });
+
+        readableStream.on('error', (error) => {
+            console.error(`Imput stream error`, error);
+            reject(error);
+        });
     });
 }
