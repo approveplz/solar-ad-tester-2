@@ -4,5 +4,7 @@ export interface CreatedFbAdInfo {
     creativeId: string;
     videoId: string;
     adId: string;
+    adSetName: string;
     videoCloudStorageUri: string;
+    videoHash: string;
 }
