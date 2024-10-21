@@ -8,94 +8,79 @@
 </head>
 <body>
     <div class="container">
-        <h1>Ad Campaign Form</h1>
-        <form id="adCampaignForm">
-            <h2>Campaign Params</h2>
-            <label for="objective">Objective:</label>
-            <select id="objective" name="objective">
-                <option value="AWARENESS">Awareness</option>
-                <option value="TRAFFIC">Traffic</option>
-                <option value="ENGAGEMENT">Engagement</option>
-                <option value="OUTCOME_LEADS">Outcome Leads</option>
-                <option value="APP_INSTALLS">App Installs</option>
-                <option value="CONVERSIONS">Conversions</option>
+        <h1>Ad Settings Form</h1>
+        <form id="adSettingsForm">
+            <h2>Promoted Object Params</h2>
+            <label for="pixelId">Pixel ID:</label>
+            <input type="text" id="pixelId" name="promotedObjectParams.pixelId">
+            
+            <label for="customEventType">Custom Event Type:</label>
+            <select id="customEventType" name="promotedObjectParams.customEventType">
+                <option value="PURCHASE">Purchase</option>
             </select>
             
-            <label for="status">Status:</label>
-            <select id="status" name="status">
-                <option value="ACTIVE">Active</option>
-                <option value="PAUSED">Paused</option>
-            </select>
+            <label for="pageId">Page ID:</label>
+            <input type="text" id="pageId" name="promotedObjectParams.pageId">
             
             <h2>Ad Set Params</h2>
             <label for="bidAmountCents">Bid Amount (Cents):</label>
-            <input type="number" id="bidAmountCents" name="bidAmountCents">
-            
-            <label for="states">States:</label>
-            <input type="text" id="states" name="states">
-            
-            <label for="dailyBudgetCents">Daily Budget (Cents):</label>
-            <input type="number" id="dailyBudgetCents" name="dailyBudgetCents">
-            
-            <label for="bidStrategy">Bid Strategy:</label>
-            <select id="bidStrategy" name="bidStrategy">
-                <option value="LOWEST_COST_WITHOUT_CAP">Lowest Cost without Cap</option>
-                <option value="LOWEST_COST_WITH_BID_CAP">Lowest Cost with Bid Cap</option>
-                <option value="COST_CAP">Cost Cap</option>
-            </select>
+            <input type="number" id="bidAmountCents" name="adSetParams.bidAmountCents">
             
             <label for="optimizationGoal">Optimization Goal:</label>
-            <select id="optimizationGoal" name="optimizationGoal">
+            <select id="optimizationGoal" name="adSetParams.optimizationGoal">
+                <option value="OFFSITE_CONVERSIONS" selected>Offsite Conversions</option>
                 <option value="APP_INSTALLS">App Installs</option>
                 <option value="IMPRESSIONS">Impressions</option>
                 <option value="LINK_CLICKS">Link Clicks</option>
                 <option value="REACH">Reach</option>
                 <option value="POST_ENGAGEMENT">Post Engagement</option>
                 <option value="PAGE_LIKES">Page Likes</option>
-                <option value="OFFSITE_CONVERSIONS">Offsite Conversions</option>
             </select>
             
             <label for="billingEvent">Billing Event:</label>
-            <select id="billingEvent" name="billingEvent">
-                <option value="IMPRESSIONS">Impressions</option>
+            <select id="billingEvent" name="adSetParams.billingEvent">
+                <option value="IMPRESSIONS" selected>Impressions</option>
                 <option value="LINK_CLICKS">Link Clicks</option>
                 <option value="APP_INSTALLS">App Installs</option>
                 <option value="CONVERSIONS">Conversions</option>
             </select>
             
-            <label for="zipcodes">Zipcodes:</label>
-            <input type="text" id="zipcodes" name="zipcodes">
+            <label for="dailyBudgetCents">Daily Budget (Cents):</label>
+            <input type="number" id="dailyBudgetCents" name="adSetParams.dailyBudgetCents">
             
-            <h2>Promoted Object Params</h2>
-            <label for="pixelId">Pixel ID:</label>
-            <input type="text" id="pixelId" name="pixelId">
+            <!-- <label for="lifetimeBudgetCents">Lifetime Budget (Cents):</label>
+            <input type="number" id="lifetimeBudgetCents" name="adSetParams.lifetimeBudgetCents"> -->
             
-            <label for="customEventType">Custom Event Type:</label>
-            <input type="text" id="customEventType" name="customEventType">
+            <label for="bidStrategy">Bid Strategy:</label>
+            <select id="bidStrategy" name="adSetParams.bidStrategy">
+                <option value="COST_CAP" selected>Cost Cap</option>
+                <option value="LOWEST_COST_WITHOUT_CAP">Lowest Cost without Cap</option>
+                <option value="LOWEST_COST_WITH_BID_CAP">Lowest Cost with Bid Cap</option>
+            </select>
             
-            <h2>Object Story Spec Params</h2>
-            <label for="pageId">Page ID:</label>
-            <input type="text" id="pageId" name="pageId">
-            
-            <label for="instagramActorId">Instagram Actor ID:</label>
-            <input type="text" id="instagramActorId" name="instagramActorId">
-            
+            <h2>Ad Creative Params</h2>
             <label for="videoTitle">Video Title:</label>
-            <input type="text" id="videoTitle" name="videoTitle">
+            <input type="text" id="videoTitle" name="adCreativeParams.videoTitle">
             
-            <label for="message">Message:</label>
-            <input type="text" id="message" name="message">
+            <label for="videoMessage">Video Message:</label>
+            <textarea id="videoMessage" name="adCreativeParams.videoMessage" rows="12"></textarea>
             
             <label for="linkDescription">Link Description:</label>
-            <input type="text" id="linkDescription" name="linkDescription">
+            <input type="text" id="linkDescription" name="adCreativeParams.linkDescription">
             
-            <label for="callToActionType">Call to Action Type:</label>
-            <input type="text" id="callToActionType" name="callToActionType">
+            <label for="ctaType">Call to Action Type:</label>
+            <select id="ctaType" name="adCreativeParams.ctaType">
+                <option value="LEARN_MORE" selected>Learn More</option>
+            </select>
             
-            <label for="callToActionValue">Call to Action Value:</label>
-            <input type="text" id="callToActionValue" name="callToActionValue">
+            <label for="ctaLinkValue">Call to Action Link Value:</label>
+            <input type="text" id="ctaLinkValue" name="adCreativeParams.ctaLinkValue">
             
-            <button type="button" id="submitButton">Send Data</button>
+            <div class="button-container">
+                <button type="button" id="editButton" class="edit-button">Edit</button>
+                <button type="button" id="cancelEditButton" class="cancel-edit-button" style="display: none;">Cancel Edit</button>
+                <button type="button" id="saveButton" class="save-button" style="display: none;">Save Changes</button>
+            </div>
         </form>
     </div>
     <script src="./script.js" type="module"></script>

@@ -82,3 +82,48 @@ button:hover {
     0% { transform: translate(-50%, -50%) rotate(0deg); }
     100% { transform: translate(-50%, -50%) rotate(360deg); }
 }
+
+/* added styles MAYBE remove */
+
+textarea {
+    resize: vertical;
+}
+
+.button-container {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 20px;
+}
+
+.edit-button,
+.cancel-edit-button,
+.save-button {
+    flex: 1;
+    margin: 0 5px;
+    padding: 10px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.edit-button {
+    background-color: #4CAF50;
+    color: white;
+}
+
+.cancel-edit-button {
+    background-color: #f44336;
+    color: white;
+}
+
+.save-button {
+    background-color: #2196F3;
+    color: white;
+}
+
+.edit-button:hover,
+.cancel-edit-button:hover,
+.save-button:hover {
+    opacity: 0.8;
+}

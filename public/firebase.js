@@ -25,12 +25,13 @@ const db = getFirestore(app);
 // Cant share code between client and cloud functions. Too lazy to setup a symbolic link
 const FB_AD_SETTINGS_COLLECTION = 'fb-ad-settings';
 
-export async function saveFbAdSettings(uuid, fbAdSettings) {
+export async function saveFbAdSettings(adType, fbAdSettings) {
     try {
-        const docRef = doc(db, FB_AD_SETTINGS_COLLECTION, uuid);
+        const docRef = doc(db, FB_AD_SETTINGS_COLLECTION, adType);
         await setDoc(docRef, fbAdSettings);
         console.log(
-            `Document written with ID: ${docRef.id}. Data: ${fbAdSettings}`
+            `Document written with ID: ${docRef.id}. Data:`,
+            fbAdSettings
         );
     } catch (error) {
         console.error(`Error adding document: ${error}`);
@@ -38,14 +39,14 @@ export async function saveFbAdSettings(uuid, fbAdSettings) {
     }
 }
 
-export async function getFbAdSettings(uuid) {
-    const docRef = doc(db, FB_AD_SETTINGS_COLLECTION, uuid);
+export async function getFbAdSettings(adType) {
+    const docRef = doc(db, FB_AD_SETTINGS_COLLECTION, adType);
     const docSnap = await getDoc(docRef);
 
     if (docSnap.exists()) {
         return docSnap.data();
     } else {
-        console.log(`Do data exists for uuid: ${uuid}`);
+        console.log(`No data exists for adType: ${adType}`);
         return null;
     }
 }
