@@ -10,24 +10,32 @@
     <div class="container">
         <h1>Ad Settings Form</h1>
         <form id="adSettingsForm">
+            <div class="ad-type-container">
+                <label for="adType">Ad Type:</label>
+                <select id="adType" name="adType" class="ad-type-select">
+                    <option value="O" selected>Ozempic</option>
+                    <option value="S">Solar</option>
+                </select>
+            </div>
+
             <h2>Promoted Object Params</h2>
             <label for="pixelId">Pixel ID:</label>
-            <input type="text" id="pixelId" name="promotedObjectParams.pixelId">
+            <input type="text" id="pixelId" name="promotedObjectParams.pixelId" class="adParam">
             
             <label for="customEventType">Custom Event Type:</label>
-            <select id="customEventType" name="promotedObjectParams.customEventType">
+            <select id="customEventType" name="promotedObjectParams.customEventType" class="adParam">
                 <option value="PURCHASE">Purchase</option>
             </select>
             
             <label for="pageId">Page ID:</label>
-            <input type="text" id="pageId" name="promotedObjectParams.pageId">
+            <input type="text" id="pageId" name="promotedObjectParams.pageId" class="adParam">
             
             <h2>Ad Set Params</h2>
             <label for="bidAmountCents">Bid Amount (Cents):</label>
-            <input type="number" id="bidAmountCents" name="adSetParams.bidAmountCents">
+            <input type="number" id="bidAmountCents" name="adSetParams.bidAmountCents" class="adParam">
             
             <label for="optimizationGoal">Optimization Goal:</label>
-            <select id="optimizationGoal" name="adSetParams.optimizationGoal">
+            <select id="optimizationGoal" name="adSetParams.optimizationGoal" class="adParam">
                 <option value="OFFSITE_CONVERSIONS" selected>Offsite Conversions</option>
                 <option value="APP_INSTALLS">App Installs</option>
                 <option value="IMPRESSIONS">Impressions</option>
@@ -38,7 +46,7 @@
             </select>
             
             <label for="billingEvent">Billing Event:</label>
-            <select id="billingEvent" name="adSetParams.billingEvent">
+            <select id="billingEvent" name="adSetParams.billingEvent" class="adParam">
                 <option value="IMPRESSIONS" selected>Impressions</option>
                 <option value="LINK_CLICKS">Link Clicks</option>
                 <option value="APP_INSTALLS">App Installs</option>
@@ -46,44 +54,44 @@
             </select>
             
             <label for="dailyBudgetCents">Daily Budget (Cents):</label>
-            <input type="number" id="dailyBudgetCents" name="adSetParams.dailyBudgetCents">
+            <input type="number" id="dailyBudgetCents" name="adSetParams.dailyBudgetCents" class="adParam">
             
             <!-- <label for="lifetimeBudgetCents">Lifetime Budget (Cents):</label>
             <input type="number" id="lifetimeBudgetCents" name="adSetParams.lifetimeBudgetCents"> -->
             
             <label for="bidStrategy">Bid Strategy:</label>
-            <select id="bidStrategy" name="adSetParams.bidStrategy">
+            <select id="bidStrategy" name="adSetParams.bidStrategy" class="adParam">
                 <option value="COST_CAP" selected>Cost Cap</option>
                 <option value="LOWEST_COST_WITHOUT_CAP">Lowest Cost without Cap</option>
                 <option value="LOWEST_COST_WITH_BID_CAP">Lowest Cost with Bid Cap</option>
             </select>
             
             <label for="targetingAgeMin">Minimum Target Age:</label>
-            <input type="number" id="targetingAgeMin" name="adSetParams.adSetTargeting.age_min" min="18" max="100">
+            <input type="number" id="targetingAgeMin" name="adSetParams.adSetTargeting.age_min" min="18" max="100" class="adParam">
             
             <label for="targetingAgeMax">Maximum Target Age:</label>
-            <input type="number" id="targetingAgeMax" name="adSetParams.adSetTargeting.age_max" min="18" max="100">
+            <input type="number" id="targetingAgeMax" name="adSetParams.adSetTargeting.age_max" min="18" max="100" class="adParam">
             
             <h2>Ad Creative Params</h2>
             <label for="videoTitle">Headline:</label>
-            <input type="text" id="videoTitle" name="adCreativeParams.videoTitle">
+            <input type="text" id="videoTitle" name="adCreativeParams.videoTitle" class="adParam">
             
             <label for="videoMessage">Primary Text:</label>
-            <textarea id="videoMessage" name="adCreativeParams.videoMessage" rows="20"></textarea>
+            <textarea id="videoMessage" name="adCreativeParams.videoMessage" rows="20" class="adParam"></textarea>
             
             <label for="linkDescription">Link Description:</label>
-            <input type="text" id="linkDescription" name="adCreativeParams.linkDescription">
+            <input type="text" id="linkDescription" name="adCreativeParams.linkDescription" class="adParam">
             
             <label for="urlTrackingTags">URL Tracking Tags:</label>
-            <textarea id="urlTrackingTags" name="adCreativeParams.urlTrackingTags" rows="4"></textarea>
+            <textarea id="urlTrackingTags" name="adCreativeParams.urlTrackingTags" rows="4" class="adParam"></textarea>
             
             <label for="ctaType">Call to Action Type:</label>
-            <select id="ctaType" name="adCreativeParams.ctaType">
+            <select id="ctaType" name="adCreativeParams.ctaType" class="adParam">
                 <option value="LEARN_MORE" selected>Learn More</option>
             </select>
             
             <label for="ctaLinkValue">Website URL:</label>
-            <input type="text" id="ctaLinkValue" name="adCreativeParams.ctaLinkValue">
+            <input type="text" id="ctaLinkValue" name="adCreativeParams.ctaLinkValue" class="adParam">
             
             <div class="button-container">
                 <button type="button" id="editButton" class="edit-button">Edit</button>
@@ -94,4 +102,4 @@
     </div>
     <script src="./script.js" type="module"></script>
 </body>
-</html> 
+</html>

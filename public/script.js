@@ -1,13 +1,122 @@
 import { saveFbAdSettings, getFbAdSettings } from './firebase.js';
 
-function showButtonSpinner(button) {
-    button.innerHTML = '<span class="spinner"></span> Saving...';
-    button.classList.add('loading');
+// State variables
+let formState = 'NOT_EDITABLE';
+let currentFormData = {};
+let currentAdType;
+
+// DOM elements
+const form = document.getElementById('adSettingsForm');
+const editButton = document.getElementById('editButton');
+const cancelEditButton = document.getElementById('cancelEditButton');
+const saveButton = document.getElementById('saveButton');
+
+// Add this new function at the top of the file, after the imports
+function handleError(error, customMessage = 'An error occurred') {
+    console.error(customMessage, error);
+    alert(`${customMessage}: ${error.message}`);
 }
 
-function hideButtonSpinner(button) {
-    button.innerHTML = 'Save Changes';
-    button.classList.remove('loading');
+async function handleSaveButtonClick(event) {
+    event.preventDefault();
+    console.log('Save button clicked');
+    const saveButton = event.target;
+
+    saveButton.disabled = true;
+    showButtonSpinner(saveButton);
+
+    try {
+        const updatedFbAdSettings = getFormData();
+
+        // Add campaign params. These dont change
+        updatedFbAdSettings.campaignParams = {
+            objective: 'OUTCOME_SALES',
+            status: 'ACTIVE',
+        };
+
+        console.log(updatedFbAdSettings);
+        await saveFbAdSettings(currentAdType, updatedFbAdSettings);
+        currentFormData = deepCopyFbAdSettings(updatedFbAdSettings);
+
+        updateFormUI(false);
+        alert('Changes saved successfully!');
+    } catch (error) {
+        handleError(error, 'Error saving ad settings');
+    } finally {
+        hideButtonSpinner(saveButton);
+        saveButton.disabled = false;
+    }
+}
+
+async function init() {
+    console.log('Initializing page');
+    try {
+        const adTypeSelect = document.getElementById('adType');
+        const saveButton = document.getElementById('saveButton');
+        const editButton = document.getElementById('editButton');
+        const cancelEditButton = document.getElementById('cancelEditButton');
+
+        if (!adTypeSelect || !saveButton || !editButton || !cancelEditButton) {
+            throw new Error(
+                'One or more required elements not found in the DOM'
+            );
+        }
+
+        adTypeSelect.addEventListener('change', handleAdTypeChange);
+        saveButton.addEventListener('click', handleSaveButtonClick);
+        editButton.addEventListener('click', toggleEditMode);
+        cancelEditButton.addEventListener('click', cancelEdit);
+
+        currentAdType = adTypeSelect.value;
+        console.log('Initial currentAdType:', currentAdType);
+
+        await loadAdSettings();
+        console.log('Ad settings loaded successfully');
+
+        // updateFormUI(false);
+
+        console.log('Initial state set');
+    } catch (error) {
+        handleError(error, 'Error during page load setup');
+    }
+}
+
+window.addEventListener('load', init);
+
+async function loadAdSettings() {
+    try {
+        const fbAdSettings = await getFbAdSettings(currentAdType);
+        populateForm(fbAdSettings);
+        currentFormData = deepCopyFbAdSettings(fbAdSettings);
+    } catch (error) {
+        handleError(error, 'Error loading ad settings');
+        resetFormParams(); // Reset form params on error
+    }
+}
+
+async function handleAdTypeChange(event) {
+    try {
+        currentAdType = event.target.value;
+        console.log({ currentAdType });
+        await loadAdSettings();
+    } catch (error) {
+        handleError(error, 'Error changing ad type');
+    }
+}
+
+/* 
+Helper functions 
+*/
+
+function updateFormUI(isEditable) {
+    console.log('Updating form UI, isEditable:', isEditable);
+    setFormEditable(isEditable);
+
+    editButton.style.display = isEditable ? 'none' : 'block';
+    cancelEditButton.style.display = isEditable ? 'block' : 'none';
+    saveButton.style.display = isEditable ? 'block' : 'none';
+
+    formState = isEditable ? 'EDITABLE' : 'NOT_EDITABLE';
 }
 
 function populateForm(data) {
@@ -51,60 +160,12 @@ function populateForm(data) {
     // setValue('zipcodes', data.adSetParams?.zipcodes?.join(','));
     // setValue('instagramActorId', data.objectStorySpecParams?.instagramActorId);
 
-    // Set form to non-editable state after populating
-    setFormEditable(false);
+    updateFormUI(false);
 }
-
-async function handleSaveButtonClick(event) {
-    event.preventDefault();
-    console.log('Save button clicked');
-    const saveButton = event.target;
-
-    saveButton.disabled = true;
-    showButtonSpinner(saveButton);
-
-    try {
-        const updatedFbAdSettings = getFormData();
-
-        // Add campaign params (if needed)
-        updatedFbAdSettings.campaignParams = {
-            objective: 'OUTCOME_SALES',
-            status: 'ACTIVE',
-        };
-
-        console.log(updatedFbAdSettings);
-        const adType = 'O'; // Replace with the actual ad type you want to use
-        await saveFbAdSettings(adType, updatedFbAdSettings);
-        currentFormData = deepCopyFbAdSettings(updatedFbAdSettings);
-
-        alert('Changes saved successfully!');
-
-        // Return to edit button state
-        formState = 'NOT_EDITABLE';
-        editButton.style.display = 'block';
-        cancelEditButton.style.display = 'none';
-        saveButton.style.display = 'none';
-        setFormEditable(false);
-    } catch (error) {
-        console.error('Error saving ad settings:', error);
-        alert(`Error: ${error.message}.`);
-    } finally {
-        hideButtonSpinner(saveButton);
-        saveButton.disabled = false;
-    }
-}
-
-const form = document.getElementById('adSettingsForm');
-const editButton = document.getElementById('editButton');
-const cancelEditButton = document.getElementById('cancelEditButton');
-const saveButton = document.getElementById('saveButton');
-
-let formState = 'NOT_EDITABLE';
-let currentFormData = {};
 
 function setFormEditable(editable) {
     console.log('Setting form editable to:', editable);
-    const inputs = form.querySelectorAll('input, select, textarea');
+    const inputs = form.querySelectorAll('.adParam');
     inputs.forEach((input) => {
         input.disabled = !editable;
     });
@@ -113,121 +174,17 @@ function setFormEditable(editable) {
 function toggleEditMode() {
     console.log(`Edit button clicked, formState: ${formState}`);
     if (formState === 'NOT_EDITABLE') {
-        formState = 'EDITABLE';
-        editButton.style.display = 'none';
-        cancelEditButton.style.display = 'block';
-        saveButton.style.display = 'block';
-        setFormEditable(true);
+        updateFormUI(true);
         currentFormData = deepCopyFbAdSettings(getFormData());
     } else {
-        formState = 'NOT_EDITABLE';
-        editButton.style.display = 'block';
-        cancelEditButton.style.display = 'none';
-        saveButton.style.display = 'none';
-        setFormEditable(false);
+        updateFormUI(false);
     }
 }
 
 function cancelEdit() {
-    formState = 'NOT_EDITABLE';
-    editButton.style.display = 'block';
-    cancelEditButton.style.display = 'none';
-    saveButton.style.display = 'none';
-    setFormEditable(false);
+    updateFormUI(false);
     populateForm(currentFormData);
 }
-
-editButton.addEventListener('click', toggleEditMode);
-cancelEditButton.addEventListener('click', cancelEdit);
-saveButton.addEventListener('click', handleSaveButtonClick);
-
-// Store the original form data when the page loads
-let originalFormData;
-window.addEventListener('load', async () => {
-    const adType = 'S'; // Replace with the actual ad type you want to use
-    const fbAdSettings = await getFbAdSettingFirestore(adType);
-    populateForm(fbAdSettings);
-    originalFormData = deepCopyFbAdSettings(fbAdSettings);
-});
-
-function logButtonStatus() {
-    const editButton = document.getElementById('editButton');
-    const saveButton = document.getElementById('saveButton');
-    console.log(
-        'Edit button display:',
-        editButton ? editButton.style.display : 'not found'
-    );
-    console.log(
-        'Save button display:',
-        saveButton ? saveButton.style.display : 'not found'
-    );
-    console.log('Form state:', formState);
-}
-
-async function main() {
-    console.log('Main function started');
-    const adType = 'O'; // Replace with the actual ad type you want to use
-    try {
-        const fbAdSettings = await getFbAdSettings(adType);
-        console.log({ fbAdSettings, adType });
-        if (fbAdSettings) {
-            populateForm(fbAdSettings);
-            currentFormData = deepCopyFbAdSettings(getFormData());
-        } else {
-            console.warn(
-                'No FB Ad Settings found for the given ad type:',
-                adType
-            );
-        }
-    } catch (error) {
-        console.error('Error fetching FB Ad Settings:', error);
-        alert('Error loading ad settings. Please try again.');
-    }
-
-    try {
-        console.log('Attempting to find buttons');
-        const saveButton = document.getElementById('saveButton');
-        const editButton = document.getElementById('editButton');
-
-        if (!saveButton || !editButton) {
-            throw new Error('One or both buttons not found in the DOM');
-        }
-
-        console.log('Buttons found, attaching event listeners');
-        saveButton.addEventListener('click', handleSaveButtonClick);
-        editButton.addEventListener('click', toggleEditMode);
-        console.log('Event listeners attached');
-
-        // Set initial state
-        formState = 'NOT_EDITABLE';
-        editButton.style.display = 'block';
-        saveButton.style.display = 'none';
-        setFormEditable(false);
-        console.log('Initial state set');
-    } catch (error) {
-        console.error('Error setting up buttons:', error);
-        alert(
-            'Error: Could not set up buttons. Please check the console for more details.'
-        );
-    }
-}
-
-function initializeApp() {
-    console.log('DOM content loaded, initializing app');
-    main().then(() => {
-        console.log('Main function completed');
-        logButtonStatus();
-    });
-}
-
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializeApp);
-} else {
-    initializeApp();
-}
-
-// Remove the previous event listener to avoid duplicate calls
-document.removeEventListener('DOMContentLoaded', main);
 
 function getFormData() {
     const formData = {
@@ -283,7 +240,6 @@ function getFormData() {
     return formData;
 }
 
-// Add this helper function at the top of your file
 function deepCopyFbAdSettings(fbAdSettings) {
     if (!fbAdSettings || typeof fbAdSettings !== 'object') {
         throw new Error(
@@ -316,4 +272,21 @@ function deepCopyFbAdSettings(fbAdSettings) {
             adSetTargeting: { ...fbAdSettings.adSetParams.adSetTargeting },
         },
     };
+}
+
+function showButtonSpinner(button) {
+    button.innerHTML = '<span class="spinner"></span> Saving...';
+    button.classList.add('loading');
+}
+
+function hideButtonSpinner(button) {
+    button.innerHTML = 'Save Changes';
+    button.classList.remove('loading');
+}
+
+function resetFormParams() {
+    const inputs = document.querySelectorAll('.adParam');
+    inputs.forEach((input) => {
+        input.value = '';
+    });
 }
