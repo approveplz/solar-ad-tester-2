@@ -54,18 +54,31 @@ export interface FbApiAdSetTargeting {
     age_max: number;
     age_min: number;
     excluded_custom_audiences?: { id: string }[];
+    excluded_geo_locations?: {
+        regions: {
+            key: string;
+            name: string;
+            country: string;
+        }[];
+        location_types: string[];
+    };
     geo_locations?: {
-        zips: {
+        zips?: {
             key: string;
             name: string;
             primary_city_id: number;
             region_id: number;
             country: string;
         }[];
+        countries?: string[];
     };
     targeting_automation?: {
         // 1 for true
         advantage_audience: number;
+    };
+    targeting_relaxation_types?: {
+        lookalike: number;
+        custom_audience: number;
     };
 }
 
@@ -74,7 +87,7 @@ export interface FbApiAdCreativeObjStorySpec {
     instagram_actor_id?: string;
     video_data: {
         video_id: string;
-        image_url: string;
+        image_url?: string;
         message?: string;
         title?: string;
         link_description?: string;

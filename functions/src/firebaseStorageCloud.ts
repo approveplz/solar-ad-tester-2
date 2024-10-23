@@ -2,6 +2,11 @@ import fetch from 'node-fetch';
 import stream from 'stream';
 import { getStorage } from 'firebase-admin/storage';
 
+// export const OZEMPIC_THUMBNAIL_IMG_FILEPATH = 'O/O-thumbnail.jpeg';
+
+export const GOOGLE_CLOUD_STORAGE_CUSTOM_METADATA_HEADER_UUID =
+    'x-goog-meta-uuid'; // Must start with x-goog-meta-
+
 export async function uploadVideoToStorage(
     destFileName: string, // Must include filetype, ex: .mp4
     uploadFileUri: string
@@ -48,4 +53,41 @@ export async function uploadVideoToStorage(
     const fileCloudStorageUri = `gs://solar-ad-tester-2.appspot.com/${destFileName}`;
 
     return { fileCloudStorageUri, uploadFileUri };
+}
+
+const EXPIRE_TIME_MS = Date.now() + 30 * 60 * 1000; // 30 minutes
+
+export async function getSignedUploadUrl(
+    adType: string,
+    fileName: string,
+    uuid: string
+): Promise<string> {
+    const bucket = getStorage().bucket();
+
+    const [url] = await bucket.file(`${adType}/${fileName}`).getSignedUrl({
+        action: 'write',
+        expires: EXPIRE_TIME_MS,
+        contentType: 'video/mp4',
+        extensionHeaders: {
+            [GOOGLE_CLOUD_STORAGE_CUSTOM_METADATA_HEADER_UUID]: uuid,
+        },
+    });
+
+    return url;
+}
+
+export async function getSignedDownloadUrl(filePath: string) {
+    const bucket = getStorage().bucket();
+    const file = bucket.file(filePath);
+
+    const [metadata] = await file.getMetadata();
+    const uuid = metadata?.metadata?.['uuid'];
+
+    const [url] = await file.getSignedUrl({
+        action: 'read',
+        expires: EXPIRE_TIME_MS,
+    });
+
+    console.log({ url, uuid });
+    return { url, uuid };
 }
