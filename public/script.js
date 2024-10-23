@@ -33,13 +33,16 @@ function populateForm(data) {
     setValue('optimizationGoal', data.adSetParams?.optimizationGoal);
     setValue('billingEvent', data.adSetParams?.billingEvent);
     setValue('dailyBudgetCents', data.adSetParams?.dailyBudgetCents);
-    // setValue('lifetimeBudgetCents', data.adSetParams?.lifetimeBudgetCents);
     setValue('bidStrategy', data.adSetParams?.bidStrategy);
+    // setValue('lifetimeBudgetCents', data.adSetParams?.lifetimeBudgetCents);
+    setValue('targetingAgeMin', data.adSetParams?.adSetTargeting?.age_min);
+    setValue('targetingAgeMax', data.adSetParams?.adSetTargeting?.age_max);
 
     // Ad creative params
     setValue('videoTitle', data.adCreativeParams?.videoTitle);
     setValue('videoMessage', data.adCreativeParams?.videoMessage);
     setValue('linkDescription', data.adCreativeParams?.linkDescription);
+    setValue('urlTrackingTags', data.adCreativeParams?.urlTrackingTags);
     setValue('ctaType', data.adCreativeParams?.ctaType);
     setValue('ctaLinkValue', data.adCreativeParams?.ctaLinkValue);
 
@@ -72,10 +75,10 @@ async function handleSaveButtonClick(event) {
         console.log(updatedFbAdSettings);
         const adType = 'O'; // Replace with the actual ad type you want to use
         await saveFbAdSettings(adType, updatedFbAdSettings);
-        currentFormData = { ...updatedFbAdSettings };
+        currentFormData = deepCopyFbAdSettings(updatedFbAdSettings);
 
         alert('Changes saved successfully!');
-        
+
         // Return to edit button state
         formState = 'NOT_EDITABLE';
         editButton.style.display = 'block';
@@ -115,7 +118,7 @@ function toggleEditMode() {
         cancelEditButton.style.display = 'block';
         saveButton.style.display = 'block';
         setFormEditable(true);
-        currentFormData = getFormData(); // Store current form data when entering edit mode
+        currentFormData = deepCopyFbAdSettings(getFormData());
     } else {
         formState = 'NOT_EDITABLE';
         editButton.style.display = 'block';
@@ -144,7 +147,7 @@ window.addEventListener('load', async () => {
     const adType = 'S'; // Replace with the actual ad type you want to use
     const fbAdSettings = await getFbAdSettingFirestore(adType);
     populateForm(fbAdSettings);
-    originalFormData = { ...fbAdSettings };
+    originalFormData = deepCopyFbAdSettings(fbAdSettings);
 });
 
 function logButtonStatus() {
@@ -169,7 +172,7 @@ async function main() {
         console.log({ fbAdSettings, adType });
         if (fbAdSettings) {
             populateForm(fbAdSettings);
-            currentFormData = getFormData(); // Store initial form data
+            currentFormData = deepCopyFbAdSettings(getFormData());
         } else {
             console.warn(
                 'No FB Ad Settings found for the given ad type:',
@@ -229,7 +232,9 @@ document.removeEventListener('DOMContentLoaded', main);
 function getFormData() {
     const formData = {
         promotedObjectParams: {},
-        adSetParams: {},
+        adSetParams: {
+            adSetTargeting: {},
+        },
         adCreativeParams: {},
         // objectStorySpecParams: {}, // Uncomment when needed
     };
@@ -254,8 +259,10 @@ function getFormData() {
         dailyBudgetCents: getValue('dailyBudgetCents'),
         // lifetimeBudgetCents: getValue('lifetimeBudgetCents'),
         bidStrategy: getValue('bidStrategy'),
-        // states: getValue('states').split(',').map(s => s.trim()).filter(Boolean),
-        // zipcodes: getValue('zipcodes').split(',').map(z => z.trim()).filter(Boolean),
+        adSetTargeting: {
+            age_min: getValue('targetingAgeMin'),
+            age_max: getValue('targetingAgeMax'),
+        },
     };
 
     // Ad creative params
@@ -263,6 +270,7 @@ function getFormData() {
         videoTitle: getValue('videoTitle'),
         videoMessage: getValue('videoMessage'),
         linkDescription: getValue('linkDescription'),
+        urlTrackingTags: getValue('urlTrackingTags'),
         ctaType: getValue('ctaType'),
         ctaLinkValue: getValue('ctaLinkValue'),
     };
@@ -273,4 +281,39 @@ function getFormData() {
     // };
 
     return formData;
+}
+
+// Add this helper function at the top of your file
+function deepCopyFbAdSettings(fbAdSettings) {
+    if (!fbAdSettings || typeof fbAdSettings !== 'object') {
+        throw new Error(
+            'Invalid fbAdSettings provided to deepCopyFbAdSettings'
+        );
+    }
+
+    if (
+        !fbAdSettings.adSetParams ||
+        typeof fbAdSettings.adSetParams !== 'object'
+    ) {
+        throw new Error(
+            'adSetParams not found or is not an object in fbAdSettings'
+        );
+    }
+
+    if (
+        !fbAdSettings.adSetParams.adSetTargeting ||
+        typeof fbAdSettings.adSetParams.adSetTargeting !== 'object'
+    ) {
+        throw new Error(
+            'adSetTargeting not found or is not an object in fbAdSettings.adSetParams'
+        );
+    }
+
+    return {
+        ...fbAdSettings,
+        adSetParams: {
+            ...fbAdSettings.adSetParams,
+            adSetTargeting: { ...fbAdSettings.adSetParams.adSetTargeting },
+        },
+    };
 }
