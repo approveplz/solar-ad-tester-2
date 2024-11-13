@@ -72,6 +72,18 @@
             <label for="targetingAgeMax">Maximum Target Age:</label>
             <input type="number" id="targetingAgeMax" name="adSetParams.adSetTargeting.age_max" min="18" max="100" class="adParam">
             
+
+            <label>Genders (select multiple):</label>
+            <div class="gender-checkboxes">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="adSetParams.adSetTargeting.genders" value="1" class="adParam"> Male
+                </label>
+                <label class="checkbox-label">
+                    <input type="checkbox" name="adSetParams.adSetTargeting.genders" value="2" class="adParam"> Female
+                </label>
+            </div>
+
+
             <h2>Ad Creative Params</h2>
             <label for="videoTitle">Headline:</label>
             <input type="text" id="videoTitle" name="adCreativeParams.videoTitle" class="adParam">

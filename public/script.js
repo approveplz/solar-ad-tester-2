@@ -22,11 +22,18 @@ async function handleSaveButtonClick(event) {
     console.log('Save button clicked');
     const saveButton = event.target;
 
-    saveButton.disabled = true;
-    showButtonSpinner(saveButton);
-
     try {
         const updatedFbAdSettings = getFormData();
+
+        // Updated gender validation to explicitly check for empty array
+        if (
+            updatedFbAdSettings.adSetParams.adSetTargeting.genders.length === 0
+        ) {
+            throw new Error('Please select at least one gender option');
+        }
+
+        saveButton.disabled = true;
+        showButtonSpinner(saveButton);
 
         // Add campaign params. These dont change
         updatedFbAdSettings.campaignParams = {
@@ -62,6 +69,12 @@ async function init() {
             );
         }
 
+        // Add input change listeners
+        const inputs = document.querySelectorAll('.adParam');
+        inputs.forEach((input) => {
+            input.addEventListener('change', handleInputChange);
+        });
+
         adTypeSelect.addEventListener('change', handleAdTypeChange);
         saveButton.addEventListener('click', handleSaveButtonClick);
         editButton.addEventListener('click', toggleEditMode);
@@ -84,6 +97,13 @@ window.addEventListener('load', init);
 async function loadAdSettings() {
     try {
         const fbAdSettings = await getFbAdSettings(currentAdType);
+        console.log(
+            `fbAdSettings loaded from storage: ${JSON.stringify(
+                fbAdSettings,
+                null,
+                2
+            )}`
+        );
         populateForm(fbAdSettings);
         currentFormData = deepCopyFbAdSettings(fbAdSettings);
     } catch (error) {
@@ -130,6 +150,18 @@ function populateForm(data) {
         }
     };
 
+    // remove this default value
+    const setCheckboxValues = (name, values) => {
+        // if (!values) return;
+
+        const checkboxes = document.querySelectorAll(
+            `input[name="${name}"].adParam[type="checkbox"]`
+        );
+        checkboxes.forEach((checkbox) => {
+            checkbox.checked = values.includes(checkbox.value);
+        });
+    };
+
     // Promoted object params
     setValue('pixelId', data.promotedObjectParams?.pixelId);
     setValue('customEventType', data.promotedObjectParams?.customEventType);
@@ -144,6 +176,10 @@ function populateForm(data) {
     // setValue('lifetimeBudgetCents', data.adSetParams?.lifetimeBudgetCents);
     setValue('targetingAgeMin', data.adSetParams?.adSetTargeting?.age_min);
     setValue('targetingAgeMax', data.adSetParams?.adSetTargeting?.age_max);
+    setCheckboxValues(
+        'adSetParams.adSetTargeting.genders',
+        data.adSetParams?.adSetTargeting?.genders
+    );
 
     // Ad creative params
     setValue('videoTitle', data.adCreativeParams?.videoTitle);
@@ -182,6 +218,10 @@ function toggleEditMode() {
 function cancelEdit() {
     updateFormUI(false);
     populateForm(currentFormData);
+    console.log(
+        'Cancelling edit, reverting to:',
+        JSON.stringify(currentFormData, null, 2)
+    );
 }
 
 function getFormData() {
@@ -197,6 +237,13 @@ function getFormData() {
     const getValue = (id) => {
         const element = document.getElementById(id);
         return element ? element.value.trim() : '';
+    };
+
+    const getCheckboxValues = (name) => {
+        const checkboxes = document.querySelectorAll(
+            `input[name="${name}"][type="checkbox"]:checked`
+        );
+        return Array.from(checkboxes).map((cb) => cb.value);
     };
 
     // Promoted object params
@@ -217,6 +264,7 @@ function getFormData() {
         adSetTargeting: {
             age_min: getValue('targetingAgeMin'),
             age_max: getValue('targetingAgeMax'),
+            genders: getCheckboxValues('adSetParams.adSetTargeting.genders'),
         },
     };
 
@@ -285,6 +333,15 @@ function hideButtonSpinner(button) {
 function resetFormParams() {
     const inputs = document.querySelectorAll('.adParam');
     inputs.forEach((input) => {
-        input.value = '';
+        if (input.type === 'checkbox') {
+            input.checked = false;
+        } else {
+            input.value = '';
+        }
     });
+}
+
+function handleInputChange() {
+    const currentData = getFormData();
+    console.log('Form data updated:', JSON.stringify(currentData, null, 2));
 }
