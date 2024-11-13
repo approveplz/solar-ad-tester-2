@@ -73,8 +73,6 @@ async function init() {
         await loadAdSettings();
         console.log('Ad settings loaded successfully');
 
-        // updateFormUI(false);
-
         console.log('Initial state set');
     } catch (error) {
         handleError(error, 'Error during page load setup');
