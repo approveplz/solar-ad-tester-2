@@ -17,8 +17,12 @@ import {
     FbApiCreateCampaignRequest,
     FbApiCreateAdVideoRequest,
     PromotedObject,
+    FbApiCreateAdCreativeRequest,
+    FbApiCreativeEnhancementsSpec,
+    FbApiContextualMultiAdsSpec,
 } from '../models/MetaApiSchema.js';
 import invariant from 'tiny-invariant';
+import { FbAdSettings } from '../models/FbAdSettings.js';
 
 export default class MetaAdCreatorService {
     // @ts-ignore
@@ -66,7 +70,7 @@ export default class MetaAdCreatorService {
 
     async createCampaign(params: {
         name: string;
-        fbAdSettings: any;
+        fbAdSettings: FbAdSettings;
     }): Promise<Campaign> {
         const { name, fbAdSettings } = params;
         const campaignParams = fbAdSettings.campaignParams;
@@ -127,7 +131,7 @@ export default class MetaAdCreatorService {
         name: string;
         campaignId: string;
         fbAdSettings: any;
-    }): Promise<AdSet | undefined> {
+    }): Promise<AdSet> {
         console.log('Creating Ad Set');
         const { name, campaignId, fbAdSettings } = params;
 
@@ -241,7 +245,7 @@ export default class MetaAdCreatorService {
         name: string;
         video: AdVideo;
         imageUrl: string;
-        fbAdSettings: any;
+        fbAdSettings: FbAdSettings;
         adType?: string;
     }): Promise<AdCreative> {
         const { name, video, imageUrl, fbAdSettings, adType } = params;
@@ -278,7 +282,7 @@ export default class MetaAdCreatorService {
         };
 
         // Need this to opt out of Ad Creative+
-        const degreesOfFreedomSpec = {
+        const degreesOfFreedomSpec: FbApiCreativeEnhancementsSpec = {
             creative_features_spec: {
                 standard_enhancements: {
                     enroll_status: 'OPT_OUT',
@@ -286,16 +290,27 @@ export default class MetaAdCreatorService {
             },
         };
 
+        // Need to opt out of Contextual Multi Ads
+        const contextualMultiAdsSpec: FbApiContextualMultiAdsSpec = {
+            enroll_status: 'OPT_OUT',
+        };
+
         const urlTags = urlTrackingTags || this.getTrackingUrlTags(adType);
+
+        const createAdCreativeRequest: FbApiCreateAdCreativeRequest = {
+            name,
+            object_story_spec: objectStorySpec,
+            degrees_of_freedom_spec: degreesOfFreedomSpec,
+            contextual_multi_ads: contextualMultiAdsSpec,
+            url_tags: urlTags,
+        };
 
         try {
             const adCreative: AdCreative =
-                await this.adAccount.createAdCreative([], {
-                    name,
-                    object_story_spec: objectStorySpec,
-                    degrees_of_freedom_spec: degreesOfFreedomSpec,
-                    url_tags: urlTags,
-                });
+                await this.adAccount.createAdCreative(
+                    [],
+                    createAdCreativeRequest
+                );
             console.log(`Created Ad Creative. Creative ID: ${adCreative.id}`);
             return adCreative;
         } catch (error: any) {
@@ -352,24 +367,24 @@ export default class MetaAdCreatorService {
         timeoutMs: number
     ): Promise<void> {
         console.log(`Waiting for videoId: ${video.id} to finish processing`);
-        const startTime = new Date().getTime();
-        let status = '';
+        const startTime = Date.now();
 
         while (true) {
-            status = await this.getVideoUploadStatus(video);
-            if (status != 'processing') {
-                break;
-            } else if (startTime + timeoutMs <= new Date().getTime()) {
-                throw Error(`Video encoding timeout. Timeout: ${timeoutMs}`);
+            const status = await this.getVideoUploadStatus(video);
+            if (status === 'ready') {
+                console.log(`videoId: ${video.id} has finished processing`);
+                return;
             }
-
+            if (status !== 'processing') {
+                throw new Error(`Failed. Video status: ${status}`);
+            }
+            if (Date.now() - startTime > timeoutMs) {
+                throw new Error(
+                    `Video encoding timeout. Timeout: ${timeoutMs}`
+                );
+            }
             await new Promise((resolve) => setTimeout(resolve, intervalMs));
         }
-
-        if (status != 'ready') {
-            throw Error(`Failed. Video status: ${status}`);
-        }
-        console.log(`videoId: ${video.id} has finished processing`);
     }
 
     private async getVideoUploadStatus(video: AdVideo) {

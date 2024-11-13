@@ -53,6 +53,8 @@ export interface FbApiCreateAdRequest {
 export interface FbApiAdSetTargeting {
     age_max: number;
     age_min: number;
+    // 1 for male, 2 for female
+    genders?: string[];
     excluded_custom_audiences?: { id: string }[];
     excluded_geo_locations?: {
         regions: {
@@ -82,23 +84,46 @@ export interface FbApiAdSetTargeting {
     };
 }
 
+export interface FbApiAdCreativeVideoData {
+    video_id: string;
+    title: string;
+    message: string;
+    link_description: string;
+    call_to_action: {
+        type: string;
+        value: {
+            link: string;
+        };
+    };
+    image_url: string;
+}
+
 export interface FbApiAdCreativeObjStorySpec {
-    page_id?: string;
-    instagram_actor_id?: string;
-    video_data: {
-        video_id: string;
-        image_url?: string;
-        message?: string;
-        title?: string;
-        link_description?: string;
-        call_to_action: {
-            type: string;
-            value: {
-                link?: string;
-            };
+    page_id: string;
+    video_data: FbApiAdCreativeVideoData;
+}
+
+export interface FbApiCreativeEnhancementsSpec {
+    creative_features_spec: {
+        standard_enhancements: {
+            enroll_status: 'OPT_OUT' | string;
         };
     };
 }
+
+// https://developers.facebook.com/docs/marketing-api/creative/multi-advertiser-ads/
+export interface FbApiContextualMultiAdsSpec {
+    enroll_status: 'OPT_OUT' | 'OPT_IN';
+}
+
+export interface FbApiCreateAdCreativeRequest {
+    name: string;
+    object_story_spec: FbApiAdCreativeObjStorySpec;
+    degrees_of_freedom_spec: FbApiCreativeEnhancementsSpec;
+    contextual_multi_ads: FbApiContextualMultiAdsSpec;
+    url_tags: string;
+}
+
 export interface PromotedObject {
     pixel_id: string;
     custom_event_type: string;

@@ -238,16 +238,13 @@ const handleCreateAd = async (
     videoFileUrl: string,
     thumbnailFilePath: string = ''
 ) => {
-    // const adSetNameAndAdName = `AZ-${adType}-${videoUuid}`;
     const adSetNameAndAdName = `${videoUuid}-AZ`;
 
-    const adSet: AdSet | undefined = await metaAdCreatorService.createAdSet({
+    const adSet: AdSet = await metaAdCreatorService.createAdSet({
         name: adSetNameAndAdName,
         campaignId,
         fbAdSettings,
     });
-
-    invariant(adSet, 'adSet must be defined');
 
     // Create Ad Video
     const adVideo: AdVideo = await metaAdCreatorService.uploadAdVideo({
@@ -448,13 +445,17 @@ const getFbAdSettings = async (adType: string) => {
                 fbAdSettings.adSetParams.adSetTargeting,
                 'adSetTargeting must exist'
             );
-            const { age_max: ageMax, age_min: ageMin } =
-                fbAdSettings.adSetParams.adSetTargeting;
+            const {
+                age_max: ageMax,
+                age_min: ageMin,
+                genders,
+            } = fbAdSettings.adSetParams.adSetTargeting;
 
             fbAdSettings.adSetParams.adSetTargeting = getAdSetTargeting(
                 adType,
                 ageMax,
-                ageMin
+                ageMin,
+                genders
             );
         } else {
             throw new Error(`No ad settings found for adType: ${adType}`);
@@ -467,7 +468,8 @@ const getFbAdSettings = async (adType: string) => {
 const getAdSetTargeting = (
     adType: string,
     ageMax: number,
-    ageMin: number
+    ageMin: number,
+    genders?: string[]
 ): FbApiAdSetTargeting => {
     let targeting: FbApiAdSetTargeting;
 
@@ -501,7 +503,7 @@ const getAdSetTargeting = (
                 advantage_audience: 0,
             },
         };
-    } else {
+    } else if (adType === 'O') {
         // adType === 'O'
         // const ageMax = 65;
         // const ageMin = 18;
@@ -543,7 +545,10 @@ const getAdSetTargeting = (
             excluded_geo_locations,
             geo_locations,
             targeting_relaxation_types,
+            genders,
         };
+    } else {
+        throw new Error(`Invalid adType: ${adType}`);
     }
 
     return targeting;
