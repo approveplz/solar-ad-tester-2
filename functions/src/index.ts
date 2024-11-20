@@ -13,6 +13,7 @@ import { FbApiAdSetTargeting } from './models/MetaApiSchema.js';
 import {
     Ad,
     AdCreative,
+    AdImage,
     AdSet,
     AdVideo,
     //@ts-ignore
@@ -33,6 +34,10 @@ import {
 import { generateVideoHash } from './helpers.js';
 
 config();
+
+const UUID_FIELD_NAME = 'uuid';
+const AD_TYPE_FIELD_NAME = 'ad_type';
+const IMAGE_BYTES_FIELD_NAME = 'image_bytes';
 
 initializeApp({
     credential: cert(serviceAccount as any),
@@ -185,12 +190,12 @@ ${ctaLinkValue}`;
                 });
 
             const adCreative: AdCreative =
-                await metaAdCreatorServiceSolar.createAdCreative({
-                    name: `Creative-${adSetNameAndAdName}`,
-                    video: adVideo,
-                    imageUrl: scrapedAd.videoPreviewImageUrl,
-                    fbAdSettings,
-                });
+                await metaAdCreatorServiceSolar.createAdCreative(
+                    `Creative-${adSetNameAndAdName}`,
+                    adVideo,
+                    scrapedAd.videoPreviewImageUrl,
+                    fbAdSettings
+                );
 
             const ad: Ad = await metaAdCreatorServiceSolar.createAd({
                 name: adSetNameAndAdName,
@@ -256,13 +261,13 @@ const handleCreateAd = async (
     const videoObject = await adVideo.read(['picture']);
     const fbGeneratedThumbnailUrl = videoObject.picture;
 
-    const adCreative: AdCreative = await metaAdCreatorService.createAdCreative({
-        name: `Creative-${adSetNameAndAdName}`,
-        video: adVideo,
-        imageUrl: thumbnailFilePath || fbGeneratedThumbnailUrl,
+    const adCreative: AdCreative = await metaAdCreatorService.createAdCreative(
+        `Creative-${adSetNameAndAdName}`,
+        adVideo,
+        thumbnailFilePath || fbGeneratedThumbnailUrl,
         fbAdSettings,
-        adType,
-    });
+        adType
+    );
 
     const ad: Ad = await metaAdCreatorService.createAd({
         name: adSetNameAndAdName,
@@ -273,12 +278,9 @@ const handleCreateAd = async (
     return ad;
 };
 
-const VIDEO_UUID_FIELD_NAME = 'uuid';
-const AD_TYPE_FIELD_NAME = 'ad_type';
-
 interface GetSignedUploadUrlRequestQuery {
     [AD_TYPE_FIELD_NAME]?: string;
-    [VIDEO_UUID_FIELD_NAME]?: string;
+    [UUID_FIELD_NAME]?: string;
 }
 
 export interface GetSignedUploadUrlResponsePayload {
@@ -290,14 +292,12 @@ export const uploadThirdPartyAdGetSignedUploadUrl = onRequest(
     { cors: false },
     async (req: Request, res: Response) => {
         const query: GetSignedUploadUrlRequestQuery = req.query;
-        const {
-            [AD_TYPE_FIELD_NAME]: adType,
-            [VIDEO_UUID_FIELD_NAME]: videoUuid,
-        } = query;
+        const { [AD_TYPE_FIELD_NAME]: adType, [UUID_FIELD_NAME]: videoUuid } =
+            query;
 
         if (!videoUuid || !adType) {
             res.status(400).json({
-                error: `Missing required parameters. Please provide fields: ${AD_TYPE_FIELD_NAME}, ${VIDEO_UUID_FIELD_NAME}`,
+                error: `Missing required parameters. Please provide fields: ${AD_TYPE_FIELD_NAME}, ${UUID_FIELD_NAME}`,
             });
             return;
         }
@@ -10325,3 +10325,72 @@ const getTargetingGeoLocationsSolar = () => {
         ],
     };
 };
+
+export const createImageAdFromHttp = onRequest(async (req, res) => {
+    try {
+        console.log('createImageAdFromHttp handler received request');
+
+        const accountId = process.env.FACEBOOK_ACCOUNT_ID_OZEMPIC;
+        const metaAdCreatorService = new MetaAdCreatorService({
+            appId: process.env.FACEBOOK_APP_ID || '',
+            appSecret: process.env.FACEBOOK_APP_SECRET || '',
+            accessToken: process.env.FACEBOOK_ACCESS_TOKEN || '',
+            accountId: accountId || '',
+            apiVersion: '20.0',
+        });
+
+        const uuid = req.body[UUID_FIELD_NAME];
+        const imageBytes = req.body[IMAGE_BYTES_FIELD_NAME];
+        const adType = req.body[AD_TYPE_FIELD_NAME];
+
+        const adSetNameAndAdName = `${uuid}-AZ`;
+
+        const fbAdSettings = await getFbAdSettings(adType);
+
+        const campaignId = '120210614745250358'; // Ozempic
+
+        const adSet: AdSet = await metaAdCreatorService.createAdSet({
+            name: adSetNameAndAdName,
+            campaignId,
+            fbAdSettings,
+        });
+
+        const adImage: AdImage = await metaAdCreatorService.uploadAdImage(
+            imageBytes
+        );
+
+        // const name = adImage._data.images.bytes.name;
+        // const hash = adImage._data.images.bytes.hash;
+
+        const adCreative = await metaAdCreatorService.createAdCreativeImage(
+            adSetNameAndAdName,
+            adImage,
+            fbAdSettings,
+            adType
+        );
+
+        // console.log({ adCreative });
+
+        const ad: Ad = await metaAdCreatorService.createAd({
+            name: adSetNameAndAdName,
+            adSet,
+            adCreative,
+        });
+
+        // console.log({ adImage });
+        res.status(200).json({
+            code: 'SUCESS',
+            error: '',
+            payload: {
+                ad_id: ad.id,
+            },
+        });
+    } catch (error) {
+        console.error('Error in test handler:', error);
+
+        res.status(500).json({
+            code: 'ERROR',
+            error: error,
+        });
+    }
+});

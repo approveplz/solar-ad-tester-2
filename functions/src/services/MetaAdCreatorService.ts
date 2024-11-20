@@ -6,6 +6,7 @@ import {
     Ad,
     AdVideo,
     Campaign,
+    AdImage,
 } from 'facebook-nodejs-business-sdk';
 
 import fetch from 'node-fetch';
@@ -127,6 +128,21 @@ export default class MetaAdCreatorService {
         return adVideo;
     }
 
+    // https://developers.facebook.com/docs/marketing-api/reference/ad-account/adimages/#Creating
+    async uploadAdImage(imageBytes: string): Promise<AdImage> {
+        console.log(`Uploading image...`);
+        // console.log({ imageBytes });
+
+        const adImage: AdImage = await this.adAccount.createAdImage(
+            [AdImage.Fields.hash, AdImage.Fields.name, AdImage.Fields.id],
+            {
+                // Base64 UTF-8 string
+                bytes: imageBytes,
+            }
+        );
+        return adImage;
+    }
+
     async createAdSet(params: {
         name: string;
         campaignId: string;
@@ -241,14 +257,14 @@ export default class MetaAdCreatorService {
         }
     }
 
-    async createAdCreative(params: {
-        name: string;
-        video: AdVideo;
-        imageUrl: string;
-        fbAdSettings: FbAdSettings;
-        adType?: string;
-    }): Promise<AdCreative> {
-        const { name, video, imageUrl, fbAdSettings, adType } = params;
+    async createAdCreative(
+        name: string,
+        video: AdVideo,
+        imageUrl: string,
+        fbAdSettings: FbAdSettings,
+        adType?: string
+    ): Promise<AdCreative> {
+        // const { name, video, imageUrl, fbAdSettings, adType } = params;
         console.log(`Creating Ad Creative. Name: ${name}`);
 
         const {
@@ -278,6 +294,79 @@ export default class MetaAdCreatorService {
                     },
                 },
                 image_url: imageUrl,
+            },
+        };
+
+        // Need this to opt out of Ad Creative+
+        const degreesOfFreedomSpec: FbApiCreativeEnhancementsSpec = {
+            creative_features_spec: {
+                standard_enhancements: {
+                    enroll_status: 'OPT_OUT',
+                },
+            },
+        };
+
+        // Need to opt out of Contextual Multi Ads
+        const contextualMultiAdsSpec: FbApiContextualMultiAdsSpec = {
+            enroll_status: 'OPT_OUT',
+        };
+
+        const urlTags = urlTrackingTags || this.getTrackingUrlTags(adType);
+
+        const createAdCreativeRequest: FbApiCreateAdCreativeRequest = {
+            name,
+            object_story_spec: objectStorySpec,
+            degrees_of_freedom_spec: degreesOfFreedomSpec,
+            contextual_multi_ads: contextualMultiAdsSpec,
+            url_tags: urlTags,
+        };
+
+        try {
+            const adCreative: AdCreative =
+                await this.adAccount.createAdCreative(
+                    [],
+                    createAdCreativeRequest
+                );
+            console.log(`Created Ad Creative. Creative ID: ${adCreative.id}`);
+            return adCreative;
+        } catch (error: any) {
+            console.error(`Facebook API Error: ${error.message}`);
+            throw error;
+        }
+    }
+
+    async createAdCreativeImage(
+        name: string,
+        adImage: AdImage,
+        fbAdSettings: FbAdSettings,
+        adType?: string
+    ): Promise<AdCreative> {
+        console.log(`Creating Ad Creative for Image. Name: ${name}`);
+
+        const {
+            adCreativeParams: {
+                videoTitle,
+                videoMessage,
+                linkDescription,
+                ctaType,
+                ctaLinkValue,
+                urlTrackingTags,
+            },
+            promotedObjectParams: { pageId },
+        } = fbAdSettings;
+
+        // We are reusing video ad params for images
+        const objectStorySpec: FbApiAdCreativeObjStorySpec = {
+            page_id: pageId,
+            link_data: {
+                link: ctaLinkValue,
+                message: videoMessage,
+                name: videoTitle,
+                description: linkDescription,
+                image_hash: adImage._data.images.bytes.hash,
+                call_to_action: {
+                    type: ctaType,
+                },
             },
         };
 

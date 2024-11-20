@@ -98,9 +98,22 @@ export interface FbApiAdCreativeVideoData {
     image_url: string;
 }
 
+export interface FbApiAdCreativeLinkData {
+    link: string;
+    message: string;
+    name: string;
+    description: string;
+    image_hash: string;
+    call_to_action: {
+        type: string;
+    };
+}
+
 export interface FbApiAdCreativeObjStorySpec {
     page_id: string;
-    video_data: FbApiAdCreativeVideoData;
+    video_data?: FbApiAdCreativeVideoData;
+    // Use LinkData for image ads
+    link_data?: FbApiAdCreativeLinkData;
 }
 
 export interface FbApiCreativeEnhancementsSpec {

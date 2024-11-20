@@ -22,6 +22,7 @@ export interface AdSetParams {
     adSetTargeting?: FbApiAdSetTargeting;
 }
 
+// These video fields are also being used for images
 export interface AdCreativeParams {
     videoTitle: string;
     videoMessage: string;
