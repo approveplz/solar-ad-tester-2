@@ -131,7 +131,6 @@ export default class MetaAdCreatorService {
     // https://developers.facebook.com/docs/marketing-api/reference/ad-account/adimages/#Creating
     async uploadAdImage(imageBytes: string): Promise<AdImage> {
         console.log(`Uploading image...`);
-        // console.log({ imageBytes });
 
         const adImage: AdImage = await this.adAccount.createAdImage(
             [AdImage.Fields.hash, AdImage.Fields.name, AdImage.Fields.id],
@@ -311,7 +310,8 @@ export default class MetaAdCreatorService {
             enroll_status: 'OPT_OUT',
         };
 
-        const urlTags = urlTrackingTags || this.getTrackingUrlTags(adType);
+        const urlTags = urlTrackingTags;
+        invariant(urlTags, 'url tracking tags can not be empty');
 
         const createAdCreativeRequest: FbApiCreateAdCreativeRequest = {
             name,
@@ -384,7 +384,9 @@ export default class MetaAdCreatorService {
             enroll_status: 'OPT_OUT',
         };
 
-        const urlTags = urlTrackingTags || this.getTrackingUrlTags(adType);
+        const urlTags = urlTrackingTags;
+
+        invariant(urlTags, 'url tracking tags are empty');
 
         const createAdCreativeRequest: FbApiCreateAdCreativeRequest = {
             name,
@@ -490,18 +492,6 @@ export default class MetaAdCreatorService {
             status: { video_status: string };
         };
         return data.status['video_status'];
-    }
-
-    private getTrackingUrlTags(adType: string = 'S') {
-        if (adType === 'S') {
-            return 'sid=27&ad_name={{ad.name}}&ad_campaign_name={{campaign.name}}&ad_group_name={{adset.name}}&ad_campaign_id={{campaign.id}}&ad_group_id={{adset.id}}&ad_id={{ad.id}}&ad_platform=facebook&ad_account_name=FB-RONIN-999006&utm_campaign={{campaign.name}}&utm_source=FB-RONIN-999006&utm_medium=facebook&utm_content={{ad.name}}&utm_term={{adset.name}}&supplier_name=FB-RONIN-999006&tier=1&lp_campaign_id=62380e9f4e1b7&lp_campaign_key=MtxpPBkJcNbfKXV7HhCG';
-        } else {
-            throw new Error(
-                `Invalid adType: ${adType}. Expected S.O Should be passed in from saved ad params.`
-            );
-            // // O
-            // return 'oid=2&affid=14&source_id=1&sub1=facebook&sub2={{campaign.id}}&sub3={{adset.id}}&sub4={{ad.id}}';
-        }
     }
 
     /*
