@@ -44,7 +44,6 @@ initializeApp({
     storageBucket: 'solar-ad-tester-2.appspot.com',
 });
 
-
 const handleCreateAd = async (
     adType: string,
     metaAdCreatorService: MetaAdCreatorService,
@@ -99,6 +98,26 @@ export interface GetSignedUploadUrlResponsePayload {
     fileName: string;
 }
 
+/**
+ * Generates a signed URL for uploading third-party ad videos to Firebase Storage.
+ *
+ * @remarks
+ * This HTTP function expects query parameters to specify the ad type and a unique identifier.
+ * The generated URL will be valid for a limited time and allows direct upload to Firebase Storage.
+ *
+ * @example
+ * GET /uploadThirdPartyAdGetSignedUploadUrl?ad_type=O&uuid=123456789
+ *
+ * @param req.query.ad_type - The type of ad ('O' for Ozempic, 'R' for Roofing)
+ * @param req.query.uuid - Unique identifier for the video
+ *
+ * @returns {Promise<GetSignedUploadUrlResponsePayload>} JSON response containing:
+ *  - uploadUrl: Signed URL for uploading the video
+ *  - fileName: Generated filename for the video (format: AZ-{adType}-{uuid}.mp4)
+ *
+ * @throws {400} If required query parameters are missing
+ * @throws {500} If there's an error generating the signed URL
+ */
 export const uploadThirdPartyAdGetSignedUploadUrl = onRequest(
     { cors: false },
     async (req: Request, res: Response) => {
@@ -138,7 +157,7 @@ export const uploadThirdPartyAdGetSignedUploadUrl = onRequest(
 
 export const watchCloudStorageUploads = onObjectFinalized(async (event) => {
     console.log('watched cloud storage uploads triggered');
-    const WATCHED_FOLDERS = ['O'];
+    const WATCHED_FOLDERS = ['O', 'R'];
 
     const { name: filePath, contentType } = event.data;
 
@@ -165,14 +184,26 @@ export const watchCloudStorageUploads = onObjectFinalized(async (event) => {
     const adType = folder;
 
     const fbAdSettings = await getFbAdSettings(adType);
-    console.log({ fbAdSettings });
+    // console.log({ fbAdSettings });
 
     invariant(fbAdSettings !== null, `fbAdSettings is null`);
 
-    const accountId =
-        adType === 'O'
-            ? process.env.FACEBOOK_ACCOUNT_ID_OZEMPIC
-            : process.env.FACEBOOK_ACCOUNT_ID;
+    let accountId: string | undefined;
+    let campaignId: string | undefined;
+
+    if (adType === 'O') {
+        accountId = process.env.FACEBOOK_ACCOUNT_ID_OZEMPIC;
+        campaignId = process.env.FACEBOOK_OZEMPIC_CAMPAIGN_ID;
+    } else if (adType === 'R') {
+        accountId = process.env.FACEBOOK_ACCOUNT_ID_ROOFING;
+        campaignId = process.env.FACEBOOK_ROOFING_CAMPAIGN_ID;
+    }
+
+    invariant(
+        accountId && typeof accountId === 'string',
+        'accountId must be a string'
+    );
+    invariant(campaignId, `empty campaign ID for adType: ${adType}`);
 
     const metaAdCreatorService = new MetaAdCreatorService({
         appId: process.env.FACEBOOK_APP_ID || '',
@@ -189,9 +220,6 @@ export const watchCloudStorageUploads = onObjectFinalized(async (event) => {
     //     fbAdSettings,
     // });
     // const campaignId = campaign.id; // Campaign ID if we create it here
-
-    const campaignId = process.env.FACEBOOK_OZEMPIC_CAMPAIGN_ID; // Read Campaign ID
-    invariant(campaignId, 'empty ozempic campaign ID');
 
     const ad = await handleCreateAd(
         adType,
@@ -407,7 +435,6 @@ export const createImageAdFromHttp = onRequest(async (req, res) => {
     }
 });
 
-
 /* No longer used. This was for solar */
 export const createAdFromClickRequest = onRequest(
     {
@@ -598,4 +625,3 @@ ${ctaLinkValue}`;
         }
     }
 );
-
