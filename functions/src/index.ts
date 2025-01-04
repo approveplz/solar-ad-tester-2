@@ -234,6 +234,7 @@ export const watchCloudStorageUploads = onObjectFinalized(async (event) => {
 const getFbAdSettings = async (adType: string) => {
     let fbAdSettings: FbAdSettings | null = null;
     if (adType === 'S') {
+        // Legacy Solar Ad settings
         const campaignParams = {
             objective: 'OUTCOME_SALES',
             status: 'PAUSED',
@@ -279,7 +280,7 @@ const getFbAdSettings = async (adType: string) => {
             adCreativeParams,
         };
     } else {
-        // Ad type is O
+        // Ad type is O or R
         fbAdSettings = await getFbAdSettingFirestore(adType);
         if (fbAdSettings) {
             invariant(
@@ -354,6 +355,25 @@ const getAdSetTargeting = (
             age_max: ageMax,
             age_min: ageMin,
             excluded_geo_locations,
+            geo_locations,
+            targeting_relaxation_types,
+            genders,
+        };
+    } else if (adType === 'R') {
+        // Update this with real roofing targeting
+        const geo_locations = {
+            countries: ['US'],
+            location_types: ['home', 'recent'],
+        };
+
+        const targeting_relaxation_types = {
+            lookalike: 0,
+            custom_audience: 0,
+        };
+
+        targeting = {
+            age_max: ageMax,
+            age_min: ageMin,
             geo_locations,
             targeting_relaxation_types,
             genders,

@@ -416,15 +416,7 @@ export default class MetaAdCreatorService {
         adSet: AdSet;
         adCreative: AdCreative;
     }): Promise<Ad> {
-        const {
-            name,
-            adSet,
-            adCreative,
-        }: {
-            name: string;
-            adSet: AdSet;
-            adCreative: AdCreative;
-        } = params;
+        const { name, adSet, adCreative } = params;
 
         const createAdRequest: FbApiCreateAdRequest = {
             name,
