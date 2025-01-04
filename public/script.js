@@ -1,11 +1,17 @@
 import { saveFbAdSettings, getFbAdSettings } from './firebase.js';
 
-// State variables
+/*
+ * STATE MANAGEMENT
+ * These variables track the current state of the form and its data
+ */
 let formState = 'NOT_EDITABLE';
 let currentFormData = {};
 let currentAdType;
 
-// DOM elements
+/*
+ * DOM ELEMENTS
+ * Cache commonly used DOM elements
+ */
 const form = document.getElementById('adSettingsForm');
 const editButton = document.getElementById('editButton');
 const cancelEditButton = document.getElementById('cancelEditButton');
@@ -122,10 +128,12 @@ async function handleAdTypeChange(event) {
     }
 }
 
-/* 
-Helper functions 
-*/
+/* Helper Functions */
 
+/*
+ * FORM UI MANAGEMENT
+ * Functions that control the form's appearance and editability
+ */
 function updateFormUI(isEditable) {
     console.log('Updating form UI, isEditable:', isEditable);
     setFormEditable(isEditable);
@@ -224,6 +232,10 @@ function cancelEdit() {
     );
 }
 
+/*
+ * FORM DATA HANDLING
+ * Functions for manipulating and managing form data
+ */
 function getFormData() {
     const formData = {
         promotedObjectParams: {},
@@ -320,6 +332,10 @@ function deepCopyFbAdSettings(fbAdSettings) {
     };
 }
 
+/*
+ * UI UTILITIES
+ * Helper functions for UI manipulation
+ */
 function showButtonSpinner(button) {
     button.innerHTML = '<span class="spinner"></span> Saving...';
     button.classList.add('loading');
