@@ -214,12 +214,14 @@ export const watchCloudStorageUploads = onObjectFinalized(async (event) => {
     });
 
     // /* Create Campaign */
-    // const campaignName = `[facebook] - [GLP-1] - [AZ] - [USA] - [All] - [GLP-V1] - [Auto Creative Testing] - [1]`;
+    // // const campaignName = `[facebook] - [GLP-1] - [AZ] - [USA] - [All] - [GLP-V1] - [Auto Creative Testing] - [1]`;
+    // const campaignName = `[facebook] - [ROOFING] - [AZ] - [USA] - [All] - [Auto Creative Testing] - [1]`;
+
     // const campaign: Campaign = await metaAdCreatorService.createCampaign({
     //     name: campaignName,
     //     fbAdSettings,
     // });
-    // const campaignId = campaign.id; // Campaign ID if we create it here
+    // campaignId = campaign.id; // Campaign ID if we create it here
 
     const ad = await handleCreateAd(
         adType,
@@ -360,10 +362,10 @@ const getAdSetTargeting = (
             genders,
         };
     } else if (adType === 'R') {
-        // Update this with real roofing targeting
         const geo_locations = {
             countries: ['US'],
             location_types: ['home', 'recent'],
+            location_cluster_ids: [{ key: '9303790499649916' }],
         };
 
         const targeting_relaxation_types = {
@@ -645,3 +647,69 @@ ${ctaLinkValue}`;
         }
     }
 );
+
+export const getAdInfo = onRequest(async (req: Request, res: Response) => {
+    try {
+        const adId = String(req.query.ad_id);
+
+        if (!adId) {
+            res.status(400).json({
+                error: 'Missing required parameter: adId',
+            });
+            return;
+        }
+
+        const accountId = process.env.FACEBOOK_ACCOUNT_ID_OZEMPIC;
+        const metaAdCreatorService = new MetaAdCreatorService({
+            appId: process.env.FACEBOOK_APP_ID || '',
+            appSecret: process.env.FACEBOOK_APP_SECRET || '',
+            accessToken: process.env.FACEBOOK_ACCESS_TOKEN || '',
+            accountId: accountId || '',
+            apiVersion: '20.0',
+        });
+
+        // The read() method from the Facebook SDK loads the requested fields into the object's _data property
+        const ad = new Ad(adId);
+        const adData = await ad.read(['id', 'creative']);
+
+        // Then get the creative details including video_id
+        const creative = new AdCreative(ad._data.creative.id);
+        const creativeData = await creative.read([
+            'id',
+            'video_id',
+            'thumbnail_url',
+            'object_story_spec',
+        ]);
+
+        // Get video details if video_id exists
+        let videoData = null;
+        if (creativeData.video_id) {
+            const video = new AdVideo(creativeData.video_id);
+            // videoData = await video.read([
+            //     'id',
+            //     'source', // URL to the video
+            //     // 'picture', // Thumbnail URL
+            //     // 'thumbnails', // Array of thumbnail URLs
+            //     // 'title',
+            //     // 'description',
+            // ]);
+            console.log(video);
+        }
+
+        res.status(200).json({
+            code: 'SUCCESS',
+            error: '',
+            payload: {
+                // ad: adData,
+                // creative: creativeData,
+                video: videoData,
+            },
+        });
+    } catch (error) {
+        console.error('Error fetching ad info:', error);
+        res.status(500).json({
+            code: 'ERROR',
+            error: error,
+        });
+    }
+});
