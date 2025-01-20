@@ -57,7 +57,23 @@ const AD_ACCOUNT_DATA = {
             geo_locations: {
                 countries: ['US'],
                 location_types: ['home', 'recent'],
-                location_cluster_ids: [{ key: '9303790499649916' }],
+                location_cluster_ids: [{ key: '9274085919322021' }],
+            },
+            targeting_relaxation_types: {
+                lookalike: 0,
+                custom_audience: 0,
+            },
+        },
+    },
+    '8653880687969127': {
+        name: 'Vincent x Digitsolution CC 2',
+        type: 'R',
+        campaignId: '120216226115490096',
+        targeting: {
+            geo_locations: {
+                countries: ['US'],
+                location_types: ['home', 'recent'],
+                location_cluster_ids: [{ key: '28950427651210969' }],
             },
             targeting_relaxation_types: {
                 lookalike: 0,
@@ -217,7 +233,7 @@ export const uploadThirdPartyAdGetSignedUploadUrl = onRequest(
 
 export const watchCloudStorageUploads = onObjectFinalized(async (event) => {
     console.log('watched cloud storage uploads triggered');
-    const WATCHED_FOLDERS = ['916987259877684', '467161346185440'];
+    const WATCHED_FOLDERS = Object.keys(AD_ACCOUNT_DATA);
 
     const { name: filePath, contentType } = event.data;
 
