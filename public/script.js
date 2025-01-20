@@ -6,7 +6,7 @@ import { saveFbAdSettings, getFbAdSettings } from './firebase.js';
  */
 let formState = 'NOT_EDITABLE';
 let currentFormData = {};
-let currentAdType;
+let accountId;
 
 /*
  * DOM ELEMENTS
@@ -48,7 +48,7 @@ async function handleSaveButtonClick(event) {
         };
 
         console.log(updatedFbAdSettings);
-        await saveFbAdSettings(currentAdType, updatedFbAdSettings);
+        await saveFbAdSettings(accountId, updatedFbAdSettings);
         currentFormData = deepCopyFbAdSettings(updatedFbAdSettings);
 
         updateFormUI(false);
@@ -64,12 +64,17 @@ async function handleSaveButtonClick(event) {
 async function init() {
     console.log('Initializing page');
     try {
-        const adTypeSelect = document.getElementById('adType');
+        const accountIdSelect = document.getElementById('accountId');
         const saveButton = document.getElementById('saveButton');
         const editButton = document.getElementById('editButton');
         const cancelEditButton = document.getElementById('cancelEditButton');
 
-        if (!adTypeSelect || !saveButton || !editButton || !cancelEditButton) {
+        if (
+            !accountIdSelect ||
+            !saveButton ||
+            !editButton ||
+            !cancelEditButton
+        ) {
             throw new Error(
                 'One or more required elements not found in the DOM'
             );
@@ -81,13 +86,13 @@ async function init() {
             input.addEventListener('change', handleInputChange);
         });
 
-        adTypeSelect.addEventListener('change', handleAdTypeChange);
+        accountIdSelect.addEventListener('change', handleAccountIdChange);
         saveButton.addEventListener('click', handleSaveButtonClick);
         editButton.addEventListener('click', toggleEditMode);
         cancelEditButton.addEventListener('click', cancelEdit);
 
-        currentAdType = adTypeSelect.value;
-        console.log('Initial currentAdType:', currentAdType);
+        accountId = accountIdSelect.value;
+        console.log('Initial accountId:', accountId);
 
         await loadAdSettings();
         console.log('Ad settings loaded successfully');
@@ -102,7 +107,7 @@ window.addEventListener('load', init);
 
 async function loadAdSettings() {
     try {
-        const fbAdSettings = await getFbAdSettings(currentAdType);
+        const fbAdSettings = await getFbAdSettings(accountId);
         console.log(
             `fbAdSettings loaded from storage: ${JSON.stringify(
                 fbAdSettings,
@@ -118,10 +123,10 @@ async function loadAdSettings() {
     }
 }
 
-async function handleAdTypeChange(event) {
+async function handleAccountIdChange(event) {
     try {
-        currentAdType = event.target.value;
-        console.log({ currentAdType });
+        accountId = event.target.value;
+        console.log({ accountId });
         await loadAdSettings();
     } catch (error) {
         handleError(error, 'Error changing ad type');

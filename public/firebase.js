@@ -25,9 +25,9 @@ const db = getFirestore(app);
 // Cant share code between client and cloud functions. Too lazy to setup a symbolic link
 const FB_AD_SETTINGS_COLLECTION = 'fb-ad-settings';
 
-export async function saveFbAdSettings(adType, fbAdSettings) {
+export async function saveFbAdSettings(accountId, fbAdSettings) {
     try {
-        const docRef = doc(db, FB_AD_SETTINGS_COLLECTION, adType);
+        const docRef = doc(db, FB_AD_SETTINGS_COLLECTION, accountId);
         await setDoc(docRef, fbAdSettings);
         console.log(
             `Document written with ID: ${docRef.id}. Data:`,
@@ -39,14 +39,14 @@ export async function saveFbAdSettings(adType, fbAdSettings) {
     }
 }
 
-export async function getFbAdSettings(adType) {
-    const docRef = doc(db, FB_AD_SETTINGS_COLLECTION, adType);
+export async function getFbAdSettings(accountId) {
+    const docRef = doc(db, FB_AD_SETTINGS_COLLECTION, accountId);
     const docSnap = await getDoc(docRef);
 
     if (docSnap.exists()) {
         return docSnap.data();
     } else {
-        console.log(`No data exists for adType: ${adType}`);
+        console.log(`No data exists for accountId: ${accountId}`);
         return null;
     }
 }

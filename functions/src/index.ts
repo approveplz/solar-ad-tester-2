@@ -37,6 +37,7 @@ config();
 
 const UUID_FIELD_NAME = 'uuid';
 const AD_TYPE_FIELD_NAME = 'ad_type';
+const ACCOUNT_ID_FIELD_NAME = 'account_id';
 const IMAGE_BYTES_FIELD_NAME = 'image_bytes';
 
 initializeApp({
@@ -44,8 +45,64 @@ initializeApp({
     storageBucket: 'solar-ad-tester-2.appspot.com',
 });
 
+/*
+Targeting saved here does not include age or gender
+*/
+const AD_ACCOUNT_DATA = {
+    '467161346185440': {
+        name: 'Vincent x Digitsolution CC 1',
+        type: 'R',
+        campaignId: '120215523703190415',
+        targeting: {
+            geo_locations: {
+                countries: ['US'],
+                location_types: ['home', 'recent'],
+                location_cluster_ids: [{ key: '9303790499649916' }],
+            },
+            targeting_relaxation_types: {
+                lookalike: 0,
+                custom_audience: 0,
+            },
+        },
+    },
+    '916987259877684': {
+        name: 'SF- 121 (EST) - Ronin WH 262 - TN_RN_FB_ABG-999019',
+        type: 'O',
+        campaignId: '120215328779990104',
+        targeting: {
+            excluded_geo_locations: {
+                regions: [
+                    {
+                        key: '3847',
+                        name: 'California',
+                        country: 'US',
+                    },
+                    {
+                        key: '3861',
+                        name: 'Louisiana',
+                        country: 'US',
+                    },
+                    {
+                        key: '3867',
+                        name: 'Mississippi',
+                        country: 'US',
+                    },
+                ],
+                location_types: ['home', 'recent'],
+            },
+            geo_locations: {
+                countries: ['US'],
+                location_types: ['home', 'recent'],
+            },
+            targeting_relaxation_types: {
+                lookalike: 0,
+                custom_audience: 0,
+            },
+        },
+    },
+};
+
 const handleCreateAd = async (
-    adType: string,
     metaAdCreatorService: MetaAdCreatorService,
     fbAdSettings: FbAdSettings,
     campaignId: string,
@@ -75,8 +132,7 @@ const handleCreateAd = async (
         `Creative-${adSetNameAndAdName}`,
         adVideo,
         thumbnailFilePath || fbGeneratedThumbnailUrl,
-        fbAdSettings,
-        adType
+        fbAdSettings
     );
 
     const ad: Ad = await metaAdCreatorService.createAd({
@@ -91,6 +147,7 @@ const handleCreateAd = async (
 interface GetSignedUploadUrlRequestQuery {
     [AD_TYPE_FIELD_NAME]?: string;
     [UUID_FIELD_NAME]?: string;
+    [ACCOUNT_ID_FIELD_NAME]?: string;
 }
 
 export interface GetSignedUploadUrlResponsePayload {
@@ -122,12 +179,15 @@ export const uploadThirdPartyAdGetSignedUploadUrl = onRequest(
     { cors: false },
     async (req: Request, res: Response) => {
         const query: GetSignedUploadUrlRequestQuery = req.query;
-        const { [AD_TYPE_FIELD_NAME]: adType, [UUID_FIELD_NAME]: videoUuid } =
-            query;
+        const {
+            [AD_TYPE_FIELD_NAME]: adType,
+            [UUID_FIELD_NAME]: videoUuid,
+            [ACCOUNT_ID_FIELD_NAME]: accountId,
+        } = query;
 
-        if (!videoUuid || !adType) {
+        if (!videoUuid || !adType || !accountId) {
             res.status(400).json({
-                error: `Missing required parameters. Please provide fields: ${AD_TYPE_FIELD_NAME}, ${UUID_FIELD_NAME}`,
+                error: `Missing required parameters. Please provide fields: ${AD_TYPE_FIELD_NAME}, ${UUID_FIELD_NAME}, ${ACCOUNT_ID_FIELD_NAME}`,
             });
             return;
         }
@@ -135,7 +195,7 @@ export const uploadThirdPartyAdGetSignedUploadUrl = onRequest(
         try {
             const fileName = `AZ-${adType}-${videoUuid}.mp4`;
             const uploadUrl = await getSignedUploadUrl(
-                adType,
+                accountId,
                 fileName,
                 videoUuid
             );
@@ -157,15 +217,20 @@ export const uploadThirdPartyAdGetSignedUploadUrl = onRequest(
 
 export const watchCloudStorageUploads = onObjectFinalized(async (event) => {
     console.log('watched cloud storage uploads triggered');
-    const WATCHED_FOLDERS = ['O', 'R'];
+    const WATCHED_FOLDERS = ['916987259877684', '467161346185440'];
 
     const { name: filePath, contentType } = event.data;
 
     const [folder, fileName, ...rest] = filePath.split('/');
 
+    console.log({ folder, eventData: event.data });
+
     if (!WATCHED_FOLDERS.includes(folder)) {
         return;
     }
+
+    console.log('watch cloud storage uplaods running');
+
     if (contentType !== 'video/mp4') {
         console.error(
             `Non-video file uploaded. filePath: ${filePath}. contentType: ${contentType}`
@@ -181,29 +246,26 @@ export const watchCloudStorageUploads = onObjectFinalized(async (event) => {
 
     invariant(uuid && typeof uuid === 'string', 'uuid must exist');
 
-    const adType = folder;
+    const accountId = folder;
 
-    const fbAdSettings = await getFbAdSettings(adType);
+    const fbAdSettings = await getFbAdSettings(accountId);
     // console.log({ fbAdSettings });
 
     invariant(fbAdSettings !== null, `fbAdSettings is null`);
 
-    let accountId: string | undefined;
-    let campaignId: string | undefined;
+    const adAccountData =
+        AD_ACCOUNT_DATA[accountId as keyof typeof AD_ACCOUNT_DATA];
+    invariant(
+        adAccountData,
+        `ad account data not found in constants for account id: ${accountId}`
+    );
 
-    if (adType === 'O') {
-        accountId = process.env.FACEBOOK_ACCOUNT_ID_OZEMPIC;
-        campaignId = process.env.FACEBOOK_OZEMPIC_CAMPAIGN_ID;
-    } else if (adType === 'R') {
-        accountId = process.env.FACEBOOK_ACCOUNT_ID_ROOFING;
-        campaignId = process.env.FACEBOOK_ROOFING_CAMPAIGN_ID;
-    }
+    const { campaignId } = adAccountData;
 
     invariant(
-        accountId && typeof accountId === 'string',
-        'accountId must be a string'
+        campaignId,
+        `Campaign ID not found in AD_ACCOUNT_DATA for account ID: ${accountId}`
     );
-    invariant(campaignId, `empty campaign ID for adType: ${adType}`);
 
     const metaAdCreatorService = new MetaAdCreatorService({
         appId: process.env.FACEBOOK_APP_ID || '',
@@ -224,7 +286,6 @@ export const watchCloudStorageUploads = onObjectFinalized(async (event) => {
     // campaignId = campaign.id; // Campaign ID if we create it here
 
     const ad = await handleCreateAd(
-        adType,
         metaAdCreatorService,
         fbAdSettings,
         campaignId,
@@ -233,160 +294,37 @@ export const watchCloudStorageUploads = onObjectFinalized(async (event) => {
     );
 });
 
-const getFbAdSettings = async (adType: string) => {
-    let fbAdSettings: FbAdSettings | null = null;
-    if (adType === 'S') {
-        // Legacy Solar Ad settings
-        const campaignParams = {
-            objective: 'OUTCOME_SALES',
-            status: 'PAUSED',
+const getFbAdSettings = async (accountId: string) => {
+    // Account ID determines if ad type is O or R
+    const fbAdSettings = await getFbAdSettingFirestore(accountId);
+    if (fbAdSettings) {
+        invariant(
+            fbAdSettings.adSetParams.adSetTargeting,
+            'adSetTargeting must exist'
+        );
+        const { age_max, age_min, genders } =
+            fbAdSettings.adSetParams.adSetTargeting;
+
+        // Get targeting
+        const targeting: FbApiAdSetTargeting = {
+            ...AD_ACCOUNT_DATA[accountId as keyof typeof AD_ACCOUNT_DATA]
+                .targeting,
+            age_max,
+            age_min,
+            genders,
         };
 
-        const promotedObjectParams = {
-            pixelId: '700671091822152',
-            customEventType: 'LEAD',
-            pageId: '117903068075583',
-        };
-
-        const adSetParams = {
-            bidAmountCents: 2200,
-            optimizationGoal: 'OFFSITE_CONVERSIONS',
-            billingEvent: 'IMPRESSIONS',
-            // dailyBudgetCents: '2000',
-            lifetimeBudgetCents: '2000',
-            bidStrategy: 'COST_CAP',
-        };
-
-        const ctaLinkValue =
-            'https://www.greenenergycollective.org/s/no-cost-solar-v3';
-        const videoMessage = `Homeowners, would you trade 30 seconds for $8,500?
-    
-    The recently revamped "2024 Solar Incentive Program" means you can now have solar panels installed at no cost on your roof, and make a major cut in your energy bills
-    
-    All you have to do is click the link below to find out if you qualify (takes 30 seconds or less)
-    
-    ${ctaLinkValue}`;
-
-        const adCreativeParams = {
-            videoTitle: 'Homeowners In Your Area Are Getting Paid to Go Solar',
-            videoMessage,
-            linkDescription: 'Less than 30 seconds to Qualify',
-            ctaType: 'LEARN_MORE',
-            ctaLinkValue,
-        };
-
-        fbAdSettings = {
-            campaignParams,
-            promotedObjectParams,
-            adSetParams,
-            adCreativeParams,
-        };
+        fbAdSettings.adSetParams.adSetTargeting = targeting;
     } else {
-        // Ad type is O or R
-        fbAdSettings = await getFbAdSettingFirestore(adType);
-        if (fbAdSettings) {
-            invariant(
-                fbAdSettings.adSetParams.adSetTargeting,
-                'adSetTargeting must exist'
-            );
-            const {
-                age_max: ageMax,
-                age_min: ageMin,
-                genders,
-            } = fbAdSettings.adSetParams.adSetTargeting;
-
-            fbAdSettings.adSetParams.adSetTargeting = getAdSetTargeting(
-                adType,
-                ageMax,
-                ageMin,
-                genders
-            );
-        } else {
-            throw new Error(`No ad settings found for adType: ${adType}`);
-        }
+        throw new Error(`No ad settings found for accountId: ${accountId}`);
     }
 
     return fbAdSettings;
 };
 
-const getAdSetTargeting = (
-    adType: string,
-    ageMax: number,
-    ageMin: number,
-    genders?: string[]
-): FbApiAdSetTargeting => {
-    let targeting: FbApiAdSetTargeting;
-
-    if (adType === 'S') {
-        throw new Error('Solar no longer supported');
-    } else if (adType === 'O') {
-        // adType === 'O'
-
-        const excluded_geo_locations = {
-            regions: [
-                {
-                    key: '3847',
-                    name: 'California',
-                    country: 'US',
-                },
-                {
-                    key: '3861',
-                    name: 'Louisiana',
-                    country: 'US',
-                },
-                {
-                    key: '3867',
-                    name: 'Mississippi',
-                    country: 'US',
-                },
-            ],
-            location_types: ['home', 'recent'],
-        };
-
-        const geo_locations = {
-            countries: ['US'],
-            location_types: ['home', 'recent'],
-        };
-
-        const targeting_relaxation_types = {
-            lookalike: 0,
-            custom_audience: 0,
-        };
-
-        targeting = {
-            age_max: ageMax,
-            age_min: ageMin,
-            excluded_geo_locations,
-            geo_locations,
-            targeting_relaxation_types,
-            genders,
-        };
-    } else if (adType === 'R') {
-        const geo_locations = {
-            countries: ['US'],
-            location_types: ['home', 'recent'],
-            location_cluster_ids: [{ key: '9303790499649916' }],
-        };
-
-        const targeting_relaxation_types = {
-            lookalike: 0,
-            custom_audience: 0,
-        };
-
-        targeting = {
-            age_max: ageMax,
-            age_min: ageMin,
-            geo_locations,
-            targeting_relaxation_types,
-            genders,
-        };
-    } else {
-        throw new Error(`Invalid adType: ${adType}`);
-    }
-
-    return targeting;
-};
-
+/*
+TODO: Fix this after refactor to read params by ad account ID instead of ad type
+*/
 export const createImageAdFromHttp = onRequest(async (req, res) => {
     try {
         console.log('createImageAdFromHttp handler received request');
@@ -408,7 +346,7 @@ export const createImageAdFromHttp = onRequest(async (req, res) => {
 
         const fbAdSettings = await getFbAdSettings(adType);
 
-        const campaignId = process.env.FACEBOOK_OZEMPIC_CAMPAIGN_ID; // Read Campaign ID
+        const campaignId = process.env.CAMPAIGN_ID_FOR_467161346185440; // Read Campaign ID
         invariant(campaignId, 'empty ozempic campaign ID');
 
         const adSet: AdSet = await metaAdCreatorService.createAdSet({
@@ -457,259 +395,336 @@ export const createImageAdFromHttp = onRequest(async (req, res) => {
     }
 });
 
-/* No longer used. This was for solar */
-export const createAdFromClickRequest = onRequest(
-    {
-        cors: true,
-        timeoutSeconds: 60,
-        memory: '512MiB',
-    },
-    async (req, res) => {
-        const {
-            adArchiveId,
-            videoHdUrl,
-            videoSdUrl,
-            videoPreviewImageUrl,
-            adTitle,
-            adBody,
-            ctaType,
-            pageName,
-            pageId,
-            pageLikeCount,
-            hasUserReported,
-            startDateUnixSeconds,
-            endDateUnixSeconds,
-            publisherPlatform,
-        } = req.body;
+// const getAdSetTargeting = (
+//     accountId: string,
+//     ageMax: number,
+//     ageMin: number,
+//     genders?: string[]
+// ): FbApiAdSetTargeting => {
+//     let targeting: FbApiAdSetTargeting;
 
-        const scrapedAd: ParsedFbAdInfo = {
-            adArchiveId,
-            videoHdUrl,
-            videoSdUrl,
-            videoPreviewImageUrl,
-            adTitle,
-            adBody,
-            ctaType,
-            pageName,
-            pageId,
-            pageLikeCount,
-            hasUserReported,
-            startDateUnixSeconds,
-            endDateUnixSeconds,
-            publisherPlatform,
-        };
+//     if (accountId === 'O') {
+//         const excluded_geo_locations = {
+//             regions: [
+//                 {
+//                     key: '3847',
+//                     name: 'California',
+//                     country: 'US',
+//                 },
+//                 {
+//                     key: '3861',
+//                     name: 'Louisiana',
+//                     country: 'US',
+//                 },
+//                 {
+//                     key: '3867',
+//                     name: 'Mississippi',
+//                     country: 'US',
+//                 },
+//             ],
+//             location_types: ['home', 'recent'],
+//         };
 
-        const metaAdCreatorServiceSolar = new MetaAdCreatorService({
-            appId: process.env.FACEBOOK_APP_ID || '',
-            appSecret: process.env.FACEBOOK_APP_SECRET || '',
-            accessToken: process.env.FACEBOOK_ACCESS_TOKEN || '',
-            accountId: process.env.FACEBOOK_ACCOUNT_ID || '',
-            apiVersion: '20.0',
-        });
+//         const geo_locations = {
+//             countries: ['US'],
+//             location_types: ['home', 'recent'],
+//         };
 
-        try {
-            /* Generate hash of video */
-            const scrapedVideoFileUrl =
-                scrapedAd.videoHdUrl || scrapedAd.videoSdUrl;
+//         const targeting_relaxation_types = {
+//             lookalike: 0,
+//             custom_audience: 0,
+//         };
 
-            const videoHash = await generateVideoHash(scrapedVideoFileUrl, 1);
-            const uploadedVideoHashHap = await getVideoHashMapFirestore(
-                'SOLAR'
-            );
+//         targeting = {
+//             age_max: ageMax,
+//             age_min: ageMin,
+//             excluded_geo_locations,
+//             geo_locations,
+//             targeting_relaxation_types,
+//             genders,
+//         };
+//     } else if (accountId === 'R') {
+//         const geo_locations = {
+//             countries: ['US'],
+//             location_types: ['home', 'recent'],
+//             location_cluster_ids: [{ key: '9303790499649916' }],
+//         };
 
-            /* Check if we have already tested this video */
-            if (videoHash in uploadedVideoHashHap) {
-                const existingAdName = uploadedVideoHashHap[videoHash];
-                console.log(
-                    `This video has already been uploaded. Video hash: ${videoHash}. Existing ad name: ${existingAdName}`
-                );
-                res.status(500).send({ code: 'DUPLICATE' });
-            }
+//         const targeting_relaxation_types = {
+//             lookalike: 0,
+//             custom_audience: 0,
+//         };
 
-            const campaignParams = {
-                objective: 'OUTCOME_LEADS',
-                status: 'PAUSED',
-            };
+//         targeting = {
+//             age_max: ageMax,
+//             age_min: ageMin,
+//             geo_locations,
+//             targeting_relaxation_types,
+//             genders,
+//         };
+//     } else {
+//         throw new Error(`Invalid accountId: ${accountId}`);
+//     }
 
-            const promotedObjectParams = {
-                pixelId: '700671091822152',
-                customEventType: 'LEAD',
-                pageId: '117903068075583',
-            };
+//     return targeting;
+// };
 
-            const adSetParams = {
-                bidAmountCents: 2200,
-                optimizationGoal: 'OFFSITE_CONVERSIONS',
-                billingEvent: 'IMPRESSIONS',
-                dailyBudgetCents: '2000',
-                lifetimeBudgetCents: '2000',
-                bidStrategy: 'COST_CAP',
-            };
+// /* No longer used. This was for solar */
+// export const createAdFromClickRequest = onRequest(
+//     {
+//         cors: true,
+//         timeoutSeconds: 60,
+//         memory: '512MiB',
+//     },
+//     async (req, res) => {
+//         const {
+//             adArchiveId,
+//             videoHdUrl,
+//             videoSdUrl,
+//             videoPreviewImageUrl,
+//             adTitle,
+//             adBody,
+//             ctaType,
+//             pageName,
+//             pageId,
+//             pageLikeCount,
+//             hasUserReported,
+//             startDateUnixSeconds,
+//             endDateUnixSeconds,
+//             publisherPlatform,
+//         } = req.body;
 
-            const ctaLinkValue =
-                'https://www.greenenergycollective.org/s/no-cost-solar-v3';
-            const videoMessage = `Homeowners, would you trade 30 seconds for $8,500?
+//         const scrapedAd: ParsedFbAdInfo = {
+//             adArchiveId,
+//             videoHdUrl,
+//             videoSdUrl,
+//             videoPreviewImageUrl,
+//             adTitle,
+//             adBody,
+//             ctaType,
+//             pageName,
+//             pageId,
+//             pageLikeCount,
+//             hasUserReported,
+//             startDateUnixSeconds,
+//             endDateUnixSeconds,
+//             publisherPlatform,
+//         };
 
-The recently revamped "2024 Solar Incentive Program" means you can now have solar panels installed at no cost on your roof, and make a major cut in your energy bills
+//         const metaAdCreatorServiceSolar = new MetaAdCreatorService({
+//             appId: process.env.FACEBOOK_APP_ID || '',
+//             appSecret: process.env.FACEBOOK_APP_SECRET || '',
+//             accessToken: process.env.FACEBOOK_ACCESS_TOKEN || '',
+//             accountId: process.env.FACEBOOK_ACCOUNT_ID || '',
+//             apiVersion: '20.0',
+//         });
 
-All you have to do is click the link below to find out if you qualify (takes 30 seconds or less)
+//         try {
+//             /* Generate hash of video */
+//             const scrapedVideoFileUrl =
+//                 scrapedAd.videoHdUrl || scrapedAd.videoSdUrl;
 
-${ctaLinkValue}`;
+//             const videoHash = await generateVideoHash(scrapedVideoFileUrl, 1);
+//             const uploadedVideoHashHap = await getVideoHashMapFirestore(
+//                 'SOLAR'
+//             );
 
-            const adCreativeParams = {
-                videoTitle:
-                    'Homeowners In Your Area Are Getting Paid to Go Solar',
-                videoMessage,
-                linkDescription: 'Less than 30 seconds to Qualify',
-                ctaType: 'LEARN_MORE',
-                ctaLinkValue,
-            };
+//             /* Check if we have already tested this video */
+//             if (videoHash in uploadedVideoHashHap) {
+//                 const existingAdName = uploadedVideoHashHap[videoHash];
+//                 console.log(
+//                     `This video has already been uploaded. Video hash: ${videoHash}. Existing ad name: ${existingAdName}`
+//                 );
+//                 res.status(500).send({ code: 'DUPLICATE' });
+//             }
 
-            const fbAdSettings: FbAdSettings = {
-                campaignParams,
-                promotedObjectParams,
-                adSetParams,
-                adCreativeParams,
-            };
+//             const campaignParams = {
+//                 objective: 'OUTCOME_LEADS',
+//                 status: 'PAUSED',
+//             };
 
-            // Create Campaign
+//             const promotedObjectParams = {
+//                 pixelId: '700671091822152',
+//                 customEventType: 'LEAD',
+//                 pageId: '117903068075583',
+//             };
 
-            // const campaignName = `[facebook] - [Solar] - [AZ] - [MOM] - [ALL] - [SOLAR-SHS-V3] - APP - 1`;
-            // const campaign: Campaign =
-            //     await metaAdCreatorService.createCampaign({
-            //         name: campaignName,
-            //         fbAdSettings,
-            //     });
-            // const campaignId = campaign.id; // Campaign ID if we create it here
+//             const adSetParams = {
+//                 bidAmountCents: 2200,
+//                 optimizationGoal: 'OFFSITE_CONVERSIONS',
+//                 billingEvent: 'IMPRESSIONS',
+//                 dailyBudgetCents: '2000',
+//                 lifetimeBudgetCents: '2000',
+//                 bidStrategy: 'COST_CAP',
+//             };
 
-            const campaignId = '120210470839980108'; // Real Campaign ID
-            // const campaignId = '120210773404130108'; // Test Campaign ID
+//             const ctaLinkValue =
+//                 'https://www.greenenergycollective.org/s/no-cost-solar-v3';
+//             const videoMessage = `Homeowners, would you trade 30 seconds for $8,500?
 
-            const adSetNameAndAdName = `AZ-S-${scrapedAd.adArchiveId}`;
+// The recently revamped "2024 Solar Incentive Program" means you can now have solar panels installed at no cost on your roof, and make a major cut in your energy bills
 
-            const adSet: AdSet | undefined =
-                await metaAdCreatorServiceSolar.createAdSet({
-                    name: adSetNameAndAdName,
-                    campaignId,
-                    fbAdSettings,
-                });
+// All you have to do is click the link below to find out if you qualify (takes 30 seconds or less)
 
-            invariant(adSet, 'adSet must be defined');
+// ${ctaLinkValue}`;
 
-            // Create Ad Video
-            const adVideo: AdVideo =
-                await metaAdCreatorServiceSolar.uploadAdVideo({
-                    scrapedAdArchiveId: scrapedAd.adArchiveId,
-                    videoFileUrl: scrapedVideoFileUrl,
-                });
+//             const adCreativeParams = {
+//                 videoTitle:
+//                     'Homeowners In Your Area Are Getting Paid to Go Solar',
+//                 videoMessage,
+//                 linkDescription: 'Less than 30 seconds to Qualify',
+//                 ctaType: 'LEARN_MORE',
+//                 ctaLinkValue,
+//             };
 
-            const adCreative: AdCreative =
-                await metaAdCreatorServiceSolar.createAdCreative(
-                    `Creative-${adSetNameAndAdName}`,
-                    adVideo,
-                    scrapedAd.videoPreviewImageUrl,
-                    fbAdSettings
-                );
+//             const fbAdSettings: FbAdSettings = {
+//                 campaignParams,
+//                 promotedObjectParams,
+//                 adSetParams,
+//                 adCreativeParams,
+//             };
 
-            const ad: Ad = await metaAdCreatorServiceSolar.createAd({
-                name: adSetNameAndAdName,
-                adSet,
-                adCreative,
-            });
+//             // Create Campaign
 
-            const { fileCloudStorageUri } = await uploadVideoToStorage(
-                `${adSetNameAndAdName}.mp4`,
-                scrapedVideoFileUrl
-            );
+//             // const campaignName = `[facebook] - [Solar] - [AZ] - [MOM] - [ALL] - [SOLAR-SHS-V3] - APP - 1`;
+//             // const campaign: Campaign =
+//             //     await metaAdCreatorService.createCampaign({
+//             //         name: campaignName,
+//             //         fbAdSettings,
+//             //     });
+//             // const campaignId = campaign.id; // Campaign ID if we create it here
 
-            const createdFbAd: CreatedFbAdInfo = {
-                campaignId,
-                adSetId: adSet.id,
-                adSetName: adSetNameAndAdName,
-                creativeId: adCreative.id,
-                adId: ad.id,
-                videoId: adVideo.id,
-                videoCloudStorageUri: fileCloudStorageUri,
-                videoHash,
-            };
+//             const campaignId = '120210470839980108'; // Real Campaign ID
+//             // const campaignId = '120210773404130108'; // Test Campaign ID
 
-            await saveFbAdFirestore('SOLAR', scrapedAd, createdFbAd);
-            await saveVideoHashFirestore(
-                'SOLAR',
-                videoHash,
-                adSetNameAndAdName
-            );
+//             const adSetNameAndAdName = `AZ-S-${scrapedAd.adArchiveId}`;
 
-            res.status(200).send({ code: 'CREATED' });
-        } catch (error) {
-            console.log(error);
-            res.status(500).send(error);
-        }
-    }
-);
+//             const adSet: AdSet | undefined =
+//                 await metaAdCreatorServiceSolar.createAdSet({
+//                     name: adSetNameAndAdName,
+//                     campaignId,
+//                     fbAdSettings,
+//                 });
 
-export const getAdInfo = onRequest(async (req: Request, res: Response) => {
-    try {
-        const adId = String(req.query.ad_id);
+//             invariant(adSet, 'adSet must be defined');
 
-        if (!adId) {
-            res.status(400).json({
-                error: 'Missing required parameter: adId',
-            });
-            return;
-        }
+//             // Create Ad Video
+//             const adVideo: AdVideo =
+//                 await metaAdCreatorServiceSolar.uploadAdVideo({
+//                     scrapedAdArchiveId: scrapedAd.adArchiveId,
+//                     videoFileUrl: scrapedVideoFileUrl,
+//                 });
 
-        const accountId = process.env.FACEBOOK_ACCOUNT_ID_OZEMPIC;
-        const metaAdCreatorService = new MetaAdCreatorService({
-            appId: process.env.FACEBOOK_APP_ID || '',
-            appSecret: process.env.FACEBOOK_APP_SECRET || '',
-            accessToken: process.env.FACEBOOK_ACCESS_TOKEN || '',
-            accountId: accountId || '',
-            apiVersion: '20.0',
-        });
+//             const adCreative: AdCreative =
+//                 await metaAdCreatorServiceSolar.createAdCreative(
+//                     `Creative-${adSetNameAndAdName}`,
+//                     adVideo,
+//                     scrapedAd.videoPreviewImageUrl,
+//                     fbAdSettings
+//                 );
 
-        // The read() method from the Facebook SDK loads the requested fields into the object's _data property
-        const ad = new Ad(adId);
-        const adData = await ad.read(['id', 'creative']);
+//             const ad: Ad = await metaAdCreatorServiceSolar.createAd({
+//                 name: adSetNameAndAdName,
+//                 adSet,
+//                 adCreative,
+//             });
 
-        // Then get the creative details including video_id
-        const creative = new AdCreative(ad._data.creative.id);
-        const creativeData = await creative.read([
-            'id',
-            'video_id',
-            'thumbnail_url',
-            'object_story_spec',
-        ]);
+//             const { fileCloudStorageUri } = await uploadVideoToStorage(
+//                 `${adSetNameAndAdName}.mp4`,
+//                 scrapedVideoFileUrl
+//             );
 
-        // Get video details if video_id exists
-        let videoData = null;
-        if (creativeData.video_id) {
-            const video = new AdVideo(creativeData.video_id);
-            // videoData = await video.read([
-            //     'id',
-            //     'source', // URL to the video
-            //     // 'picture', // Thumbnail URL
-            //     // 'thumbnails', // Array of thumbnail URLs
-            //     // 'title',
-            //     // 'description',
-            // ]);
-            console.log(video);
-        }
+//             const createdFbAd: CreatedFbAdInfo = {
+//                 campaignId,
+//                 adSetId: adSet.id,
+//                 adSetName: adSetNameAndAdName,
+//                 creativeId: adCreative.id,
+//                 adId: ad.id,
+//                 videoId: adVideo.id,
+//                 videoCloudStorageUri: fileCloudStorageUri,
+//                 videoHash,
+//             };
 
-        res.status(200).json({
-            code: 'SUCCESS',
-            error: '',
-            payload: {
-                // ad: adData,
-                // creative: creativeData,
-                video: videoData,
-            },
-        });
-    } catch (error) {
-        console.error('Error fetching ad info:', error);
-        res.status(500).json({
-            code: 'ERROR',
-            error: error,
-        });
-    }
-});
+//             await saveFbAdFirestore('SOLAR', scrapedAd, createdFbAd);
+//             await saveVideoHashFirestore(
+//                 'SOLAR',
+//                 videoHash,
+//                 adSetNameAndAdName
+//             );
+
+//             res.status(200).send({ code: 'CREATED' });
+//         } catch (error) {
+//             console.log(error);
+//             res.status(500).send(error);
+//         }
+//     }
+// );
+
+// /*
+// Trying to get video source from Ad ID. I dont think we can due to permissions
+// */
+// export const getAdInfo = onRequest(async (req: Request, res: Response) => {
+//     try {
+//         const adId = String(req.query.ad_id);
+
+//         if (!adId) {
+//             res.status(400).json({
+//                 error: 'Missing required parameter: adId',
+//             });
+//             return;
+//         }
+
+//         const accountId = process.env.FACEBOOK_ACCOUNT_ID_OZEMPIC;
+//         const metaAdCreatorService = new MetaAdCreatorService({
+//             appId: process.env.FACEBOOK_APP_ID || '',
+//             appSecret: process.env.FACEBOOK_APP_SECRET || '',
+//             accessToken: process.env.FACEBOOK_ACCESS_TOKEN || '',
+//             accountId: accountId || '',
+//             apiVersion: '20.0',
+//         });
+
+//         // The read() method from the Facebook SDK loads the requested fields into the object's _data property
+//         const ad = new Ad(adId);
+//         const adData = await ad.read(['id', 'creative']);
+
+//         // Then get the creative details including video_id
+//         const creative = new AdCreative(ad._data.creative.id);
+//         const creativeData = await creative.read([
+//             'id',
+//             'video_id',
+//             'thumbnail_url',
+//             'object_story_spec',
+//         ]);
+
+//         // Get video details if video_id exists
+//         let videoData = null;
+//         if (creativeData.video_id) {
+//             const video = new AdVideo(creativeData.video_id);
+//             // videoData = await video.read([
+//             //     'id',
+//             //     'source', // URL to the video
+//             //     // 'picture', // Thumbnail URL
+//             //     // 'thumbnails', // Array of thumbnail URLs
+//             //     // 'title',
+//             //     // 'description',
+//             // ]);
+//             console.log(video);
+//         }
+
+//         res.status(200).json({
+//             code: 'SUCCESS',
+//             error: '',
+//             payload: {
+//                 // ad: adData,
+//                 // creative: creativeData,
+//                 video: videoData,
+//             },
+//         });
+//     } catch (error) {
+//         console.error('Error fetching ad info:', error);
+//         res.status(500).json({
+//             code: 'ERROR',
+//             error: error,
+//         });
+//     }
+// });

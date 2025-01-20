@@ -149,18 +149,18 @@ textarea {
     opacity: 0.8;
 }
 
-.ad-type-container {
+.account-id-container {
     margin-bottom: 20px;
 }
 
-.ad-type-container label {
+.account-id-container label {
     font-size: 1.2em;
     font-weight: bold;
     margin-bottom: 5px;
     display: block;
 }
 
-.ad-type-select {
+.account-id-select {
     font-size: 1.1em;
     font-weight: bold;
     padding: 8px;

@@ -58,13 +58,13 @@ export async function uploadVideoToStorage(
 const EXPIRE_TIME_MS = Date.now() + 30 * 60 * 1000; // 30 minutes
 
 export async function getSignedUploadUrl(
-    adType: string,
+    accountId: string,
     fileName: string,
     uuid: string
 ): Promise<string> {
     const bucket = getStorage().bucket();
 
-    const [url] = await bucket.file(`${adType}/${fileName}`).getSignedUrl({
+    const [url] = await bucket.file(`${accountId}/${fileName}`).getSignedUrl({
         action: 'write',
         expires: EXPIRE_TIME_MS,
         contentType: 'video/mp4',

@@ -260,8 +260,7 @@ export default class MetaAdCreatorService {
         name: string,
         video: AdVideo,
         imageUrl: string,
-        fbAdSettings: FbAdSettings,
-        adType?: string
+        fbAdSettings: FbAdSettings
     ): Promise<AdCreative> {
         // const { name, video, imageUrl, fbAdSettings, adType } = params;
         console.log(`Creating Ad Creative. Name: ${name}`);
