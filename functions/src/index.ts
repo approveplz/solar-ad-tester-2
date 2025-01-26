@@ -245,7 +245,7 @@ export const watchCloudStorageUploads = onObjectFinalized(async (event) => {
         return;
     }
 
-    console.log('watch cloud storage uplaods running');
+    console.log('watch cloud storage uploads running');
 
     if (contentType !== 'video/mp4') {
         console.error(

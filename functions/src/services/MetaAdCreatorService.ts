@@ -309,15 +309,14 @@ export default class MetaAdCreatorService {
             enroll_status: 'OPT_OUT',
         };
 
-        const urlTags = urlTrackingTags;
-        invariant(urlTags, 'url tracking tags can not be empty');
+        invariant(urlTrackingTags, 'url tracking tags can not be empty');
 
         const createAdCreativeRequest: FbApiCreateAdCreativeRequest = {
             name,
             object_story_spec: objectStorySpec,
             degrees_of_freedom_spec: degreesOfFreedomSpec,
             contextual_multi_ads: contextualMultiAdsSpec,
-            url_tags: urlTags,
+            url_tags: urlTrackingTags,
         };
 
         try {
