@@ -126,7 +126,7 @@ const handleCreateAd = async (
     videoFileUrl: string,
     thumbnailFilePath: string = ''
 ) => {
-    const adSetNameAndAdName = `${videoUuid}-AZ`;
+    const adSetNameAndAdName = `${videoUuid}`;
 
     const adSet: AdSet = await metaAdCreatorService.createAdSet({
         name: adSetNameAndAdName,
