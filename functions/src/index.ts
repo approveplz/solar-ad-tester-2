@@ -57,8 +57,14 @@ const AD_ACCOUNT_DATA = {
             geo_locations: {
                 countries: ['US'],
                 location_types: ['home', 'recent'],
-                location_cluster_ids: [{ key: '9274085919322021' }],
+                location_cluster_ids: [{ key: '9096931440399416' }],
             },
+            excluded_custom_audiences: [
+                {
+                    id: '120214060134290415',
+                    name: 'Roofing Leads 180d',
+                },
+            ],
             targeting_relaxation_types: {
                 lookalike: 0,
                 custom_audience: 0,
@@ -73,6 +79,7 @@ const AD_ACCOUNT_DATA = {
             geo_locations: {
                 countries: ['US'],
                 location_types: ['home', 'recent'],
+                // TODO: Change this to the correct location cluster ID
                 location_cluster_ids: [{ key: '28950427651210969' }],
             },
             targeting_relaxation_types: {
