@@ -190,8 +190,8 @@ export default class MetaAdCreatorService {
                 0
             )
         );
-        // Set to 4 AM PDT (11 AM UTC)
-        tomorrow.setUTCHours(11);
+        // Set to 7 AM PDT (14 AM UTC)
+        tomorrow.setUTCHours(14);
 
         const oneWeekLater = new Date(tomorrow);
         oneWeekLater.setDate(oneWeekLater.getDate() + 7);
