@@ -53,6 +53,7 @@ const AD_ACCOUNT_DATA = {
         name: 'Vincent x Digitsolution CC 1',
         type: 'R',
         campaignId: '120215523703190415',
+        scalingCampaignId: '120216743109330415',
         targeting: {
             geo_locations: {
                 location_types: ['home', 'recent'],
@@ -75,6 +76,7 @@ const AD_ACCOUNT_DATA = {
         name: 'Vincent x Digitsolution CC 2',
         type: 'R',
         campaignId: '120216226115490096',
+        scalingCampaignId: '',
         targeting: {
             geo_locations: {
                 location_types: ['home', 'recent'],
@@ -92,6 +94,7 @@ const AD_ACCOUNT_DATA = {
         name: 'SF- 121 (EST) - Ronin WH 262 - TN_RN_FB_ABG-999019',
         type: 'O',
         campaignId: '120215328779990104',
+        scalingCampaignId: '',
         targeting: {
             excluded_geo_locations: {
                 regions: [
@@ -271,7 +274,6 @@ export const watchCloudStorageUploads = onObjectFinalized(async (event) => {
     const accountId = folder;
 
     const fbAdSettings = await getFbAdSettings(accountId);
-    // console.log({ fbAdSettings });
 
     invariant(fbAdSettings !== null, `fbAdSettings is null`);
 
@@ -343,6 +345,73 @@ const getFbAdSettings = async (accountId: string) => {
 
     return fbAdSettings;
 };
+
+export const duplicateAdSetAndAdToCampaign = onRequest(async (req, res) => {
+    try {
+        // Validate required input parameters
+        const { adId, accountId } = req.body;
+        if (!adId || !accountId) {
+            res.status(400).json({
+                success: false,
+                error: 'Missing required parameters: adId and accountId are required',
+            });
+            return;
+        }
+        const accountData =
+            AD_ACCOUNT_DATA[accountId as keyof typeof AD_ACCOUNT_DATA];
+        if (!accountData) {
+            res.status(400).json({
+                success: false,
+                error: `Invalid accountId: ${accountId}`,
+            });
+            return;
+        }
+        const { scalingCampaignId } = accountData;
+        if (!scalingCampaignId) {
+            res.status(400).json({
+                success: false,
+                error: `No scaling campaign ID configured for account: ${accountId}`,
+            });
+            return;
+        }
+
+        const metaAdCreatorService = new MetaAdCreatorService({
+            appId: process.env.FACEBOOK_APP_ID || '',
+            appSecret: process.env.FACEBOOK_APP_SECRET || '',
+            accessToken: process.env.FACEBOOK_ACCESS_TOKEN || '',
+            accountId,
+            apiVersion: '20.0',
+        });
+
+        // Get ad set ID and duplicate it
+        const adSetId = await metaAdCreatorService.getAdSetIdFromAdId(adId);
+        const duplicatedAdSet = await metaAdCreatorService.duplicateAdSet(
+            adSetId,
+            scalingCampaignId
+        );
+
+        console.log(
+            `Successfully duplicated ad set ${adSetId} to campaign ${scalingCampaignId}`
+        );
+
+        res.status(200).json({
+            success: true,
+            error: null,
+            data: { duplicatedAdSet },
+        });
+        return;
+    } catch (error) {
+        console.error('Error duplicating ad set:', error);
+        res.status(500).json({
+            success: false,
+            error:
+                error instanceof Error
+                    ? error.message
+                    : 'An unexpected error occurred',
+        });
+    }
+    return;
+});
 
 /*
 TODO: Fix this after refactor to read params by ad account ID instead of ad type

@@ -256,13 +256,38 @@ export default class MetaAdCreatorService {
         }
     }
 
+    async getAdSetIdFromAdId(adId: string): Promise<string> {
+        const ad = new Ad(adId);
+        const response = (await (ad.get(['adset_id']) as unknown)) as {
+            adset_id: string;
+        };
+        const adsetId = response['adset_id'];
+        return adsetId;
+    }
+
+    async duplicateAdSet(adSetId: string, campaignId: string): Promise<AdSet> {
+        const adSet = new AdSet(adSetId);
+
+        const copyRequestParams = {
+            campaign_id: campaignId,
+            deep_copy: true,
+            status_option: 'ACTIVE',
+            rename_options: {
+                rename_strategy: 'NO_RENAME',
+            },
+        };
+
+        const duplicatedAdSet = await adSet.createCopy([], copyRequestParams);
+
+        return duplicatedAdSet;
+    }
+
     async createAdCreative(
         name: string,
         video: AdVideo,
         imageUrl: string,
         fbAdSettings: FbAdSettings
     ): Promise<AdCreative> {
-        // const { name, video, imageUrl, fbAdSettings, adType } = params;
         console.log(`Creating Ad Creative. Name: ${name}`);
 
         const {
