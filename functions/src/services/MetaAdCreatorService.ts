@@ -291,9 +291,12 @@ export default class MetaAdCreatorService {
             },
         };
 
-        const duplicatedAdSet = await adSet.createCopy([], copyRequestParams);
+        const duplicatedAdSet = await adSet.createCopy(
+            ['id'],
+            copyRequestParams
+        );
 
-        return duplicatedAdSet;
+        return new AdSet(duplicatedAdSet.id);
     }
 
     async createAdCreative(

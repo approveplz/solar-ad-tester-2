@@ -437,6 +437,7 @@ export const handleAdTesting = onRequest(async (req, res) => {
             // - duplicate ads to scaling campaign
         }
 
+        console.log(message);
         res.status(200).json({ success: true, status: adSetStatus, message });
     } catch (error) {
         message = `Error processing ad ${adId}: ${
@@ -479,7 +480,7 @@ async function duplicateAdSetAndAdToCampaign(
     return duplicateAdSetWithUpdatedBudget;
 }
 
-// https://us-central1-solar-ad-tester-2.cloudfunctions.net/duplicateAdSetAndAdToCampaignHttp
+// https://duplicateadsetandadtocampaignhttp-txyabkufvq-uc.a.run.app
 export const duplicateAdSetAndAdToCampaignHttp = onRequest(async (req, res) => {
     try {
         // Validate required input parameters
