@@ -55,7 +55,7 @@ export async function uploadVideoToStorage(
     return { fileCloudStorageUri, uploadFileUri };
 }
 
-const EXPIRE_TIME_MS = Date.now() + 30 * 60 * 1000; // 30 minutes
+const EXPIRE_TIME_MS = Date.now() + 2 * 60 * 60 * 1000; // 2 hours
 
 export async function getSignedUploadUrl(
     accountId: string,
