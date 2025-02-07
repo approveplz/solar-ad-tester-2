@@ -8,7 +8,7 @@ import {
     Campaign,
     AdImage,
 } from 'facebook-nodejs-business-sdk';
-
+type AdSetStatus = (typeof AdSet.Status)[keyof typeof AdSet.Status];
 import fetch from 'node-fetch';
 import {
     FbApiAdCreativeObjStorySpec,
@@ -257,12 +257,26 @@ export default class MetaAdCreatorService {
     }
 
     async getAdSetIdFromAdId(adId: string): Promise<string> {
-        const ad = new Ad(adId);
-        const response = (await (ad.get(['adset_id']) as unknown)) as {
-            adset_id: string;
-        };
-        const adsetId = response['adset_id'];
-        return adsetId;
+        console.log(`Getting AdSet ID for Ad ID: ${adId}`);
+        try {
+            const ad = new Ad(adId);
+            const response = (await (ad.get(['adset_id']) as unknown)) as {
+                adset_id: string;
+            };
+            const adsetId = response['adset_id'];
+
+            if (!adsetId) {
+                throw new Error('AdSet ID not found in response');
+            }
+
+            console.log(`Successfully retrieved AdSet ID: ${adsetId}`);
+            return adsetId;
+        } catch (error: any) {
+            console.error(
+                `Failed to get AdSet ID for Ad ID: ${adId}. Error: ${error.message}`
+            );
+            throw error;
+        }
     }
 
     async duplicateAdSet(adSetId: string, campaignId: string): Promise<AdSet> {
@@ -453,6 +467,27 @@ export default class MetaAdCreatorService {
         console.log(`Created Facebook Ad. Ad ID: ${ad.id}`);
 
         return ad;
+    }
+
+    async updateAdSetStatus(
+        adSetId: string,
+        status: AdSetStatus
+    ): Promise<void> {
+        console.log(
+            `Updating AdSet status. AdSet ID: ${adSetId}, New status: ${status}`
+        );
+        try {
+            const adSet = new AdSet(adSetId);
+            await adSet.update([AdSet.Fields.status], { status });
+            console.log(
+                `Successfully updated AdSet status. AdSet ID: ${adSetId}`
+            );
+        } catch (error: any) {
+            console.error(
+                `Failed to update AdSet status. AdSet ID: ${adSetId}. Error: ${error.message}`
+            );
+            throw error;
+        }
     }
 
     /* Helpers */

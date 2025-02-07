@@ -32,7 +32,7 @@ import {
     getSignedDownloadUrl,
 } from './firebaseStorageCloud.js';
 import { generateVideoHash } from './helpers.js';
-
+type AdSetStatus = (typeof AdSet.Status)[keyof typeof AdSet.Status];
 config();
 
 const UUID_FIELD_NAME = 'uuid';
@@ -53,7 +53,7 @@ const AD_ACCOUNT_DATA = {
         name: 'Vincent x Digitsolution CC 1',
         type: 'R',
         campaignId: '120215523703190415',
-        scalingCampaignId: '120216743109330415',
+        scalingCampaignId: '120216751824410415',
         targeting: {
             geo_locations: {
                 location_types: ['home', 'recent'],
@@ -331,6 +331,7 @@ export const watchCloudStorageUploads = onObjectFinalized(async (event) => {
     const makeWebhookPayload = {
         adId,
         adName,
+        accountId,
     };
 
     await fetch(makeWebhookUrl, {
@@ -367,8 +368,119 @@ const getFbAdSettings = async (accountId: string) => {
     return fbAdSettings;
 };
 
-// https://us-central1-solar-ad-tester-2.cloudfunctions.net/duplicateAdSetAndAdToCampaign
-export const duplicateAdSetAndAdToCampaign = onRequest(async (req, res) => {
+export const handleAdTesting = onRequest(async (req, res) => {
+    const lifetimeSpendThresholdDollars = 40;
+    const lifetimeRoiThreshold = 1.5;
+    const { adId, accountId, totalSpendLifetimeDollars, totalRoiLifetime } =
+        req.body;
+
+    let adSetStatus: AdSetStatus = 'ACTIVE'; // Default Facebook ad set status
+    let message = '';
+
+    try {
+        // Validate required parameters
+        const missingParams = [];
+        if (!adId) missingParams.push('adId');
+        if (!accountId) missingParams.push('accountId');
+        if (totalSpendLifetimeDollars === undefined)
+            missingParams.push('totalSpendLifetimeDollars');
+        if (totalRoiLifetime === undefined)
+            missingParams.push('totalRoiLifetime');
+
+        if (missingParams.length > 0) {
+            message = `Missing required parameters: ${missingParams.join(
+                ', '
+            )}`;
+            res.status(400).json({
+                success: false,
+                status: adSetStatus,
+                message,
+            });
+            return;
+        }
+
+        if (totalSpendLifetimeDollars < lifetimeSpendThresholdDollars) {
+            message = `Ad ${adId} still under the lifetime spend threshold of ${lifetimeSpendThresholdDollars} dollars. Total spend: ${totalSpendLifetimeDollars}`;
+            res.status(200).json({
+                success: true,
+                status: adSetStatus,
+                message,
+            });
+            return;
+        }
+
+        console.log(`Spend threshold met for ad ${adId}`);
+
+        const metaAdCreatorService = new MetaAdCreatorService({
+            appId: process.env.FACEBOOK_APP_ID || '',
+            appSecret: process.env.FACEBOOK_APP_SECRET || '',
+            accessToken: process.env.FACEBOOK_ACCESS_TOKEN || '',
+            accountId,
+            apiVersion: '20.0',
+        });
+        const adSetId = await metaAdCreatorService.getAdSetIdFromAdId(adId);
+
+        console.log(`Lifetime ROI: ${totalRoiLifetime}`);
+
+        if (totalRoiLifetime < 1) {
+            adSetStatus = 'PAUSED';
+            message = `Ad ${adId} has ROI of < 1. ROI: ${totalRoiLifetime}. Ad Paused.`;
+
+            await metaAdCreatorService.updateAdSetStatus(adSetId, adSetStatus);
+            console.log(`Updated ad ${adId} status to ${adSetStatus}`);
+        } else if (totalRoiLifetime < lifetimeRoiThreshold) {
+            message = `Ad ${adId} has ROI between 1 and ${lifetimeRoiThreshold}. ROI: ${totalRoiLifetime}. Keep running because profitable but do not scale.`;
+        } else {
+            message = `Ad ${adId} has ROI >= ${lifetimeRoiThreshold}. ROI: ${totalRoiLifetime}. Ready for scaling.`;
+            // TODO: Implement scaling logic
+            // - try ads with hooks
+            // - duplicate ads to scaling campaign
+        }
+
+        res.status(200).json({ success: true, status: adSetStatus, message });
+    } catch (error) {
+        message = `Error processing ad ${adId}: ${
+            error instanceof Error ? error.message : 'Unknown error'
+        }`;
+        console.error(message);
+        res.status(500).json({ success: false, status: adSetStatus, message });
+    }
+});
+
+async function duplicateAdSetAndAdToCampaign(
+    metaAdCreatorService: MetaAdCreatorService,
+    adId: string,
+    campaignId: string,
+    dailyBudgetCents: number
+) {
+    const adSetId = await metaAdCreatorService.getAdSetIdFromAdId(adId);
+    const duplicatedAdSet = await metaAdCreatorService.duplicateAdSet(
+        adSetId,
+        campaignId
+    );
+
+    console.log(
+        `Successfully duplicated ad set ${adSetId} to campaign ${campaignId}`
+    );
+
+    const updateDailyBudgetParams = {
+        daily_budget: dailyBudgetCents,
+    };
+
+    const duplicateAdSetWithUpdatedBudget = await duplicatedAdSet.update(
+        [],
+        updateDailyBudgetParams
+    );
+
+    console.log(
+        `Successfully updated daily budget for ad set ${adSetId} to ${dailyBudgetCents}`
+    );
+
+    return duplicateAdSetWithUpdatedBudget;
+}
+
+// https://us-central1-solar-ad-tester-2.cloudfunctions.net/duplicateAdSetAndAdToCampaignHttp
+export const duplicateAdSetAndAdToCampaignHttp = onRequest(async (req, res) => {
     try {
         // Validate required input parameters
         const { adId, accountId } = req.body;
@@ -405,15 +517,11 @@ export const duplicateAdSetAndAdToCampaign = onRequest(async (req, res) => {
             apiVersion: '20.0',
         });
 
-        // Get ad set ID and duplicate it
-        const adSetId = await metaAdCreatorService.getAdSetIdFromAdId(adId);
-        const duplicatedAdSet = await metaAdCreatorService.duplicateAdSet(
-            adSetId,
-            scalingCampaignId
-        );
-
-        console.log(
-            `Successfully duplicated ad set ${adSetId} to campaign ${scalingCampaignId}`
+        const duplicatedAdSet = await duplicateAdSetAndAdToCampaign(
+            metaAdCreatorService,
+            adId,
+            scalingCampaignId,
+            20000
         );
 
         res.status(200).json({
