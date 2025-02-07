@@ -55,7 +55,6 @@ const AD_ACCOUNT_DATA = {
         campaignId: '120215523703190415',
         targeting: {
             geo_locations: {
-                countries: ['US'],
                 location_types: ['home', 'recent'],
                 location_cluster_ids: [{ key: '9096931440399416' }],
             },
@@ -65,6 +64,7 @@ const AD_ACCOUNT_DATA = {
                     name: 'Roofing Leads 180d',
                 },
             ],
+            brand_safety_content_filter_levels: ['FEED_RELAXED'],
             targeting_relaxation_types: {
                 lookalike: 0,
                 custom_audience: 0,
@@ -77,11 +77,11 @@ const AD_ACCOUNT_DATA = {
         campaignId: '120216226115490096',
         targeting: {
             geo_locations: {
-                countries: ['US'],
                 location_types: ['home', 'recent'],
                 // TODO: Change this to the correct location cluster ID
                 location_cluster_ids: [{ key: '28950427651210969' }],
             },
+            brand_safety_content_filter_levels: ['FEED_RELAXED'],
             targeting_relaxation_types: {
                 lookalike: 0,
                 custom_audience: 0,
@@ -114,7 +114,6 @@ const AD_ACCOUNT_DATA = {
                 location_types: ['home', 'recent'],
             },
             geo_locations: {
-                countries: ['US'],
                 location_types: ['home', 'recent'],
             },
             targeting_relaxation_types: {

@@ -73,7 +73,10 @@ export interface FbApiAdSetTargeting {
             country: string;
         }[];
         countries?: string[];
+        location_types?: string[];
+        location_cluster_ids?: { key: string }[];
     };
+    brand_safety_content_filter_levels?: string[];
     targeting_automation?: {
         // 1 for true
         advantage_audience: number;
