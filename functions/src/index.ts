@@ -316,6 +316,27 @@ export const watchCloudStorageUploads = onObjectFinalized(async (event) => {
         uuid,
         downloadUrl
     );
+
+    // Send adId and adName to Make.com webhook
+    const adResponse = (await (ad.get(['name', ' id']) as unknown)) as {
+        name: string;
+        id: string;
+    };
+
+    const adName = adResponse.name;
+    const adId = adResponse.id;
+    console.log({ ad, adName, adId });
+    const makeWebhookUrl =
+        'https://hook.us1.make.com/w08iv7ieulywlnb91i594d93c1mqks7y';
+    const makeWebhookPayload = {
+        adId,
+        adName,
+    };
+
+    await fetch(makeWebhookUrl, {
+        method: 'POST',
+        body: JSON.stringify(makeWebhookPayload),
+    });
 });
 
 const getFbAdSettings = async (accountId: string) => {
@@ -346,6 +367,7 @@ const getFbAdSettings = async (accountId: string) => {
     return fbAdSettings;
 };
 
+// https://us-central1-solar-ad-tester-2.cloudfunctions.net/duplicateAdSetAndAdToCampaign
 export const duplicateAdSetAndAdToCampaign = onRequest(async (req, res) => {
     try {
         // Validate required input parameters
