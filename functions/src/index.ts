@@ -22,6 +22,8 @@ import {
 import {
     //@ts-ignore
     getFbAdSettingFirestore,
+    getIncrementedCounterFirestore,
+    saveAdPerformanceFirestore,
     saveFbAdFirestore,
     saveVideoHashFirestore,
     getVideoHashMapFirestore,
@@ -32,6 +34,7 @@ import {
     getSignedDownloadUrl,
 } from './firebaseStorageCloud.js';
 import { generateVideoHash } from './helpers.js';
+import { AdPerformance } from './models/AdPerformance.js';
 type AdSetStatus = (typeof AdSet.Status)[keyof typeof AdSet.Status];
 config();
 
@@ -240,6 +243,111 @@ export const uploadThirdPartyAdGetSignedUploadUrl = onRequest(
     }
 );
 
+export const createFbAdHttp = onRequest(async (req, res) => {
+    try {
+        // Validate required request body parameters
+        const requiredFields = [
+            'accountId',
+            'downloadUrl',
+            'vertical',
+            'scriptWriter',
+            'ideaWriter',
+            'hookWriter',
+        ];
+        const missingFields = requiredFields.filter(
+            (field) => !req.body[field]
+        );
+
+        if (missingFields.length > 0) {
+            res.status(400).json({
+                success: false,
+                error: `Missing required fields: ${missingFields.join(', ')}`,
+            });
+            return;
+        }
+
+        const {
+            accountId,
+            downloadUrl,
+            vertical,
+            scriptWriter,
+            ideaWriter,
+            hookWriter,
+        } = req.body;
+
+        const adAccountData =
+            AD_ACCOUNT_DATA[accountId as keyof typeof AD_ACCOUNT_DATA];
+        invariant(
+            adAccountData,
+            `ad account data not found in constants for account id: ${accountId}`
+        );
+
+        const { campaignId } = adAccountData;
+        const fbAdSettings = await getFbAdSettings(accountId);
+        const metaAdCreatorService = new MetaAdCreatorService({
+            appId: process.env.FACEBOOK_APP_ID || '',
+            appSecret: process.env.FACEBOOK_APP_SECRET || '',
+            accessToken: process.env.FACEBOOK_ACCESS_TOKEN || '',
+            accountId: accountId || '',
+            apiVersion: '20.0',
+        });
+
+        const nextCounter = await getIncrementedCounterFirestore();
+        const adName = `${nextCounter}-${vertical}-${scriptWriter}-${ideaWriter}-${hookWriter}`;
+
+        const ad = await handleCreateAd(
+            metaAdCreatorService,
+            fbAdSettings,
+            campaignId,
+            adName,
+            downloadUrl
+        );
+
+        const adResponse = (await (ad.get(['name', ' id']) as unknown)) as {
+            id: string;
+        };
+
+        const adId = adResponse.id;
+        const adSetId = await metaAdCreatorService.getAdSetIdFromAdId(adId);
+
+        const adPerformance: AdPerformance = {
+            adName,
+            gDriveDownloadUrl: downloadUrl,
+            adId,
+            adSetId,
+            campaignId,
+            vertical,
+            ideaWriter,
+            scriptWriter,
+            hookWriter,
+            performanceMetrics: {
+                fbSpendLast3Days: 0,
+                fbSpendLast7Days: 0,
+                fbSpendLifetime: 0,
+                fbRevenueLast3Days: 0,
+                fbRevenueLast7Days: 0,
+                fbRevenueLifetime: 0,
+            },
+            fbIsActive: true,
+            isHook: false,
+        };
+
+        await saveAdPerformanceFirestore(adPerformance);
+
+        res.status(200).json({
+            success: true,
+            adPerformance,
+        });
+    } catch (error) {
+        console.error('Error creating Facebook ad:', error);
+
+        res.status(500).json({
+            success: false,
+            error: 'An unexpected error occurred while creating the Facebook ad',
+        });
+    }
+});
+
 export const watchCloudStorageUploads = onObjectFinalized(async (event) => {
     console.log('watched cloud storage uploads triggered');
     const WATCHED_FOLDERS = Object.keys(AD_ACCOUNT_DATA);
@@ -434,7 +542,17 @@ export const handleAdTesting = onRequest(async (req, res) => {
             message = `Ad ${adId} has ROI >= ${lifetimeRoiThreshold}. ROI: ${totalRoiLifetime}. Ready for scaling.`;
             // TODO: Implement scaling logic
             // - try ads with hooks
-            // - duplicate ads to scaling campaign
+
+            const accountData =
+                AD_ACCOUNT_DATA[accountId as keyof typeof AD_ACCOUNT_DATA];
+            const { scalingCampaignId } = accountData;
+
+            await duplicateAdSetAndAdToCampaign(
+                metaAdCreatorService,
+                adId,
+                scalingCampaignId,
+                20000
+            );
         }
 
         console.log(message);

@@ -2,7 +2,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { FbAdSettings } from './models/FbAdSettings.js';
 import { CreatedFbAdInfo } from './models/CreatedFbAdInfo.js';
 import { ParsedFbAdInfo } from './models/ParsedFbAdInfo.js';
-
+import { AdPerformance } from './models/AdPerformance.js';
 const FB_AD_SETTINGS_COLLECTION = 'fb-ad-settings';
 const CREATED_ADS_COLLECTION_SOLAR = 'created-ads-collection-solar';
 const CREATED_ADS_COLLECTION_ROOFING = 'created-ads-collection-roofing';
@@ -15,11 +15,63 @@ const CREATED_ADS_COLLECTION_ROOFING_VIDEO_HASHES =
 const CREATED_ADS_COLLECTION_SOLAR_VIDEO_HASHES_DOC_NAME = 'videohashes';
 const CREATED_ADS_COLLECTION_SOLAR_VIDEO_HASHES_MAP_NAME = 'videohashes';
 
+const INCREMENT_COUNTER_COLLECTION = 'counters';
+const INCREMENT_COUNTER_DOC_NAME = 'global';
+
+const AD_PERFORMANCE_COLLECTION = 'ad-performance';
+
+const AdPerformanceDocConverter = {
+    toFirestore: (data: AdPerformance) => data,
+    fromFirestore: (snap: FirebaseFirestore.QueryDocumentSnapshot) =>
+        snap.data() as AdPerformance,
+};
+
+export async function saveAdPerformanceFirestore(adPerformance: AdPerformance) {
+    const db = getFirestore();
+    const data = {
+        adPerformance,
+    };
+    return await db.collection(AD_PERFORMANCE_COLLECTION).doc().set(data);
+}
+
 const FbAdSettingsDocConverter = {
     toFirestore: (data: FbAdSettings) => data,
     fromFirestore: (snap: FirebaseFirestore.QueryDocumentSnapshot) =>
         snap.data() as FbAdSettings,
 };
+
+export async function getIncrementedCounterFirestore(): Promise<number> {
+    try {
+        const db = getFirestore();
+        const counterRef = db
+            .collection(INCREMENT_COUNTER_COLLECTION)
+            .doc(INCREMENT_COUNTER_DOC_NAME);
+
+        return await db.runTransaction(async (transaction) => {
+            const counterDoc = await transaction.get(counterRef);
+
+            const counterData = counterDoc.data();
+            if (!counterData) {
+                throw new Error('Counter document data is undefined');
+            }
+
+            const nextCounter = counterData.counter + 1;
+
+            transaction.set(
+                counterRef,
+                { counter: nextCounter },
+                { merge: true }
+            );
+            return nextCounter;
+        });
+    } catch (error) {
+        console.error(
+            'Error getting incremented counter from Firestore:',
+            error
+        );
+        throw error;
+    }
+}
 
 export async function getFbAdSettingFirestore(
     adType: string
