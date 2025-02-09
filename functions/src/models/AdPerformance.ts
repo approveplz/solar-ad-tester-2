@@ -25,4 +25,6 @@ export interface AdPerformance {
     performanceMetrics: PerformanceMetrics;
     fbIsActive: boolean;
     isHook: boolean;
+    hasHooksCreated: boolean;
+    hasScaled: boolean;
 }

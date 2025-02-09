@@ -354,6 +354,8 @@ export const createFbAdHttp = onRequest(async (req, res) => {
             },
             fbIsActive: true,
             isHook: false,
+            hasHooksCreated: false,
+            hasScaled: false,
         };
 
         await saveAdPerformanceFirestore(fbAdId, adPerformance);
@@ -689,6 +691,8 @@ export const duplicateAdSetAndAdToCampaignHttp = onRequest(async (req, res) => {
 export const updateAdPerformanceScheduled = onSchedule(
     'every 1 hours',
     async (event) => {
+        const metAdCreatorServices: Record<string, MetaAdCreatorService> = {};
+
         try {
             const bigQueryService = new BigQueryService();
             const bqPerformanceLast3Days: AdPerformanceDataBigQuery[] =
@@ -737,16 +741,96 @@ export const updateAdPerformanceScheduled = onSchedule(
                     fbRoiLifetime: bqFbMetricsLifetime?.ROI ?? 0,
                 };
 
+                const lifetimeSpendThresholdDollars = 40;
+
+                if (
+                    firestoreAdPerformance.performanceMetrics.fbSpendLifetime <
+                    lifetimeSpendThresholdDollars
+                ) {
+                    console.log(
+                        `Ad ${fbAdId} has spent less than ${lifetimeSpendThresholdDollars} dollars. Skipping...`
+                    );
+                    continue;
+                }
+
+                let adSetStatus: AdSetStatus = 'ACTIVE';
+                let hasHooksCreated = firestoreAdPerformance.hasHooksCreated;
+                let hasScaled = firestoreAdPerformance.hasScaled;
+                let metaAdCreatorService: MetaAdCreatorService;
+                let fbIsActive: boolean = firestoreAdPerformance.fbIsActive;
+                let message = '';
+                const lifetimeRoiScalingThreshold = 1.5;
+                const lifetimeRoiHookThreshold = 1.15;
+                const creatomateService = await CreatomateService.create(
+                    process.env.CREATOMATE_API_KEY || ''
+                );
+
+                const fbAccountId = firestoreAdPerformance.fbAccountId;
+                invariant(fbAccountId, 'fbAccountId must be defined');
+
+                if (metAdCreatorServices[fbAccountId]) {
+                    metaAdCreatorService = metAdCreatorServices[fbAccountId];
+                } else {
+                    metaAdCreatorService = new MetaAdCreatorService({
+                        appId: process.env.FACEBOOK_APP_ID || '',
+                        appSecret: process.env.FACEBOOK_APP_SECRET || '',
+                        accessToken: process.env.FACEBOOK_ACCESS_TOKEN || '',
+                        accountId: fbAccountId,
+                    });
+                    metAdCreatorServices[fbAccountId] = metaAdCreatorService;
+                }
+
+                if (
+                    firestoreAdPerformance.performanceMetrics.fbRoiLifetime <
+                    lifetimeRoiHookThreshold
+                ) {
+                    adSetStatus = 'PAUSED';
+                    fbIsActive = false;
+                    message = `Ad ${fbAdId} has ROI < ${lifetimeRoiHookThreshold}. ROI: ${firestoreAdPerformance.performanceMetrics.fbRoiLifetime}. Ad Paused.`;
+                } else if (
+                    firestoreAdPerformance.performanceMetrics.fbRoiLifetime <
+                    lifetimeRoiScalingThreshold
+                ) {
+                    message = `Ad ${fbAdId} has ROI between ${lifetimeRoiHookThreshold} and ${lifetimeRoiScalingThreshold}. ROI: ${firestoreAdPerformance.performanceMetrics.fbRoiLifetime}. Keep running because profitable but do not scale.`;
+                    if (!firestoreAdPerformance.hasHooksCreated) {
+                        const originalVideoUrl =
+                            firestoreAdPerformance.gDriveDownloadUrl;
+
+                        const baseAdName = firestoreAdPerformance.adName;
+                        await creatomateService.uploadToCreatomateWithHooksAll(
+                            originalVideoUrl,
+                            baseAdName,
+                            fbAdId
+                        );
+                    } else {
+                        message = 'Hooks already created.';
+                    }
+                } else {
+                    message = `Ad ${fbAdId} has ROI >= ${lifetimeRoiScalingThreshold}. ROI: ${firestoreAdPerformance.performanceMetrics.fbRoiLifetime}. Ready for scaling.`;
+                    if (!firestoreAdPerformance.hasScaled) {
+                        // TODO: Scale ad
+                        hasScaled = true;
+                    } else {
+                        message = 'Ad has already been scaled.';
+                    }
+                }
+
+                await metaAdCreatorService.updateAdSetStatus(
+                    firestoreAdPerformance.fbAdSetId,
+                    adSetStatus
+                );
                 firestoreAdPerformance.performanceMetrics = performanceMetrics;
+                firestoreAdPerformance.hasHooksCreated = hasHooksCreated;
+                firestoreAdPerformance.hasScaled = hasScaled;
+                firestoreAdPerformance.fbIsActive = fbIsActive;
                 await saveAdPerformanceFirestore(
                     firestoreAdPerformance.fbAdId,
                     firestoreAdPerformance
                 );
 
-                console.log(`Updated performance metrics for ad ${fbAdId}`);
+                console.log(`Updated ad performance for ad ${fbAdId}`);
+                console.log(message);
             }
-
-            console.log('Successfully updated all ad performances');
         } catch (error) {
             console.error('Error updating ad performances:', error);
             throw error; // Rethrowing the error will mark the execution as failed in Firebase
@@ -864,6 +948,8 @@ export const handleCreatomateWebhookHttp = onRequest(async (req, res) => {
         },
         fbIsActive: true,
         isHook: true,
+        hasHooksCreated: false,
+        hasScaled: false,
     };
 
     await saveAdPerformanceFirestore(hookAdId, hookAdPerformance);
