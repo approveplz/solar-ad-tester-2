@@ -355,6 +355,7 @@ export const createFbAdHttp = onRequest(async (req, res) => {
             fbIsActive: true,
             isHook: false,
             hasHooksCreated: false,
+            isScaled: false,
             hasScaled: false,
         };
 
@@ -508,7 +509,7 @@ export const handleAdTesting = onRequest(async (req, res) => {
     const { adId, accountId, totalSpendLifetimeDollars, totalRoiLifetime } =
         req.body;
 
-    let adSetStatus: AdSetStatus = 'ACTIVE'; // Default Facebook ad set status
+    let fbAdSetStatus: AdSetStatus = 'ACTIVE'; // Default Facebook ad set status
     let message = '';
 
     try {
@@ -527,7 +528,7 @@ export const handleAdTesting = onRequest(async (req, res) => {
             )}`;
             res.status(400).json({
                 success: false,
-                status: adSetStatus,
+                status: fbAdSetStatus,
                 message,
             });
             return;
@@ -537,7 +538,7 @@ export const handleAdTesting = onRequest(async (req, res) => {
             message = `Ad ${adId} still under the lifetime spend threshold of ${lifetimeSpendThresholdDollars} dollars. Total spend: ${totalSpendLifetimeDollars}`;
             res.status(200).json({
                 success: true,
-                status: adSetStatus,
+                status: fbAdSetStatus,
                 message,
             });
             return;
@@ -557,11 +558,14 @@ export const handleAdTesting = onRequest(async (req, res) => {
         console.log(`Lifetime ROI: ${totalRoiLifetime}`);
 
         if (totalRoiLifetime < 1) {
-            adSetStatus = 'PAUSED';
+            fbAdSetStatus = 'PAUSED';
             message = `Ad ${adId} has ROI of < 1. ROI: ${totalRoiLifetime}. Ad Paused.`;
 
-            await metaAdCreatorService.updateAdSetStatus(adSetId, adSetStatus);
-            console.log(`Updated ad ${adId} status to ${adSetStatus}`);
+            await metaAdCreatorService.updateAdSetStatus(
+                adSetId,
+                fbAdSetStatus
+            );
+            console.log(`Updated ad ${adId} status to ${fbAdSetStatus}`);
         } else if (totalRoiLifetime < lifetimeRoiThreshold) {
             message = `Ad ${adId} has ROI between 1 and ${lifetimeRoiThreshold}. ROI: ${totalRoiLifetime}. Keep running because profitable but do not scale.`;
         } else {
@@ -582,13 +586,17 @@ export const handleAdTesting = onRequest(async (req, res) => {
         }
 
         console.log(message);
-        res.status(200).json({ success: true, status: adSetStatus, message });
+        res.status(200).json({ success: true, status: fbAdSetStatus, message });
     } catch (error) {
         message = `Error processing ad ${adId}: ${
             error instanceof Error ? error.message : 'Unknown error'
         }`;
         console.error(message);
-        res.status(500).json({ success: false, status: adSetStatus, message });
+        res.status(500).json({
+            success: false,
+            status: fbAdSetStatus,
+            message,
+        });
     }
 });
 
@@ -688,6 +696,28 @@ export const duplicateAdSetAndAdToCampaignHttp = onRequest(async (req, res) => {
     return;
 });
 
+const LIFETIME_SPEND_THRESHOLD = 40;
+const LIFETIME_ROI_SCALING_THRESHOLD = 1.5;
+const LIFETIME_ROI_HOOK_THRESHOLD = 1.3;
+
+function buildPerformanceMetrics(
+    bqMetrics3d?: AdPerformanceDataBigQuery,
+    bqMetrics7d?: AdPerformanceDataBigQuery,
+    bqMetricsLifetime?: AdPerformanceDataBigQuery
+): PerformanceMetrics {
+    return {
+        fbSpendLast3Days: bqMetrics3d?.total_cost ?? 0,
+        fbSpendLast7Days: bqMetrics7d?.total_cost ?? 0,
+        fbSpendLifetime: bqMetricsLifetime?.total_cost ?? 0,
+        fbRevenueLast3Days: bqMetrics3d?.total_revenue ?? 0,
+        fbRevenueLast7Days: bqMetrics7d?.total_revenue ?? 0,
+        fbRevenueLifetime: bqMetricsLifetime?.total_revenue ?? 0,
+        fbRoiLast3Days: bqMetrics3d?.ROI ?? 0,
+        fbRoiLast7Days: bqMetrics7d?.ROI ?? 0,
+        fbRoiLifetime: bqMetricsLifetime?.ROI ?? 0,
+    };
+}
+
 export const updateAdPerformanceScheduled = onSchedule(
     'every 1 hours',
     async (event) => {
@@ -695,138 +725,117 @@ export const updateAdPerformanceScheduled = onSchedule(
 
         try {
             const bigQueryService = new BigQueryService();
-            const bqPerformanceLast3Days: AdPerformanceDataBigQuery[] =
-                await bigQueryService.getAdPerformance('AD_PERFORMANCE_3D');
+            const [
+                bqFbPerformanceLast3Days,
+                bqFbPerformanceLast7Days,
+                bqFbPerformanceLifetime,
+                firestoreAdPerformances,
+            ] = await Promise.all([
+                bigQueryService.getAdPerformance('AD_PERFORMANCE_3D'),
+                bigQueryService.getAdPerformance('AD_PERFORMANCE_7D'),
+                bigQueryService.getAdPerformance('AD_PERFORMANCE_LIFETIME'),
+                getAdPerformanceFirestoreAll(),
+            ]);
 
-            const bqPerformanceLast7Days: AdPerformanceDataBigQuery[] =
-                await bigQueryService.getAdPerformance('AD_PERFORMANCE_7D');
+            for (const adPerformance of firestoreAdPerformances) {
+                const fbAdId = adPerformance.fbAdId;
 
-            const bqPerformanceLifetime: AdPerformanceDataBigQuery[] =
-                await bigQueryService.getAdPerformance(
-                    'AD_PERFORMANCE_LIFETIME'
-                );
-
-            const firestoreAdPerformances: AdPerformance[] =
-                await getAdPerformanceFirestoreAll();
-
-            for (const firestoreAdPerformance of firestoreAdPerformances) {
-                const fbAdId = firestoreAdPerformance.fbAdId;
-                if (!firestoreAdPerformance.fbIsActive) {
+                // Skip inactive ads
+                if (!adPerformance.fbIsActive) {
                     continue;
                 }
 
-                const bqFbMetricsLast3Days = bqPerformanceLast3Days.find(
+                // Find relevant metrics
+                const bqFbMetrics3d = bqFbPerformanceLast3Days.find(
+                    (ad) => ad.AdID === fbAdId && ad.Platform === 'FB'
+                );
+                const bqFbMetrics7d = bqFbPerformanceLast7Days.find(
+                    (ad) => ad.AdID === fbAdId && ad.Platform === 'FB'
+                );
+                const bqFbMetricsLifetime = bqFbPerformanceLifetime.find(
                     (ad) => ad.AdID === fbAdId && ad.Platform === 'FB'
                 );
 
-                const bqFbMetricsLast7Days = bqPerformanceLast7Days.find(
-                    (ad) => ad.AdID === fbAdId && ad.Platform === 'FB'
+                // Update performance metrics
+                adPerformance.performanceMetrics = buildPerformanceMetrics(
+                    bqFbMetrics3d,
+                    bqFbMetrics7d,
+                    bqFbMetricsLifetime
                 );
 
-                const bqFbMetricsLifetime = bqPerformanceLifetime.find(
-                    (ad) => ad.AdID === fbAdId && ad.Platform === 'FB'
-                );
-
-                const performanceMetrics: PerformanceMetrics = {
-                    fbSpendLast3Days: bqFbMetricsLast3Days?.total_cost ?? 0,
-                    fbSpendLast7Days: bqFbMetricsLast7Days?.total_cost ?? 0,
-                    fbSpendLifetime: bqFbMetricsLifetime?.total_cost ?? 0,
-                    fbRevenueLast3Days:
-                        bqFbMetricsLast3Days?.total_revenue ?? 0,
-                    fbRevenueLast7Days:
-                        bqFbMetricsLast7Days?.total_revenue ?? 0,
-                    fbRevenueLifetime: bqFbMetricsLifetime?.total_revenue ?? 0,
-                    fbRoiLast3Days: bqFbMetricsLast3Days?.ROI ?? 0,
-                    fbRoiLast7Days: bqFbMetricsLast7Days?.ROI ?? 0,
-                    fbRoiLifetime: bqFbMetricsLifetime?.ROI ?? 0,
-                };
-
-                const lifetimeSpendThresholdDollars = 40;
-
+                // Skip if below spend threshold
                 if (
-                    firestoreAdPerformance.performanceMetrics.fbSpendLifetime <
-                    lifetimeSpendThresholdDollars
+                    adPerformance.performanceMetrics.fbSpendLifetime <
+                    LIFETIME_SPEND_THRESHOLD
                 ) {
                     console.log(
-                        `Ad ${fbAdId} has spent less than ${lifetimeSpendThresholdDollars} dollars. Skipping...`
+                        `Ad ${fbAdId} has spent less than ${LIFETIME_SPEND_THRESHOLD} dollars. Skipping...`
                     );
                     continue;
                 }
 
-                let adSetStatus: AdSetStatus = 'ACTIVE';
-                let hasHooksCreated = firestoreAdPerformance.hasHooksCreated;
-                let hasScaled = firestoreAdPerformance.hasScaled;
-                let metaAdCreatorService: MetaAdCreatorService;
-                let fbIsActive: boolean = firestoreAdPerformance.fbIsActive;
-                let message = '';
-                const lifetimeRoiScalingThreshold = 1.5;
-                const lifetimeRoiHookThreshold = 1.15;
-                const creatomateService = await CreatomateService.create(
-                    process.env.CREATOMATE_API_KEY || ''
-                );
-
-                const fbAccountId = firestoreAdPerformance.fbAccountId;
+                const fbAccountId = adPerformance.fbAccountId;
                 invariant(fbAccountId, 'fbAccountId must be defined');
 
-                if (metAdCreatorServices[fbAccountId]) {
-                    metaAdCreatorService = metAdCreatorServices[fbAccountId];
-                } else {
-                    metaAdCreatorService = new MetaAdCreatorService({
-                        appId: process.env.FACEBOOK_APP_ID || '',
-                        appSecret: process.env.FACEBOOK_APP_SECRET || '',
-                        accessToken: process.env.FACEBOOK_ACCESS_TOKEN || '',
-                        accountId: fbAccountId,
-                    });
-                    metAdCreatorServices[fbAccountId] = metaAdCreatorService;
+                if (!metAdCreatorServices[fbAccountId]) {
+                    metAdCreatorServices[fbAccountId] =
+                        new MetaAdCreatorService({
+                            appId: process.env.FACEBOOK_APP_ID || '',
+                            appSecret: process.env.FACEBOOK_APP_SECRET || '',
+                            accessToken:
+                                process.env.FACEBOOK_ACCESS_TOKEN || '',
+                            accountId: fbAccountId,
+                        });
                 }
 
-                if (
-                    firestoreAdPerformance.performanceMetrics.fbRoiLifetime <
-                    lifetimeRoiHookThreshold
-                ) {
-                    adSetStatus = 'PAUSED';
-                    fbIsActive = false;
-                    message = `Ad ${fbAdId} has ROI < ${lifetimeRoiHookThreshold}. ROI: ${firestoreAdPerformance.performanceMetrics.fbRoiLifetime}. Ad Paused.`;
-                } else if (
-                    firestoreAdPerformance.performanceMetrics.fbRoiLifetime <
-                    lifetimeRoiScalingThreshold
-                ) {
-                    message = `Ad ${fbAdId} has ROI between ${lifetimeRoiHookThreshold} and ${lifetimeRoiScalingThreshold}. ROI: ${firestoreAdPerformance.performanceMetrics.fbRoiLifetime}. Keep running because profitable but do not scale.`;
-                    if (!firestoreAdPerformance.hasHooksCreated) {
-                        const originalVideoUrl =
-                            firestoreAdPerformance.gDriveDownloadUrl;
+                // Handle ad based on ROI
+                const fbRoiLifetime =
+                    adPerformance.performanceMetrics.fbRoiLifetime;
+                let message: string;
+                let fbAdSetStatus: AdSetStatus = 'ACTIVE';
 
-                        const baseAdName = firestoreAdPerformance.adName;
+                if (fbRoiLifetime < 1) {
+                    fbAdSetStatus = 'PAUSED';
+                    message = `Ad ${fbAdId} has ROI < 1. ROI: ${fbRoiLifetime}. Ad Paused.`;
+                } else if (fbRoiLifetime < LIFETIME_ROI_HOOK_THRESHOLD) {
+                    message = `Ad ${fbAdId} has 1 < ROI < ${LIFETIME_ROI_HOOK_THRESHOLD}. ROI: ${fbRoiLifetime}. Keep Ad running because profitable but do not create hooks or scale.`;
+                } else {
+                    // fbRoiLifetime >= LIFETIME_ROI_HOOK_THRESHOLD
+                    if (!adPerformance.hasHooksCreated) {
+                        const creatomateService =
+                            await CreatomateService.create(
+                                process.env.CREATOMATE_API_KEY || ''
+                            );
                         await creatomateService.uploadToCreatomateWithHooksAll(
-                            originalVideoUrl,
-                            baseAdName,
+                            adPerformance.gDriveDownloadUrl,
+                            adPerformance.adName,
                             fbAdId
                         );
+                        adPerformance.hasHooksCreated = true;
+                        message = `Ad ${fbAdId} has ROI above ${LIFETIME_ROI_HOOK_THRESHOLD}. ROI: ${fbRoiLifetime}. Create hooks.`;
                     } else {
                         message = 'Hooks already created.';
                     }
-                } else {
-                    message = `Ad ${fbAdId} has ROI >= ${lifetimeRoiScalingThreshold}. ROI: ${firestoreAdPerformance.performanceMetrics.fbRoiLifetime}. Ready for scaling.`;
-                    if (!firestoreAdPerformance.hasScaled) {
-                        // TODO: Scale ad
-                        hasScaled = true;
-                    } else {
-                        message = 'Ad has already been scaled.';
+
+                    if (fbRoiLifetime >= LIFETIME_ROI_SCALING_THRESHOLD) {
+                        if (!adPerformance.hasScaled) {
+                            // TODO: Implement scaling logic
+                            adPerformance.hasScaled = true;
+                            message = `Ad ${fbAdId} has ROI >= ${LIFETIME_ROI_SCALING_THRESHOLD}. ROI: ${fbRoiLifetime}. Ready for scaling.`;
+                        } else {
+                            message = 'Ad has already been scaled.';
+                        }
                     }
                 }
 
-                await metaAdCreatorService.updateAdSetStatus(
-                    firestoreAdPerformance.fbAdSetId,
-                    adSetStatus
+                // Update ad set status in Facebook
+                await metAdCreatorServices[fbAccountId].updateAdSetStatus(
+                    adPerformance.fbAdSetId,
+                    fbAdSetStatus
                 );
-                firestoreAdPerformance.performanceMetrics = performanceMetrics;
-                firestoreAdPerformance.hasHooksCreated = hasHooksCreated;
-                firestoreAdPerformance.hasScaled = hasScaled;
-                firestoreAdPerformance.fbIsActive = fbIsActive;
-                await saveAdPerformanceFirestore(
-                    firestoreAdPerformance.fbAdId,
-                    firestoreAdPerformance
-                );
+
+                // Save updated performance data
+                await saveAdPerformanceFirestore(fbAdId, adPerformance);
 
                 console.log(`Updated ad performance for ad ${fbAdId}`);
                 console.log(message);
@@ -949,6 +958,7 @@ export const handleCreatomateWebhookHttp = onRequest(async (req, res) => {
         fbIsActive: true,
         isHook: true,
         hasHooksCreated: false,
+        isScaled: false,
         hasScaled: false,
     };
 
