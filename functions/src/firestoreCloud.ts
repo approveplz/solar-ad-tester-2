@@ -26,6 +26,25 @@ const AdPerformanceDocConverter = {
         snap.data() as AdPerformance,
 };
 
+export async function getAdPerformanceFirestoreById(
+    fbAdId: string
+): Promise<AdPerformance | null> {
+    try {
+        const db = getFirestore();
+        const docSnap = await db
+            .collection(AD_PERFORMANCE_COLLECTION)
+            .withConverter(AdPerformanceDocConverter)
+            .doc(fbAdId)
+            .get();
+
+        return docSnap.data() || null;
+    } catch (error) {
+        console.error(`Error getting ad performance for ID: ${fbAdId}`);
+        console.error(error);
+        return null;
+    }
+}
+
 export async function getAdPerformanceFirestoreAll(): Promise<AdPerformance[]> {
     const db = getFirestore();
     const snapshot = await db

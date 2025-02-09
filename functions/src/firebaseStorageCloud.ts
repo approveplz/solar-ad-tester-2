@@ -91,3 +91,38 @@ export async function getSignedDownloadUrl(filePath: string) {
     console.log({ url, uuid });
     return { url, uuid };
 }
+
+export async function getAllFilesInFolderWithSignedUrls(folderName: string) {
+    const bucket = getStorage().bucket();
+
+    try {
+        const [files] = await bucket.getFiles({
+            prefix: folderName,
+        });
+
+        const filePromises = files
+            .filter(
+                // Only return files in the folder. Not folder itself, or nested folders
+                (file) => file.name !== folderName && !file.name.endsWith('/')
+            )
+            .map(async (file) => {
+                const [url] = await file.getSignedUrl({
+                    action: 'read',
+                    expires: EXPIRE_TIME_MS,
+                });
+                return {
+                    // Remove the folder name from the file name
+                    name: file.name.replace(`${folderName}/`, ''),
+                    url,
+                };
+            });
+
+        return Promise.all(filePromises);
+    } catch (error) {
+        console.error(
+            `Error listing files in folder: ${bucket.name}/${folderName}`,
+            error
+        );
+        throw error;
+    }
+}

@@ -11,6 +11,7 @@ export interface PerformanceMetrics {
 }
 
 export interface AdPerformance {
+    counter: number;
     vertical: string;
     gDriveDownloadUrl: string;
     adName: string;

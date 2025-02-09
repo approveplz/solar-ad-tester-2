@@ -6,8 +6,6 @@ import invariant from 'tiny-invariant';
 import serviceAccount from './solar-ad-tester-2-firebase-adminsdk-3iokc-bd8ce8732d.json' assert { type: 'json' };
 import { config } from 'dotenv';
 import MetaAdCreatorService from './services/MetaAdCreatorService.js';
-import { ParsedFbAdInfo } from './models/ParsedFbAdInfo.js';
-import { CreatedFbAdInfo } from './models/CreatedFbAdInfo.js';
 import { FbAdSettings } from './models/FbAdSettings.js';
 import { FbApiAdSetTargeting } from './models/MetaApiSchema.js';
 import {
@@ -20,28 +18,26 @@ import {
     Campaign,
 } from 'facebook-nodejs-business-sdk';
 import {
-    //@ts-ignore
     getFbAdSettingFirestore,
     getIncrementedCounterFirestore,
     saveAdPerformanceFirestore,
     getAdPerformanceFirestoreAll,
-    saveFbAdFirestore,
-    saveVideoHashFirestore,
-    getVideoHashMapFirestore,
+    getAdPerformanceFirestoreById,
 } from './firestoreCloud.js';
 import {
-    uploadVideoToStorage,
     getSignedUploadUrl,
     getSignedDownloadUrl,
 } from './firebaseStorageCloud.js';
-import { generateVideoHash } from './helpers.js';
 import { AdPerformance, PerformanceMetrics } from './models/AdPerformance.js';
 import {
     AdPerformanceDataBigQuery,
     BigQueryService,
 } from './services/BigQueryService.js';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
-
+import {
+    CreatomateMetadata,
+    CreatomateService,
+} from './services/CreatomateService.js';
 type AdSetStatus = (typeof AdSet.Status)[keyof typeof AdSet.Status];
 config();
 
@@ -250,6 +246,16 @@ export const uploadThirdPartyAdGetSignedUploadUrl = onRequest(
     }
 );
 
+const getAdName = (
+    counter: number,
+    vertical: string,
+    scriptWriter: string,
+    ideaWriter: string,
+    hookWriter: string
+): string => {
+    return `${counter}-${vertical}-${scriptWriter}-${ideaWriter}-${hookWriter}`;
+};
+
 export const createFbAdHttp = onRequest(async (req, res) => {
     try {
         // Validate required request body parameters
@@ -300,7 +306,13 @@ export const createFbAdHttp = onRequest(async (req, res) => {
         });
 
         const nextCounter = await getIncrementedCounterFirestore();
-        const adName = `${nextCounter}-${vertical}-${scriptWriter}-${ideaWriter}-${hookWriter}`;
+        const adName = getAdName(
+            nextCounter,
+            vertical,
+            scriptWriter,
+            ideaWriter,
+            hookWriter
+        );
 
         const ad = await handleCreateAd(
             metaAdCreatorService,
@@ -318,6 +330,7 @@ export const createFbAdHttp = onRequest(async (req, res) => {
         const fbAdSetId = await metaAdCreatorService.getAdSetIdFromAdId(fbAdId);
 
         const adPerformance: AdPerformance = {
+            counter: nextCounter,
             fbAccountId: accountId,
             adName,
             gDriveDownloadUrl: downloadUrl,
@@ -740,6 +753,123 @@ export const updateAdPerformanceScheduled = onSchedule(
         }
     }
 );
+
+export const handleCreatomateRequestHttp = onRequest(async (req, res) => {
+    console.log('creatomate request received');
+
+    const creatomateService = await CreatomateService.create(
+        process.env.CREATOMATE_API_KEY || ''
+    );
+
+    const baseVideoUrl =
+        'https://drive.google.com/uc?export=download&id=1OMj1MwqUL2V_r12VEWxWEmfip28WO8s7';
+    const baseAdName = '103-R-AZ-AZ-AZ';
+    const fbAdId = '120216814815950415';
+    const result = await creatomateService.uploadToCreatomateWithHooksAll(
+        baseVideoUrl,
+        baseAdName,
+        fbAdId
+    );
+    res.status(200).json({ success: true, result });
+});
+
+export const handleCreatomateWebhookHttp = onRequest(async (req, res) => {
+    const {
+        id: creatomateRenderId,
+        status,
+        url: creatomateUrl,
+        metadata: metadataJSON,
+    } = req.body;
+    const metadata: CreatomateMetadata = JSON.parse(metadataJSON);
+
+    if (status !== 'succeeded') {
+        console.log(`Creatomate render ${creatomateRenderId} failed`);
+        res.status(500).json({
+            success: false,
+            error: 'Creatomate render failed',
+        });
+        return;
+    }
+
+    const { hookName, fbAdId: originalFbAdId } = metadata;
+
+    const originalAdPerformance = await getAdPerformanceFirestoreById(
+        originalFbAdId
+    );
+    invariant(originalAdPerformance, 'adPerformance must be defined');
+
+    const {
+        vertical: originalVertical,
+        fbAccountId: originalFbAccountId,
+        fbCampaignId: originalFbCampaignId,
+        ideaWriter: originalIdeaWriter,
+        scriptWriter: originalScriptWriter,
+        counter: originalCounter,
+    } = originalAdPerformance;
+
+    const originalFbAdSettings = await getFbAdSettings(originalFbAccountId);
+    const metaAdCreatorService = new MetaAdCreatorService({
+        appId: process.env.FACEBOOK_APP_ID || '',
+        appSecret: process.env.FACEBOOK_APP_SECRET || '',
+        accessToken: process.env.FACEBOOK_ACCESS_TOKEN || '',
+        accountId: originalFbAccountId || '',
+        apiVersion: '20.0',
+    });
+
+    const hookAdName = `${getAdName(
+        originalCounter,
+        originalVertical,
+        originalScriptWriter,
+        originalIdeaWriter,
+        'AZ'
+    )}-HOOK:${hookName}`;
+
+    const hookAd = await handleCreateAd(
+        metaAdCreatorService,
+        originalFbAdSettings,
+        originalFbCampaignId,
+        hookAdName,
+        creatomateUrl
+    );
+
+    const hookAdResponse = (await (hookAd.get(['name', ' id']) as unknown)) as {
+        id: string;
+    };
+
+    const hookAdId = hookAdResponse.id;
+    const hookAdSetId = await metaAdCreatorService.getAdSetIdFromAdId(hookAdId);
+
+    const hookAdPerformance: AdPerformance = {
+        counter: originalCounter,
+        fbAccountId: originalFbAccountId,
+        adName: hookAdName,
+        gDriveDownloadUrl: creatomateUrl,
+        fbAdId: hookAdId,
+        fbAdSetId: hookAdSetId,
+        fbCampaignId: originalFbCampaignId,
+        vertical: originalVertical,
+        ideaWriter: originalIdeaWriter,
+        scriptWriter: originalScriptWriter,
+        hookWriter: 'AZ',
+        performanceMetrics: {
+            fbSpendLast3Days: 0,
+            fbSpendLast7Days: 0,
+            fbSpendLifetime: 0,
+            fbRevenueLast3Days: 0,
+            fbRevenueLast7Days: 0,
+            fbRevenueLifetime: 0,
+            fbRoiLast3Days: 0,
+            fbRoiLast7Days: 0,
+            fbRoiLifetime: 0,
+        },
+        fbIsActive: true,
+        isHook: true,
+    };
+
+    await saveAdPerformanceFirestore(hookAdId, hookAdPerformance);
+
+    res.status(200).json({ success: true });
+});
 
 /*
 TODO: Fix this after refactor to read params by ad account ID instead of ad type
