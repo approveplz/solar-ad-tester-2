@@ -24,6 +24,7 @@ import {
     getFbAdSettingFirestore,
     getIncrementedCounterFirestore,
     saveAdPerformanceFirestore,
+    getAdPerformanceFirestoreAll,
     saveFbAdFirestore,
     saveVideoHashFirestore,
     getVideoHashMapFirestore,
@@ -34,7 +35,13 @@ import {
     getSignedDownloadUrl,
 } from './firebaseStorageCloud.js';
 import { generateVideoHash } from './helpers.js';
-import { AdPerformance } from './models/AdPerformance.js';
+import { AdPerformance, PerformanceMetrics } from './models/AdPerformance.js';
+import {
+    AdPerformanceDataBigQuery,
+    BigQueryService,
+} from './services/BigQueryService.js';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
+
 type AdSetStatus = (typeof AdSet.Status)[keyof typeof AdSet.Status];
 config();
 
@@ -307,15 +314,16 @@ export const createFbAdHttp = onRequest(async (req, res) => {
             id: string;
         };
 
-        const adId = adResponse.id;
-        const adSetId = await metaAdCreatorService.getAdSetIdFromAdId(adId);
+        const fbAdId = adResponse.id;
+        const fbAdSetId = await metaAdCreatorService.getAdSetIdFromAdId(fbAdId);
 
         const adPerformance: AdPerformance = {
+            fbAccountId: accountId,
             adName,
             gDriveDownloadUrl: downloadUrl,
-            adId,
-            adSetId,
-            campaignId,
+            fbAdId,
+            fbAdSetId,
+            fbCampaignId: campaignId,
             vertical,
             ideaWriter,
             scriptWriter,
@@ -327,12 +335,15 @@ export const createFbAdHttp = onRequest(async (req, res) => {
                 fbRevenueLast3Days: 0,
                 fbRevenueLast7Days: 0,
                 fbRevenueLifetime: 0,
+                fbRoiLast3Days: 0,
+                fbRoiLast7Days: 0,
+                fbRoiLifetime: 0,
             },
             fbIsActive: true,
             isHook: false,
         };
 
-        await saveAdPerformanceFirestore(adPerformance);
+        await saveAdPerformanceFirestore(fbAdId, adPerformance);
 
         res.status(200).json({
             success: true,
@@ -661,6 +672,74 @@ export const duplicateAdSetAndAdToCampaignHttp = onRequest(async (req, res) => {
     }
     return;
 });
+
+export const updateAdPerformanceScheduled = onSchedule(
+    'every 1 hours',
+    async (event) => {
+        try {
+            const bigQueryService = new BigQueryService();
+            const bqPerformanceLast3Days: AdPerformanceDataBigQuery[] =
+                await bigQueryService.getAdPerformance('AD_PERFORMANCE_3D');
+
+            const bqPerformanceLast7Days: AdPerformanceDataBigQuery[] =
+                await bigQueryService.getAdPerformance('AD_PERFORMANCE_7D');
+
+            const bqPerformanceLifetime: AdPerformanceDataBigQuery[] =
+                await bigQueryService.getAdPerformance(
+                    'AD_PERFORMANCE_LIFETIME'
+                );
+
+            const firestoreAdPerformances: AdPerformance[] =
+                await getAdPerformanceFirestoreAll();
+
+            for (const firestoreAdPerformance of firestoreAdPerformances) {
+                const fbAdId = firestoreAdPerformance.fbAdId;
+                if (!firestoreAdPerformance.fbIsActive) {
+                    continue;
+                }
+
+                const bqFbMetricsLast3Days = bqPerformanceLast3Days.find(
+                    (ad) => ad.AdID === fbAdId && ad.Platform === 'FB'
+                );
+
+                const bqFbMetricsLast7Days = bqPerformanceLast7Days.find(
+                    (ad) => ad.AdID === fbAdId && ad.Platform === 'FB'
+                );
+
+                const bqFbMetricsLifetime = bqPerformanceLifetime.find(
+                    (ad) => ad.AdID === fbAdId && ad.Platform === 'FB'
+                );
+
+                const performanceMetrics: PerformanceMetrics = {
+                    fbSpendLast3Days: bqFbMetricsLast3Days?.total_cost ?? 0,
+                    fbSpendLast7Days: bqFbMetricsLast7Days?.total_cost ?? 0,
+                    fbSpendLifetime: bqFbMetricsLifetime?.total_cost ?? 0,
+                    fbRevenueLast3Days:
+                        bqFbMetricsLast3Days?.total_revenue ?? 0,
+                    fbRevenueLast7Days:
+                        bqFbMetricsLast7Days?.total_revenue ?? 0,
+                    fbRevenueLifetime: bqFbMetricsLifetime?.total_revenue ?? 0,
+                    fbRoiLast3Days: bqFbMetricsLast3Days?.ROI ?? 0,
+                    fbRoiLast7Days: bqFbMetricsLast7Days?.ROI ?? 0,
+                    fbRoiLifetime: bqFbMetricsLifetime?.ROI ?? 0,
+                };
+
+                firestoreAdPerformance.performanceMetrics = performanceMetrics;
+                await saveAdPerformanceFirestore(
+                    firestoreAdPerformance.fbAdId,
+                    firestoreAdPerformance
+                );
+
+                console.log(`Updated performance metrics for ad ${fbAdId}`);
+            }
+
+            console.log('Successfully updated all ad performances');
+        } catch (error) {
+            console.error('Error updating ad performances:', error);
+            throw error; // Rethrowing the error will mark the execution as failed in Firebase
+        }
+    }
+);
 
 /*
 TODO: Fix this after refactor to read params by ad account ID instead of ad type

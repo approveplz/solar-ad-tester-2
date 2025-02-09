@@ -26,12 +26,25 @@ const AdPerformanceDocConverter = {
         snap.data() as AdPerformance,
 };
 
-export async function saveAdPerformanceFirestore(adPerformance: AdPerformance) {
+export async function getAdPerformanceFirestoreAll(): Promise<AdPerformance[]> {
     const db = getFirestore();
-    const data = {
-        adPerformance,
-    };
-    return await db.collection(AD_PERFORMANCE_COLLECTION).doc().set(data);
+    const snapshot = await db
+        .collection(AD_PERFORMANCE_COLLECTION)
+        .withConverter(AdPerformanceDocConverter)
+        .get();
+
+    return snapshot.docs.map((doc) => doc.data());
+}
+
+export async function saveAdPerformanceFirestore(
+    fbAdId: string,
+    adPerformance: AdPerformance
+) {
+    const db = getFirestore();
+    return await db
+        .collection(AD_PERFORMANCE_COLLECTION)
+        .doc(fbAdId)
+        .set(adPerformance, { merge: true });
 }
 
 const FbAdSettingsDocConverter = {
@@ -74,20 +87,20 @@ export async function getIncrementedCounterFirestore(): Promise<number> {
 }
 
 export async function getFbAdSettingFirestore(
-    adType: string
+    accountId: string
 ): Promise<FbAdSettings | null> {
     try {
         const db = getFirestore();
         const docSnap = await db
             .collection(FB_AD_SETTINGS_COLLECTION)
             .withConverter(FbAdSettingsDocConverter)
-            .doc(adType)
+            .doc(accountId)
             .get();
 
         return docSnap.data() || null;
     } catch (error) {
         console.error(
-            `Error getting Doc: ${adType} from collection: ${FB_AD_SETTINGS_COLLECTION}`
+            `Error getting Doc: ${accountId} from collection: ${FB_AD_SETTINGS_COLLECTION}`
         );
         console.error(error);
         return null;
