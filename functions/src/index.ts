@@ -351,6 +351,9 @@ export const createFbAdHttp = onRequest(async (req, res) => {
                 fbRoiLast3Days: 0,
                 fbRoiLast7Days: 0,
                 fbRoiLifetime: 0,
+                fbLeadsLast3Days: 0,
+                fbLeadsLast7Days: 0,
+                fbLeadsLifetime: 0,
             },
             fbIsActive: true,
             isHook: false,
@@ -715,6 +718,9 @@ function buildPerformanceMetrics(
         fbRoiLast3Days: bqMetrics3d?.ROI ?? 0,
         fbRoiLast7Days: bqMetrics7d?.ROI ?? 0,
         fbRoiLifetime: bqMetricsLifetime?.ROI ?? 0,
+        fbLeadsLast3Days: bqMetrics3d?.leads ?? 0,
+        fbLeadsLast7Days: bqMetrics7d?.leads ?? 0,
+        fbLeadsLifetime: bqMetricsLifetime?.leads ?? 0,
     };
 }
 
@@ -957,6 +963,9 @@ export const handleCreatomateWebhookHttp = onRequest(async (req, res) => {
             fbRoiLast3Days: 0,
             fbRoiLast7Days: 0,
             fbRoiLifetime: 0,
+            fbLeadsLast3Days: 0,
+            fbLeadsLast7Days: 0,
+            fbLeadsLifetime: 0,
         },
         fbIsActive: true,
         isHook: true,

@@ -8,6 +8,9 @@ export interface PerformanceMetrics {
     fbRoiLast3Days: number;
     fbRoiLast7Days: number;
     fbRoiLifetime: number;
+    fbLeadsLast3Days: number;
+    fbLeadsLast7Days: number;
+    fbLeadsLifetime: number;
 }
 
 export interface AdPerformance {
