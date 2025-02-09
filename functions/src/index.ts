@@ -726,9 +726,9 @@ export const updateAdPerformanceScheduled = onSchedule(
         try {
             const bigQueryService = new BigQueryService();
             const [
-                bqFbPerformanceLast3Days,
-                bqFbPerformanceLast7Days,
-                bqFbPerformanceLifetime,
+                bqPerformanceLast3Days,
+                bqPerformanceLast7Days,
+                bqPerformanceLifetime,
                 firestoreAdPerformances,
             ] = await Promise.all([
                 bigQueryService.getAdPerformance('AD_PERFORMANCE_3D'),
@@ -746,13 +746,13 @@ export const updateAdPerformanceScheduled = onSchedule(
                 }
 
                 // Find relevant metrics
-                const bqFbMetrics3d = bqFbPerformanceLast3Days.find(
+                const bqFbMetrics3d = bqPerformanceLast3Days.find(
                     (ad) => ad.AdID === fbAdId && ad.Platform === 'FB'
                 );
-                const bqFbMetrics7d = bqFbPerformanceLast7Days.find(
+                const bqFbMetrics7d = bqPerformanceLast7Days.find(
                     (ad) => ad.AdID === fbAdId && ad.Platform === 'FB'
                 );
-                const bqFbMetricsLifetime = bqFbPerformanceLifetime.find(
+                const bqFbMetricsLifetime = bqPerformanceLifetime.find(
                     (ad) => ad.AdID === fbAdId && ad.Platform === 'FB'
                 );
 
