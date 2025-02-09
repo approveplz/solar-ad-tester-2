@@ -791,12 +791,15 @@ export const updateAdPerformanceScheduled = onSchedule(
                 // Handle ad based on ROI
                 const fbRoiLifetime =
                     adPerformance.performanceMetrics.fbRoiLifetime;
+                const fbRoiLast3Days =
+                    adPerformance.performanceMetrics.fbRoiLast3Days;
                 let message: string;
                 let fbAdSetStatus: AdSetStatus = 'ACTIVE';
 
-                if (fbRoiLifetime < 1) {
+                if (fbRoiLifetime < 1 || fbRoiLast3Days < 1) {
                     fbAdSetStatus = 'PAUSED';
-                    message = `Ad ${fbAdId} has ROI < 1. ROI: ${fbRoiLifetime}. Ad Paused.`;
+                    adPerformance.fbIsActive = false;
+                    message = `Ad ${fbAdId} has ROI < 1. Lifetime ROI: ${fbRoiLifetime}, Last 3 Days ROI: ${fbRoiLast3Days}. Ad Paused.`;
                 } else if (fbRoiLifetime < LIFETIME_ROI_HOOK_THRESHOLD) {
                     message = `Ad ${fbAdId} has 1 < ROI < ${LIFETIME_ROI_HOOK_THRESHOLD}. ROI: ${fbRoiLifetime}. Keep Ad running because profitable but do not create hooks or scale.`;
                 } else {
