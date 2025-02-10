@@ -81,7 +81,7 @@ export class SkypeService {
     /**
      * IMPORTANT: For this bot to work properly, you must configure the messaging endpoint
      * in your Azure Bot Service configuration. The endpoint should point to where this
-     * handleIncomingMessage function is exposed (e.g., https://your-domain.com/api/messages).
+     * handleIncomingMessage function is exposed (e.g., https://us-central1-solar-ad-tester-2.cloudfunctions.net/handleIncomingSkypeMessageHttp).
      * This allows the bot to receive messages from Skype through Azure's Bot Framework.
      */
 
@@ -136,6 +136,7 @@ export class SkypeService {
                     await turnContext.sendActivity({
                         type: ActivityTypes.Message,
                         text: message,
+                        textFormat: 'plain',
                     });
                 }
             );

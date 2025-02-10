@@ -36,8 +36,8 @@ import {
 import { MediaBuyingService } from './services/MediaBuyingService.js';
 import { SkypeService } from './services/SkypeService.js';
 import { getAdName } from './helpers.js';
+import { AD_ACCOUNT_DATA } from './adAccountConfig.js';
 
-type AdSetStatus = (typeof AdSet.Status)[keyof typeof AdSet.Status];
 config();
 
 const UUID_FIELD_NAME = 'uuid';
@@ -50,86 +50,32 @@ initializeApp({
     storageBucket: 'solar-ad-tester-2.appspot.com',
 });
 
-/*
-Targeting saved here does not include age or gender
-*/
-const AD_ACCOUNT_DATA = {
-    '467161346185440': {
-        name: 'Vincent x Digitsolution CC 1',
-        type: 'R',
-        campaignId: '120215523703190415',
-        scalingCampaignId: '120216751824410415',
-        targeting: {
-            geo_locations: {
-                location_types: ['home', 'recent'],
-                location_cluster_ids: [{ key: '9096931440399416' }],
-            },
-            excluded_custom_audiences: [
-                {
-                    id: '120214060134290415',
-                    name: 'Roofing Leads 180d',
-                },
-            ],
-            brand_safety_content_filter_levels: ['FEED_RELAXED'],
-            targeting_relaxation_types: {
-                lookalike: 0,
-                custom_audience: 0,
-            },
-        },
-    },
-    '8653880687969127': {
-        name: 'Vincent x Digitsolution CC 2',
-        type: 'R',
-        campaignId: '120216226115490096',
-        scalingCampaignId: '',
-        targeting: {
-            geo_locations: {
-                location_types: ['home', 'recent'],
-                // TODO: Change this to the correct location cluster ID
-                location_cluster_ids: [{ key: '28950427651210969' }],
-            },
-            brand_safety_content_filter_levels: ['FEED_RELAXED'],
-            targeting_relaxation_types: {
-                lookalike: 0,
-                custom_audience: 0,
-            },
-        },
-    },
-    '916987259877684': {
-        name: 'SF- 121 (EST) - Ronin WH 262 - TN_RN_FB_ABG-999019',
-        type: 'O',
-        campaignId: '120215328779990104',
-        scalingCampaignId: '',
-        targeting: {
-            excluded_geo_locations: {
-                regions: [
-                    {
-                        key: '3847',
-                        name: 'California',
-                        country: 'US',
-                    },
-                    {
-                        key: '3861',
-                        name: 'Louisiana',
-                        country: 'US',
-                    },
-                    {
-                        key: '3867',
-                        name: 'Mississippi',
-                        country: 'US',
-                    },
-                ],
-                location_types: ['home', 'recent'],
-            },
-            geo_locations: {
-                location_types: ['home', 'recent'],
-            },
-            targeting_relaxation_types: {
-                lookalike: 0,
-                custom_audience: 0,
-            },
-        },
-    },
+const getFbAdSettings = async (accountId: string) => {
+    // Account ID determines if ad type is O or R
+    const fbAdSettings = await getFbAdSettingFirestore(accountId);
+    if (fbAdSettings) {
+        invariant(
+            fbAdSettings.adSetParams.adSetTargeting,
+            'adSetTargeting must exist'
+        );
+        const { age_max, age_min, genders } =
+            fbAdSettings.adSetParams.adSetTargeting;
+
+        // Get targeting
+        const targeting: FbApiAdSetTargeting = {
+            ...AD_ACCOUNT_DATA[accountId as keyof typeof AD_ACCOUNT_DATA]
+                .targeting,
+            age_max,
+            age_min,
+            genders,
+        };
+
+        fbAdSettings.adSetParams.adSetTargeting = targeting;
+    } else {
+        throw new Error(`No ad settings found for accountId: ${accountId}`);
+    }
+
+    return fbAdSettings;
 };
 
 const handleCreateAd = async (
@@ -174,77 +120,131 @@ const handleCreateAd = async (
     return ad;
 };
 
-interface GetSignedUploadUrlRequestQuery {
-    [AD_TYPE_FIELD_NAME]?: string;
-    [UUID_FIELD_NAME]?: string;
-    [ACCOUNT_ID_FIELD_NAME]?: string;
-}
+export const watchCloudStorageUploads = onObjectFinalized(async (event) => {
+    console.log('watched cloud storage uploads triggered');
+    const WATCHED_FOLDERS = Object.keys(AD_ACCOUNT_DATA);
 
-export interface GetSignedUploadUrlResponsePayload {
-    uploadUrl: string;
-    fileName: string;
-}
+    const { name: filePath, contentType } = event.data;
 
-/**
- * Generates a signed URL for uploading third-party ad videos to Firebase Storage.
- *
- * @remarks
- * This HTTP function expects query parameters to specify the ad type and a unique identifier.
- * The generated URL will be valid for a limited time and allows direct upload to Firebase Storage.
- *
- * @example
- * GET /uploadThirdPartyAdGetSignedUploadUrl?ad_type=O&uuid=123456789
- *
- * @param req.query.ad_type - The type of ad ('O' for Ozempic, 'R' for Roofing)
- * @param req.query.uuid - Unique identifier for the video
- *
- * @returns {Promise<GetSignedUploadUrlResponsePayload>} JSON response containing:
- *  - uploadUrl: Signed URL for uploading the video
- *  - fileName: Generated filename for the video (format: AZ-{adType}-{uuid}.mp4)
- *
- * @throws {400} If required query parameters are missing
- * @throws {500} If there's an error generating the signed URL
- */
-export const uploadThirdPartyAdGetSignedUploadUrl = onRequest(
-    { cors: false },
-    async (req: Request, res: Response) => {
-        const query: GetSignedUploadUrlRequestQuery = req.query;
-        const {
-            [AD_TYPE_FIELD_NAME]: adType,
-            [UUID_FIELD_NAME]: videoUuid,
-            [ACCOUNT_ID_FIELD_NAME]: accountId,
-        } = query;
+    const [folder, fileName, ...rest] = filePath.split('/');
 
-        if (!videoUuid || !adType || !accountId) {
-            res.status(400).json({
-                error: `Missing required parameters. Please provide fields: ${AD_TYPE_FIELD_NAME}, ${UUID_FIELD_NAME}, ${ACCOUNT_ID_FIELD_NAME}`,
-            });
-            return;
-        }
+    console.log({ folder, eventData: event.data });
 
+    if (!WATCHED_FOLDERS.includes(folder)) {
+        return;
+    }
+
+    console.log('watch cloud storage uploads running');
+
+    if (contentType !== 'video/mp4') {
+        console.error(
+            `Non-video file uploaded. filePath: ${filePath}. contentType: ${contentType}`
+        );
+        return;
+    }
+
+    console.log(
+        `Triggering function for upload in watched folder: ${folder}. filePath: ${filePath}`
+    );
+
+    const { url: downloadUrl, uuid } = await getSignedDownloadUrl(filePath);
+
+    invariant(uuid && typeof uuid === 'string', 'uuid must exist');
+
+    const accountId = folder;
+
+    const fbAdSettings = await getFbAdSettings(accountId);
+
+    invariant(fbAdSettings !== null, `fbAdSettings is null`);
+
+    const adAccountData =
+        AD_ACCOUNT_DATA[accountId as keyof typeof AD_ACCOUNT_DATA];
+    invariant(
+        adAccountData,
+        `ad account data not found in constants for account id: ${accountId}`
+    );
+
+    const { campaignId } = adAccountData;
+
+    invariant(
+        campaignId,
+        `Campaign ID not found in AD_ACCOUNT_DATA for account ID: ${accountId}`
+    );
+
+    const metaAdCreatorService = new MetaAdCreatorService({
+        appId: process.env.FACEBOOK_APP_ID || '',
+        appSecret: process.env.FACEBOOK_APP_SECRET || '',
+        accessToken: process.env.FACEBOOK_ACCESS_TOKEN || '',
+        accountId: accountId || '',
+        apiVersion: '20.0',
+    });
+
+    // /* Create Campaign */
+    // // const campaignName = `[facebook] - [GLP-1] - [AZ] - [USA] - [All] - [GLP-V1] - [Auto Creative Testing] - [1]`;
+    // const campaignName = `[facebook] - [ROOFING] - [AZ] - [USA] - [All] - [Auto Creative Testing] - [1]`;
+
+    // const campaign: Campaign = await metaAdCreatorService.createCampaign({
+    //     name: campaignName,
+    //     fbAdSettings,
+    // });
+    // campaignId = campaign.id; // Campaign ID if we create it here
+
+    const ad = await handleCreateAd(
+        metaAdCreatorService,
+        fbAdSettings,
+        campaignId,
+        uuid,
+        downloadUrl
+    );
+
+    // Send adId and adName to Make.com webhook
+    const adResponse = (await (ad.get(['name', ' id']) as unknown)) as {
+        name: string;
+        id: string;
+    };
+
+    const adName = adResponse.name;
+    const adId = adResponse.id;
+    console.log({ ad, adName, adId });
+    const makeWebhookUrl =
+        'https://hook.us1.make.com/w08iv7ieulywlnb91i594d93c1mqks7y';
+    const makeWebhookPayload = {
+        adId,
+        adName,
+        accountId,
+    };
+
+    await fetch(makeWebhookUrl, {
+        method: 'POST',
+        body: JSON.stringify(makeWebhookPayload),
+    });
+});
+
+export const updateAdPerformanceScheduled = onSchedule(
+    'every 1 hours',
+    async () => {
         try {
-            const fileName = `AZ-${adType}-${videoUuid}.mp4`;
-            const uploadUrl = await getSignedUploadUrl(
-                accountId,
-                fileName,
-                videoUuid
+            const creatomateService = await CreatomateService.create(
+                process.env.CREATOMATE_API_KEY || ''
             );
-            console.log(
-                `Created signed upload URL. fileName: ${fileName}. uploadUrl: ${uploadUrl}. adType: ${adType}. videoUuid: ${videoUuid}`
+            const bigQueryService = new BigQueryService();
+            const mediaBuyingService = new MediaBuyingService(
+                creatomateService,
+                bigQueryService
             );
-            const payload: GetSignedUploadUrlResponsePayload = {
-                uploadUrl,
-                fileName,
-            };
-            res.status(200).json(payload);
+            await mediaBuyingService.handleAdPerformanceUpdates();
         } catch (error) {
-            const message = `Error generating signed upload URL. Error: ${error}`;
-            console.error(message);
-            res.status(500).json({ error: message });
+            console.error('Error updating ad performances:', error);
+            throw error;
         }
     }
 );
 
+/******************************************************************************
+ * HTTP Production endpoints
+ ******************************************************************************/
+
+// Called from Google Apps Script
 export const createFbAdHttp = onRequest(async (req, res) => {
     try {
         // Validate required request body parameters
@@ -355,282 +355,7 @@ export const createFbAdHttp = onRequest(async (req, res) => {
     }
 });
 
-export const watchCloudStorageUploads = onObjectFinalized(async (event) => {
-    console.log('watched cloud storage uploads triggered');
-    const WATCHED_FOLDERS = Object.keys(AD_ACCOUNT_DATA);
-
-    const { name: filePath, contentType } = event.data;
-
-    const [folder, fileName, ...rest] = filePath.split('/');
-
-    console.log({ folder, eventData: event.data });
-
-    if (!WATCHED_FOLDERS.includes(folder)) {
-        return;
-    }
-
-    console.log('watch cloud storage uploads running');
-
-    if (contentType !== 'video/mp4') {
-        console.error(
-            `Non-video file uploaded. filePath: ${filePath}. contentType: ${contentType}`
-        );
-        return;
-    }
-
-    console.log(
-        `Triggering function for upload in watched folder: ${folder}. filePath: ${filePath}`
-    );
-
-    const { url: downloadUrl, uuid } = await getSignedDownloadUrl(filePath);
-
-    invariant(uuid && typeof uuid === 'string', 'uuid must exist');
-
-    const accountId = folder;
-
-    const fbAdSettings = await getFbAdSettings(accountId);
-
-    invariant(fbAdSettings !== null, `fbAdSettings is null`);
-
-    const adAccountData =
-        AD_ACCOUNT_DATA[accountId as keyof typeof AD_ACCOUNT_DATA];
-    invariant(
-        adAccountData,
-        `ad account data not found in constants for account id: ${accountId}`
-    );
-
-    const { campaignId } = adAccountData;
-
-    invariant(
-        campaignId,
-        `Campaign ID not found in AD_ACCOUNT_DATA for account ID: ${accountId}`
-    );
-
-    const metaAdCreatorService = new MetaAdCreatorService({
-        appId: process.env.FACEBOOK_APP_ID || '',
-        appSecret: process.env.FACEBOOK_APP_SECRET || '',
-        accessToken: process.env.FACEBOOK_ACCESS_TOKEN || '',
-        accountId: accountId || '',
-        apiVersion: '20.0',
-    });
-
-    // /* Create Campaign */
-    // // const campaignName = `[facebook] - [GLP-1] - [AZ] - [USA] - [All] - [GLP-V1] - [Auto Creative Testing] - [1]`;
-    // const campaignName = `[facebook] - [ROOFING] - [AZ] - [USA] - [All] - [Auto Creative Testing] - [1]`;
-
-    // const campaign: Campaign = await metaAdCreatorService.createCampaign({
-    //     name: campaignName,
-    //     fbAdSettings,
-    // });
-    // campaignId = campaign.id; // Campaign ID if we create it here
-
-    const ad = await handleCreateAd(
-        metaAdCreatorService,
-        fbAdSettings,
-        campaignId,
-        uuid,
-        downloadUrl
-    );
-
-    // Send adId and adName to Make.com webhook
-    const adResponse = (await (ad.get(['name', ' id']) as unknown)) as {
-        name: string;
-        id: string;
-    };
-
-    const adName = adResponse.name;
-    const adId = adResponse.id;
-    console.log({ ad, adName, adId });
-    const makeWebhookUrl =
-        'https://hook.us1.make.com/w08iv7ieulywlnb91i594d93c1mqks7y';
-    const makeWebhookPayload = {
-        adId,
-        adName,
-        accountId,
-    };
-
-    await fetch(makeWebhookUrl, {
-        method: 'POST',
-        body: JSON.stringify(makeWebhookPayload),
-    });
-});
-
-const getFbAdSettings = async (accountId: string) => {
-    // Account ID determines if ad type is O or R
-    const fbAdSettings = await getFbAdSettingFirestore(accountId);
-    if (fbAdSettings) {
-        invariant(
-            fbAdSettings.adSetParams.adSetTargeting,
-            'adSetTargeting must exist'
-        );
-        const { age_max, age_min, genders } =
-            fbAdSettings.adSetParams.adSetTargeting;
-
-        // Get targeting
-        const targeting: FbApiAdSetTargeting = {
-            ...AD_ACCOUNT_DATA[accountId as keyof typeof AD_ACCOUNT_DATA]
-                .targeting,
-            age_max,
-            age_min,
-            genders,
-        };
-
-        fbAdSettings.adSetParams.adSetTargeting = targeting;
-    } else {
-        throw new Error(`No ad settings found for accountId: ${accountId}`);
-    }
-
-    return fbAdSettings;
-};
-
-// https://duplicateadsetandadtocampaignhttp-txyabkufvq-uc.a.run.app
-export const duplicateAdSetAndAdToCampaignHttp = onRequest(async (req, res) => {
-    try {
-        // Validate required input parameters
-        const { adId, accountId } = req.body;
-        if (!adId || !accountId) {
-            res.status(400).json({
-                success: false,
-                error: 'Missing required parameters: adId and accountId are required',
-            });
-            return;
-        }
-        const creatomateService = await CreatomateService.create(
-            process.env.CREATOMATE_API_KEY || ''
-        );
-        const bigQueryService = new BigQueryService();
-        const mediaBuyingService = new MediaBuyingService(
-            creatomateService,
-            bigQueryService
-        );
-
-        const adPerformance = {
-            adName: '105-R-AZ-AZ-AZ',
-            counter: 105,
-            fbAccountId: '467161346185440',
-            fbAdId: '120216860324070415',
-            fbAdSetId: '120216860308490415',
-            fbCampaignId: '120215523703190415',
-            fbScalingCampaignId: '120216751824410415',
-            gDriveDownloadUrl:
-                'https://drive.google.com/uc?export=download&id=1815gqdRw0PzA7d_sH_dzxqscbV3OD-Ku',
-            vertical: 'R',
-            ideaWriter: 'AZ',
-            scriptWriter: 'AZ',
-            hookWriter: 'AZ',
-            fbIsActive: true,
-            isHook: false,
-            isScaled: false,
-            hasHooksCreated: false,
-            hasScaled: false,
-            performanceMetrics: {
-                fb: {
-                    last3Days: {
-                        clicks: 250,
-                        leads: 5,
-                        revenue: 7500, // $75
-                        roi: 3.0,
-                        spend: 2500, // $25
-                    },
-                    last7Days: {
-                        clicks: 600,
-                        leads: 12,
-                        revenue: 18000, // $180
-                        roi: 3.0,
-                        spend: 6000, // $60
-                    },
-                    lifetime: {
-                        clicks: 1000,
-                        leads: 20,
-                        revenue: 30000, // $300
-                        roi: 3.0,
-                        spend: 10000, // $100
-                    },
-                },
-                fbRevenueLast3Days: 7500,
-                fbRevenueLast7Days: 18000,
-                fbRevenueLifetime: 30000,
-                fbRoiLast3Days: 3.0,
-                fbRoiLast7Days: 3.0,
-                fbRoiLifetime: 3.0,
-                fbSpendLast3Days: 2500,
-                fbSpendLast7Days: 6000,
-                fbSpendLifetime: 10000,
-            },
-        };
-
-        invariant(adPerformance, 'adPerformance must be defined');
-
-        const metaAdCreatorService = new MetaAdCreatorService({
-            appId: process.env.FACEBOOK_APP_ID || '',
-            appSecret: process.env.FACEBOOK_APP_SECRET || '',
-            accessToken: process.env.FACEBOOK_ACCESS_TOKEN || '',
-            accountId,
-        });
-        await mediaBuyingService.handleScaling(
-            adPerformance,
-            metaAdCreatorService
-        );
-
-        return;
-    } catch (error) {
-        console.error('Error duplicating ad set:', error);
-        res.status(500).json({
-            success: false,
-            error:
-                error instanceof Error
-                    ? error.message
-                    : 'An unexpected error occurred',
-        });
-    }
-    return;
-});
-
-export const updateAdPerformanceScheduled = onSchedule(
-    'every 1 hours',
-    async () => {
-        try {
-            const creatomateService = await CreatomateService.create(
-                process.env.CREATOMATE_API_KEY || ''
-            );
-            const bigQueryService = new BigQueryService();
-            const mediaBuyingService = new MediaBuyingService(
-                creatomateService,
-                bigQueryService
-            );
-            await mediaBuyingService.handleAdPerformanceUpdates();
-        } catch (error) {
-            console.error('Error updating ad performances:', error);
-            throw error;
-        }
-    }
-);
-
-export const handleCreatomateRequestHttp = onRequest(async (req, res) => {
-    console.log('creatomate request received');
-
-    const creatomateService = await CreatomateService.create(
-        process.env.CREATOMATE_API_KEY || ''
-    );
-
-    // const baseVideoUrl_720x1280 =
-    //     'https://drive.google.com/uc?export=download&id=1OMj1MwqUL2V_r12VEWxWEmfip28WO8s7';
-    const baseVideoUrl_360x360 =
-        'https://drive.google.com/uc?export=download&id=1ew-u6qi83SgPQZIBi-XwTjYImlk4N7E-';
-
-    const baseVideoUrl_16x9 =
-        'https://drive.google.com/uc?export=download&id=1rh5gJXbstIyZUuOuhel7tgfhLJ2tVcSt';
-    const baseAdName = '103-R-AZ-AZ-AZ';
-    // If I use a real fbAdId it will actually creat the hooks
-    const fbAdId = '';
-    const result = await creatomateService.uploadToCreatomateWithHooksAll(
-        baseVideoUrl_16x9,
-        baseAdName,
-        fbAdId
-    );
-    res.status(200).json({ success: true, result });
-});
-
+// Called when the Creatomate render is finished
 export const handleCreatomateWebhookHttp = onRequest(async (req, res) => {
     const {
         id: creatomateRenderId,
@@ -724,7 +449,202 @@ export const handleCreatomateWebhookHttp = onRequest(async (req, res) => {
     res.status(200).json({ success: true });
 });
 
-export const handleSkypeMessageHttp_TEST = onRequest(async (req, res) => {
+// Called when the Azure bot recieves a message from Skype
+//https://us-central1-solar-ad-tester-2.cloudfunctions.net/handleIncomingSkypeMessageHttp
+export const handleIncomingSkypeMessageHttp = onRequest(async (req, res) => {
+    const skypeService = new SkypeService(
+        process.env.MICROSOFT_APP_ID || '',
+        process.env.MICROSOFT_APP_PASSWORD || ''
+    );
+    await skypeService.handleIncomingMessage(req, res);
+});
+
+interface GetSignedUploadUrlRequestQuery {
+    [AD_TYPE_FIELD_NAME]?: string;
+    [UUID_FIELD_NAME]?: string;
+    [ACCOUNT_ID_FIELD_NAME]?: string;
+}
+export interface GetSignedUploadUrlResponsePayload {
+    uploadUrl: string;
+    fileName: string;
+}
+
+// Called by Make.com scenario
+export const uploadThirdPartyAdGetSignedUploadUrl = onRequest(
+    { cors: false },
+    async (req: Request, res: Response) => {
+        const query: GetSignedUploadUrlRequestQuery = req.query;
+        const {
+            [AD_TYPE_FIELD_NAME]: adType,
+            [UUID_FIELD_NAME]: videoUuid,
+            [ACCOUNT_ID_FIELD_NAME]: accountId,
+        } = query;
+
+        if (!videoUuid || !adType || !accountId) {
+            res.status(400).json({
+                error: `Missing required parameters. Please provide fields: ${AD_TYPE_FIELD_NAME}, ${UUID_FIELD_NAME}, ${ACCOUNT_ID_FIELD_NAME}`,
+            });
+            return;
+        }
+
+        try {
+            const fileName = `AZ-${adType}-${videoUuid}.mp4`;
+            const uploadUrl = await getSignedUploadUrl(
+                accountId,
+                fileName,
+                videoUuid
+            );
+            console.log(
+                `Created signed upload URL. fileName: ${fileName}. uploadUrl: ${uploadUrl}. adType: ${adType}. videoUuid: ${videoUuid}`
+            );
+            const payload: GetSignedUploadUrlResponsePayload = {
+                uploadUrl,
+                fileName,
+            };
+            res.status(200).json(payload);
+        } catch (error) {
+            const message = `Error generating signed upload URL. Error: ${error}`;
+            console.error(message);
+            res.status(500).json({ error: message });
+        }
+    }
+);
+
+/******************************************************************************
+ * HTTP Function endpoints for testing
+ ******************************************************************************/
+
+export const handleCreatomateRequestHttp_TEST = onRequest(async (req, res) => {
+    console.log('creatomate request received');
+
+    const creatomateService = await CreatomateService.create(
+        process.env.CREATOMATE_API_KEY || ''
+    );
+
+    // const baseVideoUrl_720x1280 =
+    //     'https://drive.google.com/uc?export=download&id=1OMj1MwqUL2V_r12VEWxWEmfip28WO8s7';
+    const baseVideoUrl_360x360 =
+        'https://drive.google.com/uc?export=download&id=1ew-u6qi83SgPQZIBi-XwTjYImlk4N7E-';
+
+    const baseVideoUrl_16x9 =
+        'https://drive.google.com/uc?export=download&id=1rh5gJXbstIyZUuOuhel7tgfhLJ2tVcSt';
+    const baseAdName = '103-R-AZ-AZ-AZ';
+    // If I use a real fbAdId it will actually creat the hooks
+    const fbAdId = '';
+    const result = await creatomateService.uploadToCreatomateWithHooksAll(
+        baseVideoUrl_16x9,
+        baseAdName,
+        fbAdId
+    );
+    res.status(200).json({ success: true, result });
+});
+
+// https://duplicateadsetandadtocampaignhttp-txyabkufvq-uc.a.run.app
+export const duplicateAdSetAndAdToCampaignHttp_TEST = onRequest(
+    async (req, res) => {
+        try {
+            // Validate required input parameters
+            const { adId, accountId } = req.body;
+            if (!adId || !accountId) {
+                res.status(400).json({
+                    success: false,
+                    error: 'Missing required parameters: adId and accountId are required',
+                });
+                return;
+            }
+            const creatomateService = await CreatomateService.create(
+                process.env.CREATOMATE_API_KEY || ''
+            );
+            const bigQueryService = new BigQueryService();
+            const mediaBuyingService = new MediaBuyingService(
+                creatomateService,
+                bigQueryService
+            );
+
+            const adPerformance = {
+                adName: '105-R-AZ-AZ-AZ',
+                counter: 105,
+                fbAccountId: '467161346185440',
+                fbAdId: '120216860324070415',
+                fbAdSetId: '120216860308490415',
+                fbCampaignId: '120215523703190415',
+                fbScalingCampaignId: '120216751824410415',
+                gDriveDownloadUrl:
+                    'https://drive.google.com/uc?export=download&id=1815gqdRw0PzA7d_sH_dzxqscbV3OD-Ku',
+                vertical: 'R',
+                ideaWriter: 'AZ',
+                scriptWriter: 'AZ',
+                hookWriter: 'AZ',
+                fbIsActive: true,
+                isHook: false,
+                isScaled: false,
+                hasHooksCreated: false,
+                hasScaled: false,
+                performanceMetrics: {
+                    fb: {
+                        last3Days: {
+                            clicks: 250,
+                            leads: 5,
+                            revenue: 7500, // $75
+                            roi: 3.0,
+                            spend: 2500, // $25
+                        },
+                        last7Days: {
+                            clicks: 600,
+                            leads: 12,
+                            revenue: 18000, // $180
+                            roi: 3.0,
+                            spend: 6000, // $60
+                        },
+                        lifetime: {
+                            clicks: 1000,
+                            leads: 20,
+                            revenue: 30000, // $300
+                            roi: 3.0,
+                            spend: 10000, // $100
+                        },
+                    },
+                    fbRevenueLast3Days: 7500,
+                    fbRevenueLast7Days: 18000,
+                    fbRevenueLifetime: 30000,
+                    fbRoiLast3Days: 3.0,
+                    fbRoiLast7Days: 3.0,
+                    fbRoiLifetime: 3.0,
+                    fbSpendLast3Days: 2500,
+                    fbSpendLast7Days: 6000,
+                    fbSpendLifetime: 10000,
+                },
+            };
+
+            invariant(adPerformance, 'adPerformance must be defined');
+
+            const metaAdCreatorService = new MetaAdCreatorService({
+                appId: process.env.FACEBOOK_APP_ID || '',
+                appSecret: process.env.FACEBOOK_APP_SECRET || '',
+                accessToken: process.env.FACEBOOK_ACCESS_TOKEN || '',
+                accountId,
+            });
+            await mediaBuyingService.handleScaling(
+                adPerformance,
+                metaAdCreatorService
+            );
+
+            return;
+        } catch (error) {
+            console.error('Error duplicating ad set:', error);
+            res.status(500).json({
+                success: false,
+                error:
+                    error instanceof Error
+                        ? error.message
+                        : 'An unexpected error occurred',
+            });
+        }
+        return;
+    }
+);
+
+export const handleSendSkypeMessageHttp_TEST = onRequest(async (req, res) => {
     const skypeService = new SkypeService(
         process.env.MICROSOFT_APP_ID || '',
         process.env.MICROSOFT_APP_PASSWORD || ''
@@ -734,15 +654,6 @@ export const handleSkypeMessageHttp_TEST = onRequest(async (req, res) => {
 
     await skypeService.sendMessageByConversationName(conversationName, message);
     res.status(200).json({ success: true });
-});
-
-//https://us-central1-solar-ad-tester-2.cloudfunctions.net/handleIncomingSkypeMessageHttp
-export const handleIncomingSkypeMessageHttp = onRequest(async (req, res) => {
-    const skypeService = new SkypeService(
-        process.env.MICROSOFT_APP_ID || '',
-        process.env.MICROSOFT_APP_PASSWORD || ''
-    );
-    await skypeService.handleIncomingMessage(req, res);
 });
 
 /*
