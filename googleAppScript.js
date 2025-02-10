@@ -22,6 +22,14 @@ function main() {
         const file = files.next();
         const fileId = file.getId();
         const fileName = file.getName();
+        const mimeType = file.getMimeType();
+
+        if (mimeType !== 'video/mp4') {
+            console.log(
+                `Skipping non-video fileName: ${fileName} (${mimeType})`
+            );
+            continue;
+        }
 
         if (processedFileIds.includes(fileId)) {
             console.log(`Skipping already processed file: ${fileId}`);
