@@ -178,26 +178,33 @@ export default class MetaAdCreatorService {
         /* Get start and end time */
         const now = new Date();
 
-        // Create tomorrow's date at 00:00 UTC
-        const tomorrow = new Date(
+        // Calculate days to add to get to next weekday
+        const daysToAdd =
+            now.getUTCDay() === 5
+                ? 3 // If Friday, add 3 days
+                : now.getUTCDay() === 6
+                ? 2 // If Saturday, add 2 days
+                : now.getUTCDay() === 0
+                ? 1 // If Sunday, add 1 day
+                : 1; // If Mon-Thu, add 1 day
+
+        const nextWeekday = new Date(
             Date.UTC(
                 now.getUTCFullYear(),
                 now.getUTCMonth(),
-                now.getUTCDate() + 1,
-                0,
+                now.getUTCDate() + daysToAdd,
+                14, // 7 AM PDT (14:00 UTC)
                 0,
                 0,
                 0
             )
         );
-        // Set to 7 AM PDT (14 AM UTC)
-        tomorrow.setUTCHours(14);
 
-        const oneWeekLater = new Date(tomorrow);
+        const oneWeekLater = new Date(nextWeekday);
         oneWeekLater.setDate(oneWeekLater.getDate() + 7);
 
         const startTimeUnixSeconds = Math.floor(
-            tomorrow.getTime() / 1000
+            nextWeekday.getTime() / 1000
         ).toString();
 
         const endTimeUnixSeconds = Math.floor(
