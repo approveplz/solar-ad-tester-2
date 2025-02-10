@@ -1,3 +1,4 @@
+import { Request, Response } from 'express';
 import {
     CloudAdapter,
     ConfigurationBotFrameworkAuthentication,
@@ -13,7 +14,7 @@ export class SkypeService {
     private conversationMapping: {
         [key: string]: { conversationId: string; isGroup: boolean };
     } = {
-        TEST_GROUP_CHAT: {
+        BRAYDEN_MARCUS_GROUP_CHAT: {
             conversationId: '19:53483778f0df422a8023b955ba2881b2@thread.skype',
             isGroup: true,
         },
@@ -24,6 +25,10 @@ export class SkypeService {
         },
         MARCUS: {
             conversationId: '8:live:marcusawakuni',
+            isGroup: false,
+        },
+        ALAN: {
+            conversationId: '29:1VfeA7iWoDuqsjKUNPSpumzuzAkBzEqORXCX78Kt3k3o',
             isGroup: false,
         },
     };
@@ -50,6 +55,52 @@ export class SkypeService {
         return this.conversationMapping[name] || null;
     }
 
+    async sendMessageByConversationName(
+        conversationName: string,
+        message: string
+    ): Promise<void> {
+        console.log(
+            '[SkypeService] Sending message to conversation:',
+            conversationName
+        );
+        const convDetails = this.getConversationDetails(conversationName);
+        if (!convDetails) {
+            console.error(
+                `[SkypeService] Conversation "${conversationName}" not found.`
+            );
+            return;
+        }
+
+        await this.sendMessage(
+            convDetails.conversationId,
+            message,
+            convDetails.isGroup
+        );
+    }
+
+    async handleIncomingMessage(req: Request, res: Response): Promise<void> {
+        console.log('[SkypeService] Handling incoming message:', req.body);
+        await this.adapter.process(
+            req,
+            res,
+            async (turnContext: TurnContext) => {
+                if (turnContext.activity.type === ActivityTypes.Message) {
+                    const incomingText = turnContext.activity.text;
+                    console.log(
+                        `[SkypeService] Incoming message: ${incomingText}`
+                    );
+                    console.log({ cid: turnContext.activity.conversation.id });
+                    await turnContext.sendActivity('I received your message!');
+                } else {
+                    console.log(
+                        `[SkypeService] Received non-message activity: ${turnContext.activity.type}`
+                    );
+                }
+            }
+        );
+    }
+
+    // Helpers
     private async sendMessage(
         conversationId: string,
         message: string,
@@ -84,24 +135,5 @@ export class SkypeService {
         } catch (error) {
             console.error('[SkypeService] Failed to send message:', error);
         }
-    }
-
-    async sendMessageByConversationName(
-        conversationName: string,
-        message: string
-    ): Promise<void> {
-        const convDetails = this.getConversationDetails(conversationName);
-        if (!convDetails) {
-            console.error(
-                `[SkypeService] Conversation "${conversationName}" not found.`
-            );
-            return;
-        }
-
-        await this.sendMessage(
-            convDetails.conversationId,
-            message,
-            convDetails.isGroup
-        );
     }
 }

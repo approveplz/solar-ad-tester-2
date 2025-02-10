@@ -724,16 +724,25 @@ export const handleCreatomateWebhookHttp = onRequest(async (req, res) => {
     res.status(200).json({ success: true });
 });
 
-export const handleSkypeMessageHttp = onRequest(async (req, res) => {
+export const handleSkypeMessageHttp_TEST = onRequest(async (req, res) => {
     const skypeService = new SkypeService(
         process.env.MICROSOFT_APP_ID || '',
         process.env.MICROSOFT_APP_PASSWORD || ''
     );
-    const conversationName = 'MARCUS';
+    const conversationName = 'ALAN';
     const message = 'This is a test from ad bot';
 
     await skypeService.sendMessageByConversationName(conversationName, message);
     res.status(200).json({ success: true });
+});
+
+//https://us-central1-solar-ad-tester-2.cloudfunctions.net/handleIncomingSkypeMessageHttp
+export const handleIncomingSkypeMessageHttp = onRequest(async (req, res) => {
+    const skypeService = new SkypeService(
+        process.env.MICROSOFT_APP_ID || '',
+        process.env.MICROSOFT_APP_PASSWORD || ''
+    );
+    await skypeService.handleIncomingMessage(req, res);
 });
 
 /*
