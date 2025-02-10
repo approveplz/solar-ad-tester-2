@@ -341,20 +341,7 @@ export const createFbAdHttp = onRequest(async (req, res) => {
             ideaWriter,
             scriptWriter,
             hookWriter,
-            performanceMetrics: {
-                fbSpendLast3Days: 0,
-                fbSpendLast7Days: 0,
-                fbSpendLifetime: 0,
-                fbRevenueLast3Days: 0,
-                fbRevenueLast7Days: 0,
-                fbRevenueLifetime: 0,
-                fbRoiLast3Days: 0,
-                fbRoiLast7Days: 0,
-                fbRoiLifetime: 0,
-                fbLeadsLast3Days: 0,
-                fbLeadsLast7Days: 0,
-                fbLeadsLifetime: 0,
-            },
+            performanceMetrics: {},
             fbIsActive: true,
             isHook: false,
             hasHooksCreated: false,
@@ -704,23 +691,45 @@ const LIFETIME_ROI_SCALING_THRESHOLD = 1.5;
 const LIFETIME_ROI_HOOK_THRESHOLD = 1.3;
 
 function buildPerformanceMetrics(
-    bqMetrics3d?: AdPerformanceDataBigQuery,
-    bqMetrics7d?: AdPerformanceDataBigQuery,
-    bqMetricsLifetime?: AdPerformanceDataBigQuery
+    fbAdId: string,
+    bqMetrics3d?: AdPerformanceDataBigQuery[],
+    bqMetrics7d?: AdPerformanceDataBigQuery[],
+    bqMetricsLifetime?: AdPerformanceDataBigQuery[]
 ): PerformanceMetrics {
+    const fbMetrics3d = bqMetrics3d?.find(
+        (m) => m.Platform === 'FB' && m.AdID === fbAdId
+    );
+    const fbMetrics7d = bqMetrics7d?.find(
+        (m) => m.Platform === 'FB' && m.AdID === fbAdId
+    );
+    const fbMetricsLifetime = bqMetricsLifetime?.find(
+        (m) => m.Platform === 'FB' && m.AdID === fbAdId
+    );
+
     return {
-        fbSpendLast3Days: bqMetrics3d?.total_cost ?? 0,
-        fbSpendLast7Days: bqMetrics7d?.total_cost ?? 0,
-        fbSpendLifetime: bqMetricsLifetime?.total_cost ?? 0,
-        fbRevenueLast3Days: bqMetrics3d?.total_revenue ?? 0,
-        fbRevenueLast7Days: bqMetrics7d?.total_revenue ?? 0,
-        fbRevenueLifetime: bqMetricsLifetime?.total_revenue ?? 0,
-        fbRoiLast3Days: bqMetrics3d?.ROI ?? 0,
-        fbRoiLast7Days: bqMetrics7d?.ROI ?? 0,
-        fbRoiLifetime: bqMetricsLifetime?.ROI ?? 0,
-        fbLeadsLast3Days: bqMetrics3d?.leads ?? 0,
-        fbLeadsLast7Days: bqMetrics7d?.leads ?? 0,
-        fbLeadsLifetime: bqMetricsLifetime?.leads ?? 0,
+        fb: {
+            last3Days: {
+                spend: fbMetrics3d?.total_cost ?? 0,
+                revenue: fbMetrics3d?.total_revenue ?? 0,
+                roi: fbMetrics3d?.ROI ?? 0,
+                leads: fbMetrics3d?.leads ?? 0,
+                clicks: fbMetrics3d?.total_clicks ?? 0,
+            },
+            last7Days: {
+                spend: fbMetrics7d?.total_cost ?? 0,
+                revenue: fbMetrics7d?.total_revenue ?? 0,
+                roi: fbMetrics7d?.ROI ?? 0,
+                leads: fbMetrics7d?.leads ?? 0,
+                clicks: fbMetrics7d?.total_clicks ?? 0,
+            },
+            lifetime: {
+                spend: fbMetricsLifetime?.total_cost ?? 0,
+                revenue: fbMetricsLifetime?.total_revenue ?? 0,
+                roi: fbMetricsLifetime?.ROI ?? 0,
+                leads: fbMetricsLifetime?.leads ?? 0,
+                clicks: fbMetricsLifetime?.total_clicks ?? 0,
+            },
+        },
     };
 }
 
@@ -751,28 +760,18 @@ export const updateAdPerformanceScheduled = onSchedule(
                     continue;
                 }
 
-                // Find relevant metrics
-                const bqFbMetrics3d = bqPerformanceLast3Days.find(
-                    (ad) => ad.AdID === fbAdId && ad.Platform === 'FB'
-                );
-                const bqFbMetrics7d = bqPerformanceLast7Days.find(
-                    (ad) => ad.AdID === fbAdId && ad.Platform === 'FB'
-                );
-                const bqFbMetricsLifetime = bqPerformanceLifetime.find(
-                    (ad) => ad.AdID === fbAdId && ad.Platform === 'FB'
-                );
-
                 // Update performance metrics
                 adPerformance.performanceMetrics = buildPerformanceMetrics(
-                    bqFbMetrics3d,
-                    bqFbMetrics7d,
-                    bqFbMetricsLifetime
+                    fbAdId,
+                    bqPerformanceLast3Days,
+                    bqPerformanceLast7Days,
+                    bqPerformanceLifetime
                 );
 
                 // Skip if below spend threshold
                 if (
-                    adPerformance.performanceMetrics.fbSpendLifetime <
-                    LIFETIME_SPEND_THRESHOLD
+                    adPerformance.performanceMetrics.fb?.lifetime?.spend ??
+                    0 < LIFETIME_SPEND_THRESHOLD
                 ) {
                     console.log(
                         `Ad ${fbAdId} has spent less than ${LIFETIME_SPEND_THRESHOLD} dollars. Skipping...`
@@ -796,9 +795,9 @@ export const updateAdPerformanceScheduled = onSchedule(
 
                 // Handle ad based on ROI
                 const fbRoiLifetime =
-                    adPerformance.performanceMetrics.fbRoiLifetime;
+                    adPerformance.performanceMetrics.fb?.lifetime?.roi ?? 0;
                 const fbRoiLast3Days =
-                    adPerformance.performanceMetrics.fbRoiLast3Days;
+                    adPerformance.performanceMetrics.fb?.last3Days?.roi ?? 0;
                 let message: string;
                 let fbAdSetStatus: AdSetStatus = 'ACTIVE';
 
@@ -863,12 +862,18 @@ export const handleCreatomateRequestHttp = onRequest(async (req, res) => {
         process.env.CREATOMATE_API_KEY || ''
     );
 
-    const baseVideoUrl =
-        'https://drive.google.com/uc?export=download&id=1OMj1MwqUL2V_r12VEWxWEmfip28WO8s7';
+    // const baseVideoUrl_720x1280 =
+    //     'https://drive.google.com/uc?export=download&id=1OMj1MwqUL2V_r12VEWxWEmfip28WO8s7';
+    const baseVideoUrl_360x360 =
+        'https://drive.google.com/uc?export=download&id=1ew-u6qi83SgPQZIBi-XwTjYImlk4N7E-';
+
+    const baseVideoUrl_16x9 =
+        'https://drive.google.com/uc?export=download&id=1rh5gJXbstIyZUuOuhel7tgfhLJ2tVcSt';
     const baseAdName = '103-R-AZ-AZ-AZ';
-    const fbAdId = '120216814815950415';
+    // If I use a real fbAdId it will actually creat the hooks
+    const fbAdId = '';
     const result = await creatomateService.uploadToCreatomateWithHooksAll(
-        baseVideoUrl,
+        baseVideoUrl_16x9,
         baseAdName,
         fbAdId
     );
@@ -953,20 +958,7 @@ export const handleCreatomateWebhookHttp = onRequest(async (req, res) => {
         ideaWriter: originalIdeaWriter,
         scriptWriter: originalScriptWriter,
         hookWriter: 'AZ',
-        performanceMetrics: {
-            fbSpendLast3Days: 0,
-            fbSpendLast7Days: 0,
-            fbSpendLifetime: 0,
-            fbRevenueLast3Days: 0,
-            fbRevenueLast7Days: 0,
-            fbRevenueLifetime: 0,
-            fbRoiLast3Days: 0,
-            fbRoiLast7Days: 0,
-            fbRoiLifetime: 0,
-            fbLeadsLast3Days: 0,
-            fbLeadsLast7Days: 0,
-            fbLeadsLifetime: 0,
-        },
+        performanceMetrics: {},
         fbIsActive: true,
         isHook: true,
         hasHooksCreated: false,
@@ -982,75 +974,75 @@ export const handleCreatomateWebhookHttp = onRequest(async (req, res) => {
 /*
 TODO: Fix this after refactor to read params by ad account ID instead of ad type
 */
-export const createImageAdFromHttp = onRequest(async (req, res) => {
-    try {
-        console.log('createImageAdFromHttp handler received request');
+// export const createImageAdFromHttp = onRequest(async (req, res) => {
+//     try {
+//         console.log('createImageAdFromHttp handler received request');
 
-        const accountId = process.env.FACEBOOK_ACCOUNT_ID_OZEMPIC;
-        const metaAdCreatorService = new MetaAdCreatorService({
-            appId: process.env.FACEBOOK_APP_ID || '',
-            appSecret: process.env.FACEBOOK_APP_SECRET || '',
-            accessToken: process.env.FACEBOOK_ACCESS_TOKEN || '',
-            accountId: accountId || '',
-            apiVersion: '20.0',
-        });
+//         const accountId = process.env.FACEBOOK_ACCOUNT_ID_OZEMPIC;
+//         const metaAdCreatorService = new MetaAdCreatorService({
+//             appId: process.env.FACEBOOK_APP_ID || '',
+//             appSecret: process.env.FACEBOOK_APP_SECRET || '',
+//             accessToken: process.env.FACEBOOK_ACCESS_TOKEN || '',
+//             accountId: accountId || '',
+//             apiVersion: '20.0',
+//         });
 
-        const uuid = req.body[UUID_FIELD_NAME];
-        const imageBytes = req.body[IMAGE_BYTES_FIELD_NAME];
-        const adType = req.body[AD_TYPE_FIELD_NAME];
+//         const uuid = req.body[UUID_FIELD_NAME];
+//         const imageBytes = req.body[IMAGE_BYTES_FIELD_NAME];
+//         const adType = req.body[AD_TYPE_FIELD_NAME];
 
-        const adSetNameAndAdName = `${uuid}-AZ`;
+//         const adSetNameAndAdName = `${uuid}-AZ`;
 
-        const fbAdSettings = await getFbAdSettings(adType);
+//         const fbAdSettings = await getFbAdSettings(adType);
 
-        const campaignId = process.env.CAMPAIGN_ID_FOR_467161346185440; // Read Campaign ID
-        invariant(campaignId, 'empty ozempic campaign ID');
+//         const campaignId = process.env.CAMPAIGN_ID_FOR_467161346185440; // Read Campaign ID
+//         invariant(campaignId, 'empty ozempic campaign ID');
 
-        const adSet: AdSet = await metaAdCreatorService.createAdSet({
-            name: adSetNameAndAdName,
-            campaignId,
-            fbAdSettings,
-        });
+//         const adSet: AdSet = await metaAdCreatorService.createAdSet({
+//             name: adSetNameAndAdName,
+//             campaignId,
+//             fbAdSettings,
+//         });
 
-        const adImage: AdImage = await metaAdCreatorService.uploadAdImage(
-            imageBytes
-        );
+//         const adImage: AdImage = await metaAdCreatorService.uploadAdImage(
+//             imageBytes
+//         );
 
-        // const name = adImage._data.images.bytes.name;
-        // const hash = adImage._data.images.bytes.hash;
+//         // const name = adImage._data.images.bytes.name;
+//         // const hash = adImage._data.images.bytes.hash;
 
-        const adCreative = await metaAdCreatorService.createAdCreativeImage(
-            adSetNameAndAdName,
-            adImage,
-            fbAdSettings,
-            adType
-        );
+//         const adCreative = await metaAdCreatorService.createAdCreativeImage(
+//             adSetNameAndAdName,
+//             adImage,
+//             fbAdSettings,
+//             adType
+//         );
 
-        // console.log({ adCreative });
+//         // console.log({ adCreative });
 
-        const ad: Ad = await metaAdCreatorService.createAd({
-            name: adSetNameAndAdName,
-            adSet,
-            adCreative,
-        });
+//         const ad: Ad = await metaAdCreatorService.createAd({
+//             name: adSetNameAndAdName,
+//             adSet,
+//             adCreative,
+//         });
 
-        // console.log({ adImage });
-        res.status(200).json({
-            code: 'SUCESS',
-            error: '',
-            payload: {
-                ad_id: ad.id,
-            },
-        });
-    } catch (error) {
-        console.error('Error in test handler:', error);
+//         // console.log({ adImage });
+//         res.status(200).json({
+//             code: 'SUCESS',
+//             error: '',
+//             payload: {
+//                 ad_id: ad.id,
+//             },
+//         });
+//     } catch (error) {
+//         console.error('Error in test handler:', error);
 
-        res.status(500).json({
-            code: 'ERROR',
-            error: error,
-        });
-    }
-});
+//         res.status(500).json({
+//             code: 'ERROR',
+//             error: error,
+//         });
+//     }
+// });
 
 // const getAdSetTargeting = (
 //     accountId: string,

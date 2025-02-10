@@ -1,4 +1,6 @@
+import invariant from 'tiny-invariant';
 import { getAllFilesInFolderWithSignedUrls } from '../firebaseStorageCloud.js';
+import ffmpeg from 'fluent-ffmpeg';
 
 interface CreatomateTemplate {
     output_format: string;
@@ -8,7 +10,6 @@ interface CreatomateTemplate {
 }
 
 interface CreatomateElement {
-    id: string;
     name: string;
     type: string;
     track: number;
@@ -16,7 +17,6 @@ interface CreatomateElement {
     y?: string;
     width?: string;
     height?: string;
-    source: string;
     dynamic: boolean;
 }
 
@@ -40,6 +40,11 @@ interface Hook {
     url: string;
 }
 
+enum AspectRatio {
+    Vertical = 'vertical',
+    Horizontal = 'horizontal',
+    Square = 'square',
+}
 // const creatomateService = await CreatomateService.create(apiKey);
 export class CreatomateService {
     private readonly apiKey: string;
@@ -76,6 +81,12 @@ export class CreatomateService {
         baseAdName: string,
         fbAdId: string
     ) {
+        // Get video dimensions first
+        const dimensions = await this.getVideoDimensions(baseVideoUrl);
+        console.log(
+            `Video dimensions: ${dimensions.width}x${dimensions.height}`
+        );
+
         const uploadPromises = this.hooks.map(async (hook) => {
             try {
                 const result = await this.uploadToCreatomateWithHookSingle(
@@ -83,7 +94,8 @@ export class CreatomateService {
                     hook.url,
                     baseAdName,
                     hook.name,
-                    fbAdId
+                    fbAdId,
+                    dimensions
                 );
                 return {
                     hookName: hook.name,
@@ -101,47 +113,18 @@ export class CreatomateService {
         return Promise.all(uploadPromises);
     }
 
-    // Helpers
-    private getCreatomateTemplate(): CreatomateTemplate {
-        const creatomateTemplate = {
-            output_format: 'mp4',
-            width: 720,
-            height: 1280,
-            elements: [
-                {
-                    id: 'ceabf58e-92b4-4963-8994-0955495a3044',
-                    name: 'hook-video',
-                    type: 'video',
-                    track: 1,
-                    time: 0,
-                    y: '46.0351%',
-                    width: '113.7266%',
-                    height: '37.0663%',
-                    source: '1efba592-995d-4fc2-a084-863a996111ad',
-                    dynamic: true,
-                },
-                {
-                    id: '03fe4108-e7fe-4678-a3ce-92355d1cd44d',
-                    name: 'main-video',
-                    type: 'video',
-                    track: 1,
-                    source: '065e2f34-df0a-4f19-80f8-8e9f5ca58171',
-                    dynamic: true,
-                },
-            ],
-        };
-
-        return creatomateTemplate;
-    }
-
     async uploadToCreatomateWithHookSingle(
         baseVideoUrl: string,
         hookVideoUrl: string,
         baseAdName: string,
         hookName: string,
-        fbAdId: string
+        fbAdId: string,
+        dimensions: { width: number; height: number }
     ) {
-        const creatomateTemplate = this.getCreatomateTemplate();
+        const creatomateTemplate = this.getCreatomateTemplate(
+            dimensions.width,
+            dimensions.height
+        );
 
         const metadata: CreatomateMetadata = {
             baseAdName,
@@ -185,5 +168,129 @@ export class CreatomateService {
             console.error('Error uploading to Creatomate:', error);
             throw error;
         }
+    }
+
+    // Helpers
+    private getCreatomateTemplate(
+        width: number,
+        height: number
+    ): CreatomateTemplate {
+        const mainVideoAspectRatio = width / height;
+
+        let aspectRatio: AspectRatio;
+        if (Math.abs(mainVideoAspectRatio - 16 / 9) < 0.1) {
+            aspectRatio = AspectRatio.Horizontal;
+        } else if (Math.abs(mainVideoAspectRatio - 2 / 3) < 0.1) {
+            aspectRatio = AspectRatio.Vertical;
+        } else if (Math.abs(mainVideoAspectRatio - 1) < 0.1) {
+            aspectRatio = AspectRatio.Square;
+        } else {
+            throw new Error(
+                `Unsupported aspect ratio: ${mainVideoAspectRatio.toFixed(
+                    2
+                )} (${width}x${height}). Video must be either 16:9 (horizontal), 2:3 (vertical), or 1:1 (square).`
+            );
+        }
+
+        let creatomateTemplate: CreatomateTemplate | null = null;
+
+        if (aspectRatio === AspectRatio.Vertical) {
+            creatomateTemplate = {
+                output_format: 'mp4',
+                width: 720,
+                height: 1280,
+                elements: [
+                    {
+                        name: 'hook-video',
+                        type: 'video',
+                        track: 1,
+                        time: 0,
+                        y: '46.0351%',
+                        width: '113.7266%',
+                        height: '37.0663%',
+                        dynamic: true,
+                    },
+                    {
+                        name: 'main-video',
+                        type: 'video',
+                        track: 1,
+                        dynamic: true,
+                    },
+                ],
+            };
+        } else if (aspectRatio === AspectRatio.Square) {
+            creatomateTemplate = {
+                output_format: 'mp4',
+                width: 720,
+                height: 720,
+                elements: [
+                    {
+                        name: 'hook-video',
+                        type: 'video',
+                        track: 1,
+                        time: 0,
+                        y: '45.1481%',
+                        height: '57.7421%',
+                        dynamic: true,
+                    },
+                    {
+                        name: 'main-video',
+                        type: 'video',
+                        track: 1,
+                        dynamic: true,
+                    },
+                ],
+            };
+        } else if (aspectRatio === AspectRatio.Horizontal) {
+            creatomateTemplate = {
+                output_format: 'mp4',
+                width: 1280,
+                height: 720,
+                elements: [
+                    {
+                        name: 'hook-video',
+                        type: 'video',
+                        track: 1,
+                        time: 0,
+                        dynamic: true,
+                    },
+                    {
+                        name: 'main-video',
+                        type: 'video',
+                        track: 1,
+                        dynamic: true,
+                    },
+                ],
+            };
+        }
+
+        invariant(creatomateTemplate, 'Creatomate template must be defined');
+        return creatomateTemplate;
+    }
+
+    private getVideoDimensions(
+        videoUrl: string
+    ): Promise<{ width: number; height: number }> {
+        return new Promise((resolve, reject) => {
+            ffmpeg.ffprobe(videoUrl, (err, metadata) => {
+                if (err) {
+                    reject(err);
+                    return;
+                }
+
+                const videoStream = metadata.streams.find(
+                    (stream) => stream.codec_type === 'video'
+                );
+                if (!videoStream) {
+                    reject(new Error('No video stream found'));
+                    return;
+                }
+
+                resolve({
+                    width: videoStream.width || 0,
+                    height: videoStream.height || 0,
+                });
+            });
+        });
     }
 }

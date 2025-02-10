@@ -1,16 +1,20 @@
+export interface TimeBasedMetrics {
+    spend: number;
+    revenue: number;
+    roi: number;
+    leads: number;
+    clicks: number;
+}
+
+export interface PlatformMetrics {
+    last3Days: TimeBasedMetrics;
+    last7Days: TimeBasedMetrics;
+    lifetime: TimeBasedMetrics;
+}
+
 export interface PerformanceMetrics {
-    fbSpendLast3Days: number;
-    fbSpendLast7Days: number;
-    fbSpendLifetime: number;
-    fbRevenueLast3Days: number;
-    fbRevenueLast7Days: number;
-    fbRevenueLifetime: number;
-    fbRoiLast3Days: number;
-    fbRoiLast7Days: number;
-    fbRoiLifetime: number;
-    fbLeadsLast3Days: number;
-    fbLeadsLast7Days: number;
-    fbLeadsLifetime: number;
+    fb?: PlatformMetrics;
+    ga?: PlatformMetrics;
 }
 
 export interface AdPerformance {
