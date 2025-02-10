@@ -78,6 +78,13 @@ export class SkypeService {
         );
     }
 
+    /**
+     * IMPORTANT: For this bot to work properly, you must configure the messaging endpoint
+     * in your Azure Bot Service configuration. The endpoint should point to where this
+     * handleIncomingMessage function is exposed (e.g., https://your-domain.com/api/messages).
+     * This allows the bot to receive messages from Skype through Azure's Bot Framework.
+     */
+
     async handleIncomingMessage(req: Request, res: Response): Promise<void> {
         console.log('[SkypeService] Handling incoming message:', req.body);
         await this.adapter.process(
