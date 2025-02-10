@@ -34,7 +34,7 @@ import {
     CreatomateService,
 } from './services/CreatomateService.js';
 import { MediaBuyingService } from './services/MediaBuyingService.js';
-
+import { SkypeService } from './services/SkypeService.js';
 import { getAdName } from './helpers.js';
 
 type AdSetStatus = (typeof AdSet.Status)[keyof typeof AdSet.Status];
@@ -483,7 +483,6 @@ const getFbAdSettings = async (accountId: string) => {
     return fbAdSettings;
 };
 
-
 // https://duplicateadsetandadtocampaignhttp-txyabkufvq-uc.a.run.app
 export const duplicateAdSetAndAdToCampaignHttp = onRequest(async (req, res) => {
     try {
@@ -722,6 +721,18 @@ export const handleCreatomateWebhookHttp = onRequest(async (req, res) => {
 
     await saveAdPerformanceFirestore(hookAdId, hookAdPerformance);
 
+    res.status(200).json({ success: true });
+});
+
+export const handleSkypeMessageHttp = onRequest(async (req, res) => {
+    const skypeService = new SkypeService(
+        process.env.MICROSOFT_APP_ID || '',
+        process.env.MICROSOFT_APP_PASSWORD || ''
+    );
+    const conversationName = 'MARCUS';
+    const message = 'This is a test from ad bot';
+
+    await skypeService.sendMessageByConversationName(conversationName, message);
     res.status(200).json({ success: true });
 });
 
