@@ -24,6 +24,7 @@ import {
 } from '../models/MetaApiSchema.js';
 import invariant from 'tiny-invariant';
 import { FbAdSettings } from '../models/FbAdSettings.js';
+import { getNextWeekdayUnixSeconds } from '../helpers.js';
 
 export default class MetaAdCreatorService {
     // @ts-ignore
@@ -178,34 +179,10 @@ export default class MetaAdCreatorService {
         /* Get start and end time */
         const now = new Date();
 
-        // Calculate days to add to get to next weekday
-        const daysToAdd =
-            now.getUTCDay() === 5
-                ? 3 // If Friday, add 3 days
-                : now.getUTCDay() === 6
-                ? 2 // If Saturday, add 2 days
-                : now.getUTCDay() === 0
-                ? 1 // If Sunday, add 1 day
-                : 1; // If Mon-Thu, add 1 day
+        const startTimeUnixSeconds = getNextWeekdayUnixSeconds(now).toString();
 
-        const nextWeekday = new Date(
-            Date.UTC(
-                now.getUTCFullYear(),
-                now.getUTCMonth(),
-                now.getUTCDate() + daysToAdd,
-                14, // 7 AM PDT (14:00 UTC)
-                0,
-                0,
-                0
-            )
-        );
-
-        const oneWeekLater = new Date(nextWeekday);
+        const oneWeekLater = new Date(parseInt(startTimeUnixSeconds) * 1000);
         oneWeekLater.setDate(oneWeekLater.getDate() + 7);
-
-        const startTimeUnixSeconds = Math.floor(
-            nextWeekday.getTime() / 1000
-        ).toString();
 
         const endTimeUnixSeconds = Math.floor(
             oneWeekLater.getTime() / 1000
@@ -286,7 +263,11 @@ export default class MetaAdCreatorService {
         }
     }
 
-    async duplicateAdSet(adSetId: string, campaignId: string): Promise<AdSet> {
+    async duplicateAdSet(
+        adSetId: string,
+        campaignId: string,
+        startTime: string | null = null
+    ): Promise<AdSet> {
         const adSet = new AdSet(adSetId);
 
         const copyRequestParams = {
@@ -296,6 +277,9 @@ export default class MetaAdCreatorService {
             rename_options: {
                 rename_strategy: 'NO_RENAME',
             },
+            ...(startTime && {
+                start_time: startTime,
+            }),
         };
 
         const duplicatedAdSet = await adSet.createCopy(

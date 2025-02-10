@@ -25,6 +25,7 @@ export interface AdPerformance {
     fbAdId: string;
     fbAdSetId: string;
     fbCampaignId: string;
+    fbScalingCampaignId: string;
     fbAccountId: string;
     ideaWriter: string;
     scriptWriter: string;

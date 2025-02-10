@@ -11,7 +11,6 @@ import { FbApiAdSetTargeting } from './models/MetaApiSchema.js';
 import {
     Ad,
     AdCreative,
-    AdImage,
     AdSet,
     AdVideo,
     //@ts-ignore
@@ -21,23 +20,20 @@ import {
     getFbAdSettingFirestore,
     getIncrementedCounterFirestore,
     saveAdPerformanceFirestore,
-    getAdPerformanceFirestoreAll,
     getAdPerformanceFirestoreById,
 } from './firestoreCloud.js';
 import {
     getSignedUploadUrl,
     getSignedDownloadUrl,
 } from './firebaseStorageCloud.js';
-import { AdPerformance, PerformanceMetrics } from './models/AdPerformance.js';
-import {
-    AdPerformanceDataBigQuery,
-    BigQueryService,
-} from './services/BigQueryService.js';
+import { AdPerformance } from './models/AdPerformance.js';
+import { BigQueryService } from './services/BigQueryService.js';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import {
     CreatomateMetadata,
     CreatomateService,
 } from './services/CreatomateService.js';
+import { MediaBuyingService } from './services/MediaBuyingService.js';
 
 import { getAdName } from './helpers.js';
 
@@ -288,7 +284,7 @@ export const createFbAdHttp = onRequest(async (req, res) => {
             `ad account data not found in constants for account id: ${accountId}`
         );
 
-        const { campaignId } = adAccountData;
+        const { campaignId, scalingCampaignId } = adAccountData;
         const fbAdSettings = await getFbAdSettings(accountId);
         const metaAdCreatorService = new MetaAdCreatorService({
             appId: process.env.FACEBOOK_APP_ID || '',
@@ -330,6 +326,7 @@ export const createFbAdHttp = onRequest(async (req, res) => {
             fbAdId,
             fbAdSetId,
             fbCampaignId: campaignId,
+            fbScalingCampaignId: scalingCampaignId,
             vertical,
             ideaWriter,
             scriptWriter,
@@ -486,134 +483,6 @@ const getFbAdSettings = async (accountId: string) => {
     return fbAdSettings;
 };
 
-export const handleAdTesting = onRequest(async (req, res) => {
-    const lifetimeSpendThresholdDollars = 40;
-    const lifetimeRoiThreshold = 1.5;
-    const { adId, accountId, totalSpendLifetimeDollars, totalRoiLifetime } =
-        req.body;
-
-    let fbAdSetStatus: AdSetStatus = 'ACTIVE'; // Default Facebook ad set status
-    let message = '';
-
-    try {
-        // Validate required parameters
-        const missingParams = [];
-        if (!adId) missingParams.push('adId');
-        if (!accountId) missingParams.push('accountId');
-        if (totalSpendLifetimeDollars === undefined)
-            missingParams.push('totalSpendLifetimeDollars');
-        if (totalRoiLifetime === undefined)
-            missingParams.push('totalRoiLifetime');
-
-        if (missingParams.length > 0) {
-            message = `Missing required parameters: ${missingParams.join(
-                ', '
-            )}`;
-            res.status(400).json({
-                success: false,
-                status: fbAdSetStatus,
-                message,
-            });
-            return;
-        }
-
-        if (totalSpendLifetimeDollars < lifetimeSpendThresholdDollars) {
-            message = `Ad ${adId} still under the lifetime spend threshold of ${lifetimeSpendThresholdDollars} dollars. Total spend: ${totalSpendLifetimeDollars}`;
-            res.status(200).json({
-                success: true,
-                status: fbAdSetStatus,
-                message,
-            });
-            return;
-        }
-
-        console.log(`Spend threshold met for ad ${adId}`);
-
-        const metaAdCreatorService = new MetaAdCreatorService({
-            appId: process.env.FACEBOOK_APP_ID || '',
-            appSecret: process.env.FACEBOOK_APP_SECRET || '',
-            accessToken: process.env.FACEBOOK_ACCESS_TOKEN || '',
-            accountId,
-            apiVersion: '20.0',
-        });
-        const adSetId = await metaAdCreatorService.getAdSetIdFromAdId(adId);
-
-        console.log(`Lifetime ROI: ${totalRoiLifetime}`);
-
-        if (totalRoiLifetime < 1) {
-            fbAdSetStatus = 'PAUSED';
-            message = `Ad ${adId} has ROI of < 1. ROI: ${totalRoiLifetime}. Ad Paused.`;
-
-            await metaAdCreatorService.updateAdSetStatus(
-                adSetId,
-                fbAdSetStatus
-            );
-            console.log(`Updated ad ${adId} status to ${fbAdSetStatus}`);
-        } else if (totalRoiLifetime < lifetimeRoiThreshold) {
-            message = `Ad ${adId} has ROI between 1 and ${lifetimeRoiThreshold}. ROI: ${totalRoiLifetime}. Keep running because profitable but do not scale.`;
-        } else {
-            message = `Ad ${adId} has ROI >= ${lifetimeRoiThreshold}. ROI: ${totalRoiLifetime}. Ready for scaling.`;
-            // TODO: Implement scaling logic
-            // - try ads with hooks
-
-            const accountData =
-                AD_ACCOUNT_DATA[accountId as keyof typeof AD_ACCOUNT_DATA];
-            const { scalingCampaignId } = accountData;
-
-            await duplicateAdSetAndAdToCampaign(
-                metaAdCreatorService,
-                adId,
-                scalingCampaignId,
-                20000
-            );
-        }
-
-        console.log(message);
-        res.status(200).json({ success: true, status: fbAdSetStatus, message });
-    } catch (error) {
-        message = `Error processing ad ${adId}: ${
-            error instanceof Error ? error.message : 'Unknown error'
-        }`;
-        console.error(message);
-        res.status(500).json({
-            success: false,
-            status: fbAdSetStatus,
-            message,
-        });
-    }
-});
-
-async function duplicateAdSetAndAdToCampaign(
-    metaAdCreatorService: MetaAdCreatorService,
-    adId: string,
-    campaignId: string,
-    dailyBudgetCents: number
-) {
-    const adSetId = await metaAdCreatorService.getAdSetIdFromAdId(adId);
-    const duplicatedAdSet = await metaAdCreatorService.duplicateAdSet(
-        adSetId,
-        campaignId
-    );
-
-    console.log(
-        `Successfully duplicated ad set ${adSetId} to campaign ${campaignId}`
-    );
-
-    const updateDailyBudgetParams = {
-        daily_budget: dailyBudgetCents,
-    };
-
-    const duplicateAdSetWithUpdatedBudget = await duplicatedAdSet.update(
-        [],
-        updateDailyBudgetParams
-    );
-
-    console.log(
-        `Successfully updated daily budget for ad set ${adSetId} to ${dailyBudgetCents}`
-    );
-
-    return duplicateAdSetWithUpdatedBudget;
-}
 
 // https://duplicateadsetandadtocampaignhttp-txyabkufvq-uc.a.run.app
 export const duplicateAdSetAndAdToCampaignHttp = onRequest(async (req, res) => {
@@ -627,44 +496,83 @@ export const duplicateAdSetAndAdToCampaignHttp = onRequest(async (req, res) => {
             });
             return;
         }
-        const accountData =
-            AD_ACCOUNT_DATA[accountId as keyof typeof AD_ACCOUNT_DATA];
-        if (!accountData) {
-            res.status(400).json({
-                success: false,
-                error: `Invalid accountId: ${accountId}`,
-            });
-            return;
-        }
-        const { scalingCampaignId } = accountData;
-        if (!scalingCampaignId) {
-            res.status(400).json({
-                success: false,
-                error: `No scaling campaign ID configured for account: ${accountId}`,
-            });
-            return;
-        }
+        const creatomateService = await CreatomateService.create(
+            process.env.CREATOMATE_API_KEY || ''
+        );
+        const bigQueryService = new BigQueryService();
+        const mediaBuyingService = new MediaBuyingService(
+            creatomateService,
+            bigQueryService
+        );
+
+        const adPerformance = {
+            adName: '105-R-AZ-AZ-AZ',
+            counter: 105,
+            fbAccountId: '467161346185440',
+            fbAdId: '120216860324070415',
+            fbAdSetId: '120216860308490415',
+            fbCampaignId: '120215523703190415',
+            fbScalingCampaignId: '120216751824410415',
+            gDriveDownloadUrl:
+                'https://drive.google.com/uc?export=download&id=1815gqdRw0PzA7d_sH_dzxqscbV3OD-Ku',
+            vertical: 'R',
+            ideaWriter: 'AZ',
+            scriptWriter: 'AZ',
+            hookWriter: 'AZ',
+            fbIsActive: true,
+            isHook: false,
+            isScaled: false,
+            hasHooksCreated: false,
+            hasScaled: false,
+            performanceMetrics: {
+                fb: {
+                    last3Days: {
+                        clicks: 250,
+                        leads: 5,
+                        revenue: 7500, // $75
+                        roi: 3.0,
+                        spend: 2500, // $25
+                    },
+                    last7Days: {
+                        clicks: 600,
+                        leads: 12,
+                        revenue: 18000, // $180
+                        roi: 3.0,
+                        spend: 6000, // $60
+                    },
+                    lifetime: {
+                        clicks: 1000,
+                        leads: 20,
+                        revenue: 30000, // $300
+                        roi: 3.0,
+                        spend: 10000, // $100
+                    },
+                },
+                fbRevenueLast3Days: 7500,
+                fbRevenueLast7Days: 18000,
+                fbRevenueLifetime: 30000,
+                fbRoiLast3Days: 3.0,
+                fbRoiLast7Days: 3.0,
+                fbRoiLifetime: 3.0,
+                fbSpendLast3Days: 2500,
+                fbSpendLast7Days: 6000,
+                fbSpendLifetime: 10000,
+            },
+        };
+
+        invariant(adPerformance, 'adPerformance must be defined');
 
         const metaAdCreatorService = new MetaAdCreatorService({
             appId: process.env.FACEBOOK_APP_ID || '',
             appSecret: process.env.FACEBOOK_APP_SECRET || '',
             accessToken: process.env.FACEBOOK_ACCESS_TOKEN || '',
             accountId,
-            apiVersion: '20.0',
         });
-
-        const duplicatedAdSet = await duplicateAdSetAndAdToCampaign(
-            metaAdCreatorService,
-            adId,
-            scalingCampaignId,
-            20000
+        await mediaBuyingService.handleScaling(
+            adPerformance,
+            metaAdCreatorService
         );
 
-        res.status(200).json({
-            success: true,
-            error: null,
-            data: { duplicatedAdSet },
-        });
         return;
     } catch (error) {
         console.error('Error duplicating ad set:', error);
@@ -679,171 +587,22 @@ export const duplicateAdSetAndAdToCampaignHttp = onRequest(async (req, res) => {
     return;
 });
 
-const LIFETIME_SPEND_THRESHOLD = 40;
-const LIFETIME_ROI_SCALING_THRESHOLD = 1.5;
-const LIFETIME_ROI_HOOK_THRESHOLD = 1.3;
-
-function buildPerformanceMetrics(
-    fbAdId: string,
-    bqMetrics3d?: AdPerformanceDataBigQuery[],
-    bqMetrics7d?: AdPerformanceDataBigQuery[],
-    bqMetricsLifetime?: AdPerformanceDataBigQuery[]
-): PerformanceMetrics {
-    const fbMetrics3d = bqMetrics3d?.find(
-        (m) => m.Platform === 'FB' && m.AdID === fbAdId
-    );
-    const fbMetrics7d = bqMetrics7d?.find(
-        (m) => m.Platform === 'FB' && m.AdID === fbAdId
-    );
-    const fbMetricsLifetime = bqMetricsLifetime?.find(
-        (m) => m.Platform === 'FB' && m.AdID === fbAdId
-    );
-
-    return {
-        fb: {
-            last3Days: {
-                spend: fbMetrics3d?.total_cost ?? 0,
-                revenue: fbMetrics3d?.total_revenue ?? 0,
-                roi: fbMetrics3d?.ROI ?? 0,
-                leads: fbMetrics3d?.leads ?? 0,
-                clicks: fbMetrics3d?.total_clicks ?? 0,
-            },
-            last7Days: {
-                spend: fbMetrics7d?.total_cost ?? 0,
-                revenue: fbMetrics7d?.total_revenue ?? 0,
-                roi: fbMetrics7d?.ROI ?? 0,
-                leads: fbMetrics7d?.leads ?? 0,
-                clicks: fbMetrics7d?.total_clicks ?? 0,
-            },
-            lifetime: {
-                spend: fbMetricsLifetime?.total_cost ?? 0,
-                revenue: fbMetricsLifetime?.total_revenue ?? 0,
-                roi: fbMetricsLifetime?.ROI ?? 0,
-                leads: fbMetricsLifetime?.leads ?? 0,
-                clicks: fbMetricsLifetime?.total_clicks ?? 0,
-            },
-        },
-    };
-}
-
 export const updateAdPerformanceScheduled = onSchedule(
     'every 1 hours',
-    async (event) => {
-        const metAdCreatorServices: Record<string, MetaAdCreatorService> = {};
-
+    async () => {
         try {
+            const creatomateService = await CreatomateService.create(
+                process.env.CREATOMATE_API_KEY || ''
+            );
             const bigQueryService = new BigQueryService();
-            const [
-                bqPerformanceLast3Days,
-                bqPerformanceLast7Days,
-                bqPerformanceLifetime,
-                firestoreAdPerformances,
-            ] = await Promise.all([
-                bigQueryService.getAdPerformance('AD_PERFORMANCE_3D'),
-                bigQueryService.getAdPerformance('AD_PERFORMANCE_7D'),
-                bigQueryService.getAdPerformance('AD_PERFORMANCE_LIFETIME'),
-                getAdPerformanceFirestoreAll(),
-            ]);
-
-            for (const adPerformance of firestoreAdPerformances) {
-                const fbAdId = adPerformance.fbAdId;
-
-                // Skip inactive ads
-                if (!adPerformance.fbIsActive) {
-                    continue;
-                }
-
-                // Update performance metrics
-                adPerformance.performanceMetrics = buildPerformanceMetrics(
-                    fbAdId,
-                    bqPerformanceLast3Days,
-                    bqPerformanceLast7Days,
-                    bqPerformanceLifetime
-                );
-
-                // Skip if below spend threshold
-                if (
-                    adPerformance.performanceMetrics.fb?.lifetime?.spend ??
-                    0 < LIFETIME_SPEND_THRESHOLD
-                ) {
-                    console.log(
-                        `Ad ${fbAdId} has spent less than ${LIFETIME_SPEND_THRESHOLD} dollars. Skipping...`
-                    );
-                    continue;
-                }
-
-                const fbAccountId = adPerformance.fbAccountId;
-                invariant(fbAccountId, 'fbAccountId must be defined');
-
-                if (!metAdCreatorServices[fbAccountId]) {
-                    metAdCreatorServices[fbAccountId] =
-                        new MetaAdCreatorService({
-                            appId: process.env.FACEBOOK_APP_ID || '',
-                            appSecret: process.env.FACEBOOK_APP_SECRET || '',
-                            accessToken:
-                                process.env.FACEBOOK_ACCESS_TOKEN || '',
-                            accountId: fbAccountId,
-                        });
-                }
-
-                // Handle ad based on ROI
-                const fbRoiLifetime =
-                    adPerformance.performanceMetrics.fb?.lifetime?.roi ?? 0;
-                const fbRoiLast3Days =
-                    adPerformance.performanceMetrics.fb?.last3Days?.roi ?? 0;
-                let message: string;
-                let fbAdSetStatus: AdSetStatus = 'ACTIVE';
-
-                if (fbRoiLifetime < 1 || fbRoiLast3Days < 1) {
-                    fbAdSetStatus = 'PAUSED';
-                    adPerformance.fbIsActive = false;
-                    message = `Ad ${fbAdId} has ROI < 1. Lifetime ROI: ${fbRoiLifetime}, Last 3 Days ROI: ${fbRoiLast3Days}. Ad Paused.`;
-                } else if (fbRoiLifetime < LIFETIME_ROI_HOOK_THRESHOLD) {
-                    message = `Ad ${fbAdId} has 1 < ROI < ${LIFETIME_ROI_HOOK_THRESHOLD}. ROI: ${fbRoiLifetime}. Keep Ad running because profitable but do not create hooks or scale.`;
-                } else {
-                    // fbRoiLifetime >= LIFETIME_ROI_HOOK_THRESHOLD
-                    if (!adPerformance.hasHooksCreated) {
-                        const creatomateService =
-                            await CreatomateService.create(
-                                process.env.CREATOMATE_API_KEY || ''
-                            );
-                        await creatomateService.uploadToCreatomateWithHooksAll(
-                            adPerformance.gDriveDownloadUrl,
-                            adPerformance.adName,
-                            fbAdId
-                        );
-                        adPerformance.hasHooksCreated = true;
-                        message = `Ad ${fbAdId} has ROI above ${LIFETIME_ROI_HOOK_THRESHOLD}. ROI: ${fbRoiLifetime}. Create hooks.`;
-                    } else {
-                        message = 'Hooks already created.';
-                    }
-
-                    if (fbRoiLifetime >= LIFETIME_ROI_SCALING_THRESHOLD) {
-                        if (!adPerformance.hasScaled) {
-                            // TODO: Implement scaling logic
-                            adPerformance.hasScaled = true;
-                            message = `Ad ${fbAdId} has ROI >= ${LIFETIME_ROI_SCALING_THRESHOLD}. ROI: ${fbRoiLifetime}. Ready for scaling.`;
-                        } else {
-                            message = 'Ad has already been scaled.';
-                        }
-                    }
-                }
-
-                // Update ad set status in Facebook
-                await metAdCreatorServices[fbAccountId].updateAdSetStatus(
-                    adPerformance.fbAdSetId,
-                    fbAdSetStatus
-                );
-
-                // Save updated performance data
-                await saveAdPerformanceFirestore(fbAdId, adPerformance);
-
-                console.log(`Updated ad performance for ad ${fbAdId}`);
-                console.log(message);
-            }
+            const mediaBuyingService = new MediaBuyingService(
+                creatomateService,
+                bigQueryService
+            );
+            await mediaBuyingService.handleAdPerformanceUpdates();
         } catch (error) {
             console.error('Error updating ad performances:', error);
-            throw error; // Rethrowing the error will mark the execution as failed in Firebase
+            throw error;
         }
     }
 );
@@ -902,6 +661,7 @@ export const handleCreatomateWebhookHttp = onRequest(async (req, res) => {
         vertical: originalVertical,
         fbAccountId: originalFbAccountId,
         fbCampaignId: originalFbCampaignId,
+        fbScalingCampaignId: originalFbScalingCampaignId,
         ideaWriter: originalIdeaWriter,
         scriptWriter: originalScriptWriter,
         counter: originalCounter,
@@ -947,6 +707,7 @@ export const handleCreatomateWebhookHttp = onRequest(async (req, res) => {
         fbAdId: hookAdId,
         fbAdSetId: hookAdSetId,
         fbCampaignId: originalFbCampaignId,
+        fbScalingCampaignId: originalFbScalingCampaignId,
         vertical: originalVertical,
         ideaWriter: originalIdeaWriter,
         scriptWriter: originalScriptWriter,
