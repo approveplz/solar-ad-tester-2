@@ -38,6 +38,9 @@ import {
     CreatomateMetadata,
     CreatomateService,
 } from './services/CreatomateService.js';
+
+import { getAdName } from './helpers.js';
+
 type AdSetStatus = (typeof AdSet.Status)[keyof typeof AdSet.Status];
 config();
 
@@ -245,16 +248,6 @@ export const uploadThirdPartyAdGetSignedUploadUrl = onRequest(
         }
     }
 );
-
-const getAdName = (
-    counter: number,
-    vertical: string,
-    scriptWriter: string,
-    ideaWriter: string,
-    hookWriter: string
-): string => {
-    return `${counter}-${vertical}-${scriptWriter}-${ideaWriter}-${hookWriter}`;
-};
 
 export const createFbAdHttp = onRequest(async (req, res) => {
     try {

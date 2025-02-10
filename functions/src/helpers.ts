@@ -66,3 +66,13 @@ export async function generateVideoHash(
         });
     });
 }
+
+export function getAdName(
+    counter: number,
+    vertical: string,
+    scriptWriter: string,
+    ideaWriter: string,
+    hookWriter: string
+): string {
+    return `${counter}-${vertical}-${scriptWriter}-${ideaWriter}-${hookWriter}`;
+}
