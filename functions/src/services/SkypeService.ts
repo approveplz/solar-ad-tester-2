@@ -7,6 +7,7 @@ import {
     ActivityTypes,
     ConversationReference,
 } from 'botbuilder';
+import { AdPerformance } from '../models/AdPerformance.js';
 
 export class SkypeService {
     private adapter: CloudAdapter;
@@ -55,7 +56,7 @@ export class SkypeService {
         return this.conversationMapping[name] || null;
     }
 
-    async sendMessageByConversationName(
+    async sendMessage(
         conversationName: string,
         message: string
     ): Promise<void> {
@@ -71,7 +72,7 @@ export class SkypeService {
             return;
         }
 
-        await this.sendMessage(
+        await this.sendMessageByCid(
             convDetails.conversationId,
             message,
             convDetails.isGroup
@@ -108,7 +109,7 @@ export class SkypeService {
     }
 
     // Helpers
-    private async sendMessage(
+    private async sendMessageByCid(
         conversationId: string,
         message: string,
         isGroup: boolean
@@ -143,5 +144,33 @@ export class SkypeService {
         } catch (error) {
             console.error('[SkypeService] Failed to send message:', error);
         }
+    }
+
+    createMessageWithAdPerformanceInfo(
+        adPerformance: AdPerformance,
+        includePerformanceMetrics = true
+    ) {
+        return `
+        Facebook Ad ID: ${adPerformance.fbAdId}
+        Facebook Ad Set ID: ${adPerformance.fbAdSetId}
+        Facebook Ad Set Name: ${adPerformance.adName}
+        ${
+            includePerformanceMetrics
+                ? `Last 3 Days FB ROI: ${
+                      adPerformance.performanceMetrics.fb?.last3Days?.roi || 0
+                  }
+        Lifetime FB ROI: ${
+            adPerformance.performanceMetrics.fb?.lifetime?.roi || 0
+        }
+
+        Last 3 Days FB Spend: ${
+            adPerformance.performanceMetrics.fb?.last3Days?.spend || 0
+        }
+        Lifetime FB Spend: ${
+            adPerformance.performanceMetrics.fb?.lifetime?.spend || 0
+        }`
+                : ''
+        }
+        `;
     }
 }

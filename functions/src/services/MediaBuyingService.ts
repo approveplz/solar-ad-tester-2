@@ -10,6 +10,7 @@ import {
     saveAdPerformanceFirestore,
 } from '../firestoreCloud.js';
 import invariant from 'tiny-invariant';
+import { SkypeService } from './SkypeService.js';
 import { getNextWeekdayUnixSeconds } from '../helpers.js';
 
 export class MediaBuyingService {
@@ -20,7 +21,8 @@ export class MediaBuyingService {
 
     constructor(
         private readonly creatomateService: CreatomateService,
-        private readonly bigQueryService: BigQueryService
+        private readonly bigQueryService: BigQueryService,
+        private readonly skypeService: SkypeService
     ) {}
 
     async handleAdPerformanceUpdates() {
@@ -76,12 +78,17 @@ export class MediaBuyingService {
         invariant(fbAccountId, 'fbAccountId must be defined');
 
         const metaService = await this.getMetaAdCreatorService(fbAccountId);
-        await this.handlePerformanceBasedActions(adPerformance, metaService);
+        await this.handlePerformanceBasedActions(
+            adPerformance,
+            metaService,
+            this.skypeService
+        );
     }
 
     private async handlePerformanceBasedActions(
         adPerformance: AdPerformance,
-        metaService: MetaAdCreatorService
+        metaService: MetaAdCreatorService,
+        skypeService: SkypeService
     ) {
         const fbRoiLifetime =
             adPerformance.performanceMetrics.fb?.lifetime?.roi ?? 0;
@@ -90,6 +97,14 @@ export class MediaBuyingService {
 
         if (fbRoiLifetime < 1 || fbRoiLast3Days < 1) {
             await this.pauseUnderperformingAd(adPerformance, metaService);
+
+            const message = `
+            I've paused your ad because the ROI was under 1.00X
+            
+            This is the ad that I've paused:
+            ${skypeService.createMessageWithAdPerformanceInfo(adPerformance)}
+            `;
+            await skypeService.sendMessage('ALAN', message);
         } else if (fbRoiLifetime < this.LIFETIME_ROI_HOOK_THRESHOLD) {
             console.log(
                 `Ad ${
@@ -103,9 +118,20 @@ export class MediaBuyingService {
             if (
                 !adPerformance.hasHooksCreated &&
                 !adPerformance.isHook &&
-                adPerformance.isScaled
+                !adPerformance.isScaled &&
+                !adPerformance.hasScaled
             ) {
                 await this.createHooks(adPerformance);
+                const message = `I've created hooks for your ad because the ROI was over ${
+                    this.LIFETIME_ROI_HOOK_THRESHOLD
+                }X
+                
+                This is the ad that I've created hooks for:
+                ${skypeService.createMessageWithAdPerformanceInfo(
+                    adPerformance
+                )}
+                `;
+                await skypeService.sendMessage('ALAN', message);
             }
 
             if (
@@ -113,7 +139,31 @@ export class MediaBuyingService {
                 !adPerformance.isScaled &&
                 !adPerformance.hasScaled
             ) {
-                await this.handleScaling(adPerformance, metaService);
+                const scaledAdDailyBudgetCents = 20000;
+                const scaledAdPerformance = await this.handleScaling(
+                    adPerformance,
+                    metaService,
+                    scaledAdDailyBudgetCents
+                );
+                const message = `I've scaled your ad for you because the ROI was over ${
+                    this.LIFETIME_ROI_SCALING_THRESHOLD
+                }X
+                
+                This is the original ad that I've scaled:
+                ${skypeService.createMessageWithAdPerformanceInfo(
+                    adPerformance
+                )}
+
+                This is the scaled ad that I've created for you with a daily budget of $${(
+                    scaledAdDailyBudgetCents / 100
+                ).toFixed(2)}:
+                It will start running the next weekday.
+                ${skypeService.createMessageWithAdPerformanceInfo(
+                    scaledAdPerformance,
+                    false
+                )}
+                `;
+                await skypeService.sendMessage('ALAN', message);
             }
         }
     }
@@ -139,14 +189,15 @@ export class MediaBuyingService {
 
     async handleScaling(
         adPerformance: AdPerformance,
-        metaService: MetaAdCreatorService
-    ) {
+        metaService: MetaAdCreatorService,
+        scaledDailyBudgetCents: number
+    ): Promise<AdPerformance> {
         adPerformance.hasScaled = true;
         await saveAdPerformanceFirestore(adPerformance.fbAdId, adPerformance);
         const scaledAdSet = await this.duplicateAdSetAndAdToCampaignWithUpdates(
             adPerformance.fbAdId,
             adPerformance.fbScalingCampaignId,
-            20000,
+            scaledDailyBudgetCents,
             metaService
         );
 
@@ -163,6 +214,7 @@ export class MediaBuyingService {
             hasScaled: false,
         };
         await saveAdPerformanceFirestore(scaledAdId, scaledAdPerformance);
+        return scaledAdPerformance;
     }
 
     private async duplicateAdSetAndAdToCampaignWithUpdates(

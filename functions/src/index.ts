@@ -228,9 +228,14 @@ export const updateAdPerformanceScheduled = onSchedule(
                 process.env.CREATOMATE_API_KEY || ''
             );
             const bigQueryService = new BigQueryService();
+            const skypeService = new SkypeService(
+                process.env.MICROSOFT_APP_ID || '',
+                process.env.MICROSOFT_APP_PASSWORD || ''
+            );
             const mediaBuyingService = new MediaBuyingService(
                 creatomateService,
-                bigQueryService
+                bigQueryService,
+                skypeService
             );
             await mediaBuyingService.handleAdPerformanceUpdates();
         } catch (error) {
@@ -555,10 +560,15 @@ export const duplicateAdSetAndAdToCampaignHttp_TEST = onRequest(
             const creatomateService = await CreatomateService.create(
                 process.env.CREATOMATE_API_KEY || ''
             );
+            const skypeService = new SkypeService(
+                process.env.MICROSOFT_APP_ID || '',
+                process.env.MICROSOFT_APP_PASSWORD || ''
+            );
             const bigQueryService = new BigQueryService();
             const mediaBuyingService = new MediaBuyingService(
                 creatomateService,
-                bigQueryService
+                bigQueryService,
+                skypeService
             );
 
             const adPerformance = {
@@ -626,7 +636,8 @@ export const duplicateAdSetAndAdToCampaignHttp_TEST = onRequest(
             });
             await mediaBuyingService.handleScaling(
                 adPerformance,
-                metaAdCreatorService
+                metaAdCreatorService,
+                20000
             );
 
             return;
@@ -652,7 +663,7 @@ export const handleSendSkypeMessageHttp_TEST = onRequest(async (req, res) => {
     const conversationName = 'ALAN';
     const message = 'This is a test from ad bot';
 
-    await skypeService.sendMessageByConversationName(conversationName, message);
+    await skypeService.sendMessage(conversationName, message);
     res.status(200).json({ success: true });
 });
 
