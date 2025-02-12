@@ -5,6 +5,8 @@ import {
     setDoc,
     getDoc,
     doc,
+    collection,
+    getDocs,
 } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
 
 const firebaseConfig = {
@@ -24,7 +26,7 @@ const db = getFirestore(app);
 // This should be the same as constants used to access collection from cloud functions
 // Cant share code between client and cloud functions. Too lazy to setup a symbolic link
 const FB_AD_SETTINGS_COLLECTION = 'fb-ad-settings';
-
+const AD_PERFORMANCE_COLLECTION = 'ad-performance';
 export async function saveFbAdSettings(accountId, fbAdSettings) {
     try {
         const docRef = doc(db, FB_AD_SETTINGS_COLLECTION, accountId);
@@ -49,4 +51,10 @@ export async function getFbAdSettings(accountId) {
         console.log(`No data exists for accountId: ${accountId}`);
         return null;
     }
+}
+
+export async function getAdPerformanceFirestoreAll() {
+    const collectionRef = collection(db, AD_PERFORMANCE_COLLECTION);
+    const snapshot = await getDocs(collectionRef);
+    return snapshot.docs.map((doc) => doc.data());
 }

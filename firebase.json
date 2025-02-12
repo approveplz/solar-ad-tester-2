@@ -19,8 +19,14 @@
         "indexes": "firestore.indexes.json"
     },
     "hosting": {
-        "public": "public",
-        "ignore": ["firebase.json", "**/.*", "**/node_modules/**"]
+        "public": "react-app/build",
+        "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+        "rewrites": [
+            {
+                "source": "**",
+                "destination": "/index.html"
+            }
+        ]
     },
     "emulators": {
         "functions": {
