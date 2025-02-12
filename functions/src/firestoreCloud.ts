@@ -20,6 +20,26 @@ const INCREMENT_COUNTER_DOC_NAME = 'global';
 
 const AD_PERFORMANCE_COLLECTION = 'ad-performance';
 
+const EVENTS_COLLECTION = 'events';
+
+export async function setEventFirestore(
+    event: string,
+    status: string,
+    payload: any
+) {
+    const db = getFirestore();
+    await db
+        .collection(EVENTS_COLLECTION)
+        .doc(event)
+        .set({ status, payload }, { merge: true });
+}
+
+export async function getEventFirestoreDocRef(event: string) {
+    const db = getFirestore();
+    const docRef = await db.collection(EVENTS_COLLECTION).doc(event);
+    return docRef;
+}
+
 const AdPerformanceDocConverter = {
     toFirestore: (data: AdPerformance) => data,
     fromFirestore: (snap: FirebaseFirestore.QueryDocumentSnapshot) =>

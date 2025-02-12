@@ -21,6 +21,7 @@ import {
     getIncrementedCounterFirestore,
     saveAdPerformanceFirestore,
     getAdPerformanceFirestoreById,
+    setEventFirestore,
 } from './firestoreCloud.js';
 import {
     getSignedUploadUrl,
@@ -50,7 +51,7 @@ initializeApp({
     storageBucket: 'solar-ad-tester-2.appspot.com',
 });
 
-const getFbAdSettings = async (accountId: string) => {
+export const getFbAdSettings = async (accountId: string) => {
     // Account ID determines if ad type is O or R
     const fbAdSettings = await getFbAdSettingFirestore(accountId);
     if (fbAdSettings) {
@@ -221,7 +222,7 @@ export const watchCloudStorageUploads = onObjectFinalized(async (event) => {
 });
 
 export const updateAdPerformanceScheduled = onSchedule(
-    'every 1 hours',
+    { schedule: 'every 1 hours', timeoutSeconds: 300 },
     async () => {
         try {
             const creatomateService = await CreatomateService.create(
@@ -250,115 +251,122 @@ export const updateAdPerformanceScheduled = onSchedule(
  ******************************************************************************/
 
 // Called from Google Apps Script
-export const createFbAdHttp = onRequest(async (req, res) => {
-    try {
-        // Validate required request body parameters
-        const requiredFields = [
-            'accountId',
-            'downloadUrl',
-            'vertical',
-            'scriptWriter',
-            'ideaWriter',
-            'hookWriter',
-        ];
-        const missingFields = requiredFields.filter(
-            (field) => !req.body[field]
-        );
+export const createFbAdHttp = onRequest(
+    { timeoutSeconds: 300 },
+    async (req, res) => {
+        try {
+            // Validate required request body parameters
+            const requiredFields = [
+                'accountId',
+                'downloadUrl',
+                'vertical',
+                'scriptWriter',
+                'ideaWriter',
+                'hookWriter',
+            ];
+            const missingFields = requiredFields.filter(
+                (field) => !req.body[field]
+            );
 
-        if (missingFields.length > 0) {
-            res.status(400).json({
-                success: false,
-                error: `Missing required fields: ${missingFields.join(', ')}`,
+            if (missingFields.length > 0) {
+                res.status(400).json({
+                    success: false,
+                    error: `Missing required fields: ${missingFields.join(
+                        ', '
+                    )}`,
+                });
+                return;
+            }
+
+            const {
+                accountId,
+                downloadUrl,
+                vertical,
+                scriptWriter,
+                ideaWriter,
+                hookWriter,
+            } = req.body;
+
+            const adAccountData =
+                AD_ACCOUNT_DATA[accountId as keyof typeof AD_ACCOUNT_DATA];
+            invariant(
+                adAccountData,
+                `ad account data not found in constants for account id: ${accountId}`
+            );
+
+            const { campaignId, scalingCampaignId } = adAccountData;
+            const fbAdSettings = await getFbAdSettings(accountId);
+            const metaAdCreatorService = new MetaAdCreatorService({
+                appId: process.env.FACEBOOK_APP_ID || '',
+                appSecret: process.env.FACEBOOK_APP_SECRET || '',
+                accessToken: process.env.FACEBOOK_ACCESS_TOKEN || '',
+                accountId: accountId || '',
+                apiVersion: '20.0',
             });
-            return;
+
+            const nextCounter = await getIncrementedCounterFirestore();
+            const adName = getAdName(
+                nextCounter,
+                vertical,
+                scriptWriter,
+                ideaWriter,
+                hookWriter
+            );
+
+            const ad = await handleCreateAd(
+                metaAdCreatorService,
+                fbAdSettings,
+                campaignId,
+                adName,
+                downloadUrl
+            );
+
+            const adResponse = (await (ad.get(['name', ' id']) as unknown)) as {
+                id: string;
+            };
+
+            const fbAdId = adResponse.id;
+            const fbAdSetId = await metaAdCreatorService.getAdSetIdFromAdId(
+                fbAdId
+            );
+
+            const adPerformance: AdPerformance = {
+                counter: nextCounter,
+                fbAccountId: accountId,
+                adName,
+                gDriveDownloadUrl: downloadUrl,
+                fbAdId,
+                fbAdSetId,
+                fbCampaignId: campaignId,
+                fbScalingCampaignId: scalingCampaignId,
+                vertical,
+                ideaWriter,
+                scriptWriter,
+                hookWriter,
+                performanceMetrics: {},
+                fbIsActive: true,
+                isHook: false,
+                hasHooksCreated: false,
+                isScaled: false,
+                hasScaled: false,
+            };
+
+            await saveAdPerformanceFirestore(fbAdId, adPerformance);
+
+            res.status(200).json({
+                success: true,
+                adPerformance,
+            });
+        } catch (error) {
+            console.error('Error creating Facebook ad:', error);
+
+            res.status(500).json({
+                success: false,
+                error: 'An unexpected error occurred while creating the Facebook ad',
+            });
         }
-
-        const {
-            accountId,
-            downloadUrl,
-            vertical,
-            scriptWriter,
-            ideaWriter,
-            hookWriter,
-        } = req.body;
-
-        const adAccountData =
-            AD_ACCOUNT_DATA[accountId as keyof typeof AD_ACCOUNT_DATA];
-        invariant(
-            adAccountData,
-            `ad account data not found in constants for account id: ${accountId}`
-        );
-
-        const { campaignId, scalingCampaignId } = adAccountData;
-        const fbAdSettings = await getFbAdSettings(accountId);
-        const metaAdCreatorService = new MetaAdCreatorService({
-            appId: process.env.FACEBOOK_APP_ID || '',
-            appSecret: process.env.FACEBOOK_APP_SECRET || '',
-            accessToken: process.env.FACEBOOK_ACCESS_TOKEN || '',
-            accountId: accountId || '',
-            apiVersion: '20.0',
-        });
-
-        const nextCounter = await getIncrementedCounterFirestore();
-        const adName = getAdName(
-            nextCounter,
-            vertical,
-            scriptWriter,
-            ideaWriter,
-            hookWriter
-        );
-
-        const ad = await handleCreateAd(
-            metaAdCreatorService,
-            fbAdSettings,
-            campaignId,
-            adName,
-            downloadUrl
-        );
-
-        const adResponse = (await (ad.get(['name', ' id']) as unknown)) as {
-            id: string;
-        };
-
-        const fbAdId = adResponse.id;
-        const fbAdSetId = await metaAdCreatorService.getAdSetIdFromAdId(fbAdId);
-
-        const adPerformance: AdPerformance = {
-            counter: nextCounter,
-            fbAccountId: accountId,
-            adName,
-            gDriveDownloadUrl: downloadUrl,
-            fbAdId,
-            fbAdSetId,
-            fbCampaignId: campaignId,
-            fbScalingCampaignId: scalingCampaignId,
-            vertical,
-            ideaWriter,
-            scriptWriter,
-            hookWriter,
-            performanceMetrics: {},
-            fbIsActive: true,
-            isHook: false,
-            hasHooksCreated: false,
-            isScaled: false,
-            hasScaled: false,
-        };
-
-        await saveAdPerformanceFirestore(fbAdId, adPerformance);
-
-        res.status(200).json({
-            success: true,
-            adPerformance,
-        });
-    } catch (error) {
-        console.error('Error creating Facebook ad:', error);
-
-        res.status(500).json({
-            success: false,
-            error: 'An unexpected error occurred while creating the Facebook ad',
-        });
     }
-});
+);
 
 // Called when the Creatomate render is finished
 export const handleCreatomateWebhookHttp = onRequest(async (req, res) => {
@@ -379,77 +387,14 @@ export const handleCreatomateWebhookHttp = onRequest(async (req, res) => {
         return;
     }
 
-    const { hookName, fbAdId: originalFbAdId } = metadata;
-
-    const originalAdPerformance = await getAdPerformanceFirestoreById(
-        originalFbAdId
+    await setEventFirestore(
+        `creatomate_render:${creatomateRenderId}`,
+        'SUCCESS',
+        {
+            creatomateMetadata: metadata,
+            creatomateUrl,
+        }
     );
-    invariant(originalAdPerformance, 'adPerformance must be defined');
-
-    const {
-        vertical: originalVertical,
-        fbAccountId: originalFbAccountId,
-        fbCampaignId: originalFbCampaignId,
-        fbScalingCampaignId: originalFbScalingCampaignId,
-        ideaWriter: originalIdeaWriter,
-        scriptWriter: originalScriptWriter,
-        counter: originalCounter,
-    } = originalAdPerformance;
-
-    const originalFbAdSettings = await getFbAdSettings(originalFbAccountId);
-    const metaAdCreatorService = new MetaAdCreatorService({
-        appId: process.env.FACEBOOK_APP_ID || '',
-        appSecret: process.env.FACEBOOK_APP_SECRET || '',
-        accessToken: process.env.FACEBOOK_ACCESS_TOKEN || '',
-        accountId: originalFbAccountId || '',
-        apiVersion: '20.0',
-    });
-
-    const hookAdName = `${getAdName(
-        originalCounter,
-        originalVertical,
-        originalScriptWriter,
-        originalIdeaWriter,
-        'AZ'
-    )}-HOOK:${hookName}`;
-
-    const hookAd = await handleCreateAd(
-        metaAdCreatorService,
-        originalFbAdSettings,
-        originalFbCampaignId,
-        hookAdName,
-        creatomateUrl
-    );
-
-    const hookAdResponse = (await (hookAd.get(['name', ' id']) as unknown)) as {
-        id: string;
-    };
-
-    const hookAdId = hookAdResponse.id;
-    const hookAdSetId = await metaAdCreatorService.getAdSetIdFromAdId(hookAdId);
-
-    const hookAdPerformance: AdPerformance = {
-        counter: originalCounter,
-        fbAccountId: originalFbAccountId,
-        adName: hookAdName,
-        gDriveDownloadUrl: creatomateUrl,
-        fbAdId: hookAdId,
-        fbAdSetId: hookAdSetId,
-        fbCampaignId: originalFbCampaignId,
-        fbScalingCampaignId: originalFbScalingCampaignId,
-        vertical: originalVertical,
-        ideaWriter: originalIdeaWriter,
-        scriptWriter: originalScriptWriter,
-        hookWriter: 'AZ',
-        performanceMetrics: {},
-        fbIsActive: true,
-        isHook: true,
-        hasHooksCreated: false,
-        isScaled: false,
-        hasScaled: false,
-    };
-
-    await saveAdPerformanceFirestore(hookAdId, hookAdPerformance);
 
     res.status(200).json({ success: true });
 });
@@ -666,6 +611,85 @@ export const handleSendSkypeMessageHttp_TEST = onRequest(async (req, res) => {
     await skypeService.sendMessage(conversationName, message);
     res.status(200).json({ success: true });
 });
+
+export const handleCreateHooksHttp_TEST = onRequest(
+    { timeoutSeconds: 300 },
+    async (req, res) => {
+        const creatomateService = await CreatomateService.create(
+            process.env.CREATOMATE_API_KEY || ''
+        );
+        const skypeService = new SkypeService(
+            process.env.MICROSOFT_APP_ID || '',
+            process.env.MICROSOFT_APP_PASSWORD || ''
+        );
+        const bigQueryService = new BigQueryService();
+        const mediaBuyingService = new MediaBuyingService(
+            creatomateService,
+            bigQueryService,
+            skypeService
+        );
+        const adPerformance = {
+            adName: '105-R-AZ-AZ-AZ',
+            counter: 105,
+            fbAccountId: '467161346185440',
+            fbAdId: '120216860324070415',
+            fbAdSetId: '120216860308490415',
+            fbCampaignId: '120215523703190415',
+            fbScalingCampaignId: '120216751824410415',
+            gDriveDownloadUrl:
+                'https://drive.google.com/uc?export=download&id=1815gqdRw0PzA7d_sH_dzxqscbV3OD-Ku',
+            vertical: 'R',
+            ideaWriter: 'AZ',
+            scriptWriter: 'AZ',
+            hookWriter: 'AZ',
+            fbIsActive: true,
+            isHook: false,
+            isScaled: false,
+            hasHooksCreated: false,
+            hasScaled: false,
+            performanceMetrics: {
+                fb: {
+                    last3Days: {
+                        clicks: 250,
+                        leads: 5,
+                        revenue: 7500, // $75
+                        roi: 1.4,
+                        spend: 2500, // $25
+                    },
+                    last7Days: {
+                        clicks: 600,
+                        leads: 12,
+                        revenue: 18000, // $180
+                        roi: 1.4,
+                        spend: 6000, // $60
+                    },
+                    lifetime: {
+                        clicks: 1000,
+                        leads: 20,
+                        revenue: 30000, // $300
+                        roi: 1.4,
+                        spend: 10000, // $100
+                    },
+                },
+            },
+        };
+
+        invariant(adPerformance, 'adPerformance must be defined');
+
+        const metaAdCreatorService = new MetaAdCreatorService({
+            appId: process.env.FACEBOOK_APP_ID || '',
+            appSecret: process.env.FACEBOOK_APP_SECRET || '',
+            accessToken: process.env.FACEBOOK_ACCESS_TOKEN || '',
+            accountId: adPerformance.fbAccountId,
+        });
+        await mediaBuyingService.handlePerformanceBasedActions(
+            adPerformance,
+            metaAdCreatorService,
+            skypeService
+        );
+        res.status(200).json({ success: true });
+    }
+);
 
 /*
 TODO: Fix this after refactor to read params by ad account ID instead of ad type

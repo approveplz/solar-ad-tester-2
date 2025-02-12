@@ -1,17 +1,24 @@
+import { FbAdSettings } from '../models/FbAdSettings.js';
+import { getFbAdSettings } from '../index.js';
+import { Ad, AdCreative, AdSet, AdVideo } from 'facebook-nodejs-business-sdk';
 import MetaAdCreatorService from './MetaAdCreatorService.js';
 import {
     BigQueryService,
     AdPerformanceDataBigQuery,
 } from './BigQueryService.js';
-import { CreatomateService } from './CreatomateService.js';
+import { CreatomateMetadata, CreatomateService } from './CreatomateService.js';
 import { AdPerformance, PerformanceMetrics } from '../models/AdPerformance.js';
 import {
     getAdPerformanceFirestoreAll,
+    getAdPerformanceFirestoreById,
     saveAdPerformanceFirestore,
+    getEventFirestoreDocRef,
+    setEventFirestore,
 } from '../firestoreCloud.js';
 import invariant from 'tiny-invariant';
 import { SkypeService } from './SkypeService.js';
-import { getNextWeekdayUnixSeconds } from '../helpers.js';
+import { getAdName, getNextWeekdayUnixSeconds } from '../helpers.js';
+import dedent from 'dedent';
 
 export class MediaBuyingService {
     private metAdCreatorServices: Record<string, MetaAdCreatorService> = {};
@@ -85,9 +92,9 @@ export class MediaBuyingService {
         );
     }
 
-    private async handlePerformanceBasedActions(
+    async handlePerformanceBasedActions(
         adPerformance: AdPerformance,
-        metaService: MetaAdCreatorService,
+        metaAdCreatorService: MetaAdCreatorService,
         skypeService: SkypeService
     ) {
         const fbRoiLifetime =
@@ -96,7 +103,10 @@ export class MediaBuyingService {
             adPerformance.performanceMetrics.fb?.last3Days?.roi ?? 0;
 
         if (fbRoiLifetime < 1 || fbRoiLast3Days < 1) {
-            await this.pauseUnderperformingAd(adPerformance, metaService);
+            await this.pauseUnderperformingAd(
+                adPerformance,
+                metaAdCreatorService
+            );
 
             const message = `
             I've paused your ad because the ROI was under 1.00X
@@ -121,16 +131,20 @@ export class MediaBuyingService {
                 !adPerformance.isScaled &&
                 !adPerformance.hasScaled
             ) {
-                await this.createHooks(adPerformance);
-                const message = `I've created hooks for your ad because the ROI was over ${
-                    this.LIFETIME_ROI_HOOK_THRESHOLD
-                }X
-                
-                This is the ad that I've created hooks for:
-                ${skypeService.createMessageWithAdPerformanceInfo(
-                    adPerformance
-                )}
-                `;
+                await this.handleCreateHooks(
+                    adPerformance,
+                    metaAdCreatorService
+                );
+                const message = dedent(`
+                  I've created hooks for your ad because the ROI was over ${
+                      this.LIFETIME_ROI_HOOK_THRESHOLD
+                  }X
+
+                  This is the ad that I've created hooks for:
+                  ${skypeService.createMessageWithAdPerformanceInfo(
+                      adPerformance
+                  )}
+                `).trim();
                 await skypeService.sendMessage('ALAN', message);
             }
 
@@ -142,7 +156,7 @@ export class MediaBuyingService {
                 const scaledAdDailyBudgetCents = 20000;
                 const scaledAdPerformance = await this.handleScaling(
                     adPerformance,
-                    metaService,
+                    metaAdCreatorService,
                     scaledAdDailyBudgetCents
                 );
                 const message = `I've scaled your ad for you because the ROI was over ${
@@ -170,21 +184,162 @@ export class MediaBuyingService {
 
     private async pauseUnderperformingAd(
         adPerformance: AdPerformance,
-        metaService: MetaAdCreatorService
+        metaAdCreatorService: MetaAdCreatorService
     ) {
-        await metaService.updateAdSetStatus(adPerformance.fbAdSetId, 'PAUSED');
+        await metaAdCreatorService.updateAdSetStatus(
+            adPerformance.fbAdSetId,
+            'PAUSED'
+        );
         adPerformance.fbIsActive = false;
         await saveAdPerformanceFirestore(adPerformance.fbAdId, adPerformance);
     }
 
-    private async createHooks(adPerformance: AdPerformance) {
-        await this.creatomateService.uploadToCreatomateWithHooksAll(
-            adPerformance.gDriveDownloadUrl,
-            adPerformance.adName,
-            adPerformance.fbAdId
+    async handleCreateHooks(
+        originalAdPerformance: AdPerformance,
+        metaAdCreatorService: MetaAdCreatorService
+    ) {
+        const creatomateRenderResponses =
+            await this.creatomateService.uploadToCreatomateWithHooksAll(
+                originalAdPerformance.gDriveDownloadUrl,
+                originalAdPerformance.adName,
+                originalAdPerformance.fbAdId
+            );
+
+        const renderCompleteData = await Promise.all(
+            creatomateRenderResponses.map(async (renderResponse) => {
+                const { creatomateRenderResponse } = renderResponse;
+
+                const eventKey = `creatomate_render:${creatomateRenderResponse.id}`;
+
+                try {
+                    await setEventFirestore(eventKey, 'PENDING', {});
+                    console.log(
+                        `Event ${eventKey} created with status: PENDING`
+                    );
+                } catch (err) {
+                    console.error(`Failed to create event ${eventKey}:`, err);
+                    throw err;
+                }
+
+                // Now obtain the document reference.
+                const eventDocRef = await getEventFirestoreDocRef(eventKey);
+                console.log(
+                    `Got document reference for event key: ${eventKey}`
+                );
+
+                // Return a promise that just attaches the snapshot listener.
+                return new Promise<{
+                    creatomateMetadata: CreatomateMetadata;
+                    creatomateUrl: string;
+                }>((resolve, reject) => {
+                    const unsubscribe = eventDocRef.onSnapshot(
+                        (snapshot) => {
+                            console.log('onSnapshot triggered', {
+                                exists: snapshot.exists,
+                                data: snapshot.data(),
+                            });
+
+                            if (snapshot.exists) {
+                                const data = snapshot.data();
+                                if (data && data.status === 'SUCCESS') {
+                                    console.log(
+                                        'Received SUCCESS status with data:',
+                                        data
+                                    );
+                                    clearTimeout(timeout);
+                                    unsubscribe();
+                                    resolve({
+                                        creatomateMetadata:
+                                            data.payload.creatomateMetadata,
+                                        creatomateUrl:
+                                            data.payload.creatomateUrl,
+                                    });
+                                }
+                            }
+                        },
+                        (err) => {
+                            console.error('Error in onSnapshot:', err);
+                            clearTimeout(timeout);
+                            unsubscribe();
+                            reject(err);
+                        }
+                    );
+
+                    // Set a timeout to reject after 5 minutes if the event is not updated.
+                    const timeout = setTimeout(() => {
+                        console.error(
+                            `Timeout waiting for Creatomate render event: ${creatomateRenderResponse.id}`
+                        );
+                        unsubscribe();
+                        reject(
+                            new Error(
+                                `Timeout waiting for Creatomate render event: ${creatomateRenderResponse.id}`
+                            )
+                        );
+                    }, 5 * 60 * 1000);
+                });
+            })
         );
-        adPerformance.hasHooksCreated = true;
-        await saveAdPerformanceFirestore(adPerformance.fbAdId, adPerformance);
+
+        const createHookPromises = renderCompleteData.map(
+            async ({ creatomateMetadata, creatomateUrl }) => {
+                console.log({ creatomateMetadata });
+                const { hookName } = creatomateMetadata;
+                const {
+                    vertical: originalVertical,
+                    fbAccountId: originalFbAccountId,
+                    fbCampaignId: originalFbCampaignId,
+                    fbScalingCampaignId: originalFbScalingCampaignId,
+                    ideaWriter: originalIdeaWriter,
+                    scriptWriter: originalScriptWriter,
+                    counter: originalCounter,
+                } = originalAdPerformance;
+
+                const hookAdName = `${getAdName(
+                    originalCounter,
+                    originalVertical,
+                    originalScriptWriter,
+                    originalIdeaWriter,
+                    'AZ'
+                )}-HOOK:${hookName}`;
+                const originalFbAdSettings = await getFbAdSettings(
+                    originalFbAccountId
+                );
+                const hookAd = await this.handleCreateAd(
+                    metaAdCreatorService,
+                    originalFbAdSettings,
+                    originalFbCampaignId,
+                    hookAdName,
+                    creatomateUrl
+                );
+                const hookAdId = hookAd.id;
+                const hookAdSetId =
+                    await metaAdCreatorService.getAdSetIdFromAdId(hookAdId);
+
+                const hookAdPerformance: AdPerformance = {
+                    ...originalAdPerformance,
+                    adName: hookAdName,
+                    gDriveDownloadUrl: creatomateUrl,
+                    fbAdId: hookAdId,
+                    fbAdSetId: hookAdSetId,
+                    hookWriter: 'AZ',
+                    performanceMetrics: {},
+                    fbIsActive: true,
+                    isHook: true,
+                    hasHooksCreated: false,
+                    isScaled: false,
+                    hasScaled: false,
+                };
+
+                await saveAdPerformanceFirestore(hookAdId, hookAdPerformance);
+            }
+        );
+        await Promise.all(createHookPromises);
+        originalAdPerformance.hasHooksCreated = true;
+        await saveAdPerformanceFirestore(
+            originalAdPerformance.fbAdId,
+            originalAdPerformance
+        );
     }
 
     async handleScaling(
@@ -216,6 +371,49 @@ export class MediaBuyingService {
         await saveAdPerformanceFirestore(scaledAdId, scaledAdPerformance);
         return scaledAdPerformance;
     }
+
+    handleCreateAd = async (
+        metaAdCreatorService: MetaAdCreatorService,
+        fbAdSettings: FbAdSettings,
+        campaignId: string,
+        videoUuid: string,
+        videoFileUrl: string,
+        thumbnailFilePath: string = ''
+    ): Promise<Ad> => {
+        const adSetNameAndAdName = `${videoUuid}`;
+
+        const adSet: AdSet = await metaAdCreatorService.createAdSet({
+            name: adSetNameAndAdName,
+            campaignId,
+            fbAdSettings,
+        });
+
+        // Create Ad Video
+        const adVideo: AdVideo = await metaAdCreatorService.uploadAdVideo({
+            scrapedAdArchiveId: videoUuid,
+            videoFileUrl,
+        });
+
+        // Use facebook generated thumbnail
+        const videoObject = await adVideo.read(['picture']);
+        const fbGeneratedThumbnailUrl = videoObject.picture;
+
+        const adCreative: AdCreative =
+            await metaAdCreatorService.createAdCreative(
+                `Creative-${adSetNameAndAdName}`,
+                adVideo,
+                thumbnailFilePath || fbGeneratedThumbnailUrl,
+                fbAdSettings
+            );
+
+        const ad: Ad = await metaAdCreatorService.createAd({
+            name: adSetNameAndAdName,
+            adSet,
+            adCreative,
+        });
+
+        return new Ad(ad.id);
+    };
 
     private async duplicateAdSetAndAdToCampaignWithUpdates(
         fbAdId: string,

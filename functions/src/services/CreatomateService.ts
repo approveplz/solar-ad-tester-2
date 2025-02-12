@@ -35,6 +35,13 @@ interface CreatomateRequestData {
     webhook_url: string;
 }
 
+export interface CreatomateRenderResponse {
+    id: string;
+    status: string;
+    url: string;
+    metadata: string;
+}
+
 interface Hook {
     name: string;
     url: string;
@@ -80,33 +87,39 @@ export class CreatomateService {
         baseVideoUrl: string,
         baseAdName: string,
         fbAdId: string
-    ) {
+    ): Promise<
+        {
+            hookName: string;
+            creatomateRenderResponse: CreatomateRenderResponse;
+        }[]
+    > {
         // Get video dimensions first
         const dimensions = await this.getVideoDimensions(baseVideoUrl);
         console.log(
             `Video dimensions: ${dimensions.width}x${dimensions.height}`
         );
 
-        const uploadPromises = this.hooks.map(async (hook) => {
+        const uploadPromises = this.hooks.slice(0, 1).map(async (hook) => {
             try {
-                const result = await this.uploadToCreatomateWithHookSingle(
-                    baseVideoUrl,
-                    hook.url,
-                    baseAdName,
-                    hook.name,
-                    fbAdId,
-                    dimensions
-                );
+                const creatomateRenderResponse: CreatomateRenderResponse =
+                    await this.uploadToCreatomateWithHookSingle(
+                        baseVideoUrl,
+                        hook.url,
+                        baseAdName,
+                        hook.name,
+                        fbAdId,
+                        dimensions
+                    );
+                console.log({
+                    creatomateRenderResponse,
+                });
                 return {
                     hookName: hook.name,
-                    result,
+                    creatomateRenderResponse,
                 };
             } catch (error) {
                 console.error(`Failed to process hook ${hook.name}:`, error);
-                return {
-                    hookName: hook.name,
-                    error: error,
-                };
+                throw error;
             }
         });
 
@@ -120,7 +133,7 @@ export class CreatomateService {
         hookName: string,
         fbAdId: string,
         dimensions: { width: number; height: number }
-    ) {
+    ): Promise<CreatomateRenderResponse> {
         const creatomateTemplate = this.getCreatomateTemplate(
             dimensions.width,
             dimensions.height
@@ -159,7 +172,9 @@ export class CreatomateService {
             const responseText = await response.text();
 
             try {
-                return JSON.parse(responseText);
+                const responseData: CreatomateRenderResponse[] =
+                    JSON.parse(responseText);
+                return responseData[0];
             } catch (parseError) {
                 console.error('JSON Parse Error:', parseError);
                 throw new Error(`Failed to parse response: ${responseText}`);
@@ -180,7 +195,7 @@ export class CreatomateService {
         let aspectRatio: AspectRatio;
         if (Math.abs(mainVideoAspectRatio - 16 / 9) < 0.1) {
             aspectRatio = AspectRatio.Horizontal;
-        } else if (Math.abs(mainVideoAspectRatio - 2 / 3) < 0.1) {
+        } else if (Math.abs(mainVideoAspectRatio - 9 / 16) < 0.1) {
             aspectRatio = AspectRatio.Vertical;
         } else if (Math.abs(mainVideoAspectRatio - 1) < 0.1) {
             aspectRatio = AspectRatio.Square;
@@ -188,7 +203,7 @@ export class CreatomateService {
             throw new Error(
                 `Unsupported aspect ratio: ${mainVideoAspectRatio.toFixed(
                     2
-                )} (${width}x${height}). Video must be either 16:9 (horizontal), 2:3 (vertical), or 1:1 (square).`
+                )} (${width}x${height}). Video must be either 16:9 (horizontal), 9:16 (vertical), or 1:1 (square).`
             );
         }
 

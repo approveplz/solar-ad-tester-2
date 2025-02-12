@@ -261,7 +261,7 @@ export default class MetaAdCreatorService {
             );
             throw error;
         }
-    }
+}
 
     async duplicateAdSet(
         adSetId: string,
@@ -456,7 +456,7 @@ export default class MetaAdCreatorService {
             status: 'ACTIVE',
         };
 
-        const ad: Ad = await this.adAccount.createAd([], createAdRequest);
+        const ad: Ad = await this.adAccount.createAd(['id'], createAdRequest);
 
         console.log(`Created Facebook Ad. Ad ID: ${ad.id}`);
 

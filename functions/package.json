@@ -17,6 +17,7 @@
     "dependencies": {
         "@google-cloud/bigquery": "^7.9.1",
         "botbuilder": "^4.23.2",
+        "dedent": "^1.5.3",
         "dotenv": "^16.4.5",
         "facebook-nodejs-business-sdk": "^20.0.0",
         "ffmpeg-static": "^5.2.0",

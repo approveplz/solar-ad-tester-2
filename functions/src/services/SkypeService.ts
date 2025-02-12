@@ -150,8 +150,7 @@ export class SkypeService {
         adPerformance: AdPerformance,
         includePerformanceMetrics = true
     ) {
-        return `
-        Facebook Ad ID: ${adPerformance.fbAdId}
+        return `Facebook Ad ID: ${adPerformance.fbAdId}
         Facebook Ad Set ID: ${adPerformance.fbAdSetId}
         Facebook Ad Set Name: ${adPerformance.adName}
         ${
