@@ -99,7 +99,7 @@ export class CreatomateService {
             `Video dimensions: ${dimensions.width}x${dimensions.height}`
         );
 
-        const uploadPromises = this.hooks.slice(0, 1).map(async (hook) => {
+        const uploadPromises = this.hooks.map(async (hook) => {
             try {
                 const creatomateRenderResponse: CreatomateRenderResponse =
                     await this.uploadToCreatomateWithHookSingle(

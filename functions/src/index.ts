@@ -222,7 +222,7 @@ export const watchCloudStorageUploads = onObjectFinalized(async (event) => {
 });
 
 export const updateAdPerformanceScheduled = onSchedule(
-    { schedule: 'every 1 hours', timeoutSeconds: 300 },
+    { schedule: 'every 1 hours', timeoutSeconds: 540 },
     async () => {
         try {
             const creatomateService = await CreatomateService.create(
@@ -252,7 +252,7 @@ export const updateAdPerformanceScheduled = onSchedule(
 
 // Called from Google Apps Script
 export const createFbAdHttp = onRequest(
-    { timeoutSeconds: 300 },
+    { timeoutSeconds: 540 },
     async (req, res) => {
         try {
             // Validate required request body parameters

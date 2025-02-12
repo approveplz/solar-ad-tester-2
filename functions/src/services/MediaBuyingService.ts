@@ -18,7 +18,6 @@ import {
 import invariant from 'tiny-invariant';
 import { SkypeService } from './SkypeService.js';
 import { getAdName, getNextWeekdayUnixSeconds } from '../helpers.js';
-import dedent from 'dedent';
 
 export class MediaBuyingService {
     private metAdCreatorServices: Record<string, MetaAdCreatorService> = {};
@@ -131,20 +130,29 @@ export class MediaBuyingService {
                 !adPerformance.isScaled &&
                 !adPerformance.hasScaled
             ) {
-                await this.handleCreateHooks(
+                const hookAdPerformances = await this.handleCreateHooks(
                     adPerformance,
                     metaAdCreatorService
                 );
-                const message = dedent(`
-                  I've created hooks for your ad because the ROI was over ${
-                      this.LIFETIME_ROI_HOOK_THRESHOLD
-                  }X
+                const message = `I've created hooks for your ad because the ROI was over ${
+                    this.LIFETIME_ROI_HOOK_THRESHOLD
+                }X
 
-                  This is the ad that I've created hooks for:
-                  ${skypeService.createMessageWithAdPerformanceInfo(
-                      adPerformance
-                  )}
-                `).trim();
+                This is the ad that I've created hooks for:
+                ${skypeService.createMessageWithAdPerformanceInfo(
+                    adPerformance
+                )}
+                
+                These are the hooks that I've created:
+                ${hookAdPerformances
+                    .map((hook) =>
+                        skypeService.createMessageWithAdPerformanceInfo(
+                            hook,
+                            false
+                        )
+                    )
+                    .join('')}
+                `;
                 await skypeService.sendMessage('ALAN', message);
             }
 
@@ -197,7 +205,7 @@ export class MediaBuyingService {
     async handleCreateHooks(
         originalAdPerformance: AdPerformance,
         metaAdCreatorService: MetaAdCreatorService
-    ) {
+    ): Promise<AdPerformance[]> {
         const creatomateRenderResponses =
             await this.creatomateService.uploadToCreatomateWithHooksAll(
                 originalAdPerformance.gDriveDownloadUrl,
@@ -332,14 +340,16 @@ export class MediaBuyingService {
                 };
 
                 await saveAdPerformanceFirestore(hookAdId, hookAdPerformance);
+                return hookAdPerformance;
             }
         );
-        await Promise.all(createHookPromises);
+        const hookAdPerformances = await Promise.all(createHookPromises);
         originalAdPerformance.hasHooksCreated = true;
         await saveAdPerformanceFirestore(
             originalAdPerformance.fbAdId,
             originalAdPerformance
         );
+        return hookAdPerformances;
     }
 
     async handleScaling(

@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import dedent from 'dedent';
 import {
     CloudAdapter,
     ConfigurationBotFrameworkAuthentication,
@@ -74,7 +75,7 @@ export class SkypeService {
 
         await this.sendMessageByCid(
             convDetails.conversationId,
-            message,
+            dedent(message).trim(),
             convDetails.isGroup
         );
     }
@@ -161,7 +162,6 @@ export class SkypeService {
         Lifetime FB ROI: ${
             adPerformance.performanceMetrics.fb?.lifetime?.roi || 0
         }
-
         Last 3 Days FB Spend: ${
             adPerformance.performanceMetrics.fb?.last3Days?.spend || 0
         }
