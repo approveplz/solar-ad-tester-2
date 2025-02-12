@@ -146,7 +146,7 @@ export default class MetaAdCreatorService {
     async createAdSet(params: {
         name: string;
         campaignId: string;
-        fbAdSettings: any;
+        fbAdSettings: FbAdSettings;
     }): Promise<AdSet> {
         console.log('Creating Ad Set');
         const { name, campaignId, fbAdSettings } = params;
@@ -161,9 +161,11 @@ export default class MetaAdCreatorService {
                 lifetimeBudgetCents,
                 bidStrategy,
                 adSetTargeting,
+                status,
             },
         } = fbAdSettings;
 
+        invariant(adSetTargeting, 'adSetTargeting must be defined');
         const targeting: FbApiAdSetTargeting = adSetTargeting;
 
         invariant(
@@ -190,6 +192,7 @@ export default class MetaAdCreatorService {
 
         const createAdSetRequest: FbApiCreateAdSetRequest = {
             name,
+            status,
             campaign_id: campaignId,
             bid_amount: bidAmountCents,
             bid_strategy: bidStrategy,
@@ -261,7 +264,7 @@ export default class MetaAdCreatorService {
             );
             throw error;
         }
-}
+    }
 
     async duplicateAdSet(
         adSetId: string,

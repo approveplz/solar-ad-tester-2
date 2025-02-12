@@ -20,6 +20,7 @@ export interface AdSetParams {
     lifetimeBudgetCents?: string;
     bidStrategy: string;
     adSetTargeting?: FbApiAdSetTargeting;
+    status?: string;
 }
 
 // These video fields are also being used for images

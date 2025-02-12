@@ -29,6 +29,7 @@ const initialFormData = {
         billingEvent: '',
         dailyBudgetCents: '',
         bidStrategy: '',
+        status: '',
         adSetTargeting: {
             age_min: '',
             age_max: '',
@@ -346,7 +347,23 @@ function AdSettingsForm() {
                             />
                         </label>
                     </div>
-
+                    <div>
+                        <label style={styles.label}>
+                            Status:
+                            <select
+                                name="adSetParams.status"
+                                value={
+                                    currentFormData.adSetParams?.status || ''
+                                }
+                                onChange={handleInputChange}
+                                disabled={!isFormEditable}
+                                style={styles.select}
+                            >
+                                <option value="ACTIVE">Active</option>
+                                <option value="PAUSED">Paused</option>
+                            </select>
+                        </label>
+                    </div>
                     <fieldset style={styles.fieldset}>
                         <legend style={styles.legend}>Ad Set Targeting</legend>
                         <div>

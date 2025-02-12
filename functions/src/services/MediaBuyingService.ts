@@ -310,9 +310,8 @@ export class MediaBuyingService {
                     originalIdeaWriter,
                     'AZ'
                 )}-HOOK:${hookName}`;
-                const originalFbAdSettings = await getFbAdSettings(
-                    originalFbAccountId
-                );
+                const originalFbAdSettings: FbAdSettings =
+                    await getFbAdSettings(originalFbAccountId);
                 const hookAd = await this.handleCreateAd(
                     metaAdCreatorService,
                     originalFbAdSettings,

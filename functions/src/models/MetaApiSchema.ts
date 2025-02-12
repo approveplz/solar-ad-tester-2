@@ -19,7 +19,7 @@ export interface FbApiCreateCampaignRequest {
 export interface FbApiCreateAdSetRequest {
     name: string;
     campaign_id: string;
-    bid_amount: string;
+    bid_amount: number;
     billing_event: string;
     start_time?: string;
     bid_strategy?: string;
