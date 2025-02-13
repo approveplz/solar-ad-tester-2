@@ -272,7 +272,7 @@ function AdSettingsForm() {
                     <legend style={styles.legend}>Ad Set Parameters</legend>
                     <div>
                         <label style={styles.label}>
-                            Bid Amount (Cents):
+                            Bid Amount/Cost Per Result Goal (Cents):
                             <input
                                 type="number"
                                 name="adSetParams.bidAmountCents"

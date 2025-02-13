@@ -22,6 +22,7 @@ import {
     saveAdPerformanceFirestore,
     getAdPerformanceFirestoreById,
     setEventFirestore,
+    AD_PERFORMANCE_COLLECTION,
 } from './firestoreCloud.js';
 import {
     getSignedUploadUrl,
@@ -38,6 +39,8 @@ import { MediaBuyingService } from './services/MediaBuyingService.js';
 import { SkypeService } from './services/SkypeService.js';
 import { getAdName } from './helpers.js';
 import { AD_ACCOUNT_DATA } from './adAccountConfig.js';
+import { AirtableService } from './services/AirtableService.js';
+import { onDocumentWritten } from 'firebase-functions/firestore';
 
 config();
 
@@ -242,6 +245,39 @@ export const updateAdPerformanceScheduled = onSchedule(
         } catch (error) {
             console.error('Error updating ad performances:', error);
             throw error;
+        }
+    }
+);
+
+// This function keeps Airtable in sync with Firestore by automatically syncing any changes
+// (creates, updates, NOT deletes) from the AD_PERFORMANCE_COLLECTION in Firestore to the
+// corresponding records in Airtable
+
+export const syncAdPerformance = onDocumentWritten(
+    `${AD_PERFORMANCE_COLLECTION}/{docId}`,
+    async (event) => {
+        const airtableService = new AirtableService(
+            process.env.AIRTABLE_API_KEY || '',
+            process.env.AIRTABLE_BASE_ID || ''
+        );
+
+        const docId = event.params.docId;
+
+        // If the document was deleted, event.data?.after will be undefined.
+        if (!event.data?.after.exists) {
+            console.log(`Document ${docId} was deleted. Skipping sync.`);
+            return;
+        }
+
+        // "event.data.after" is a DocumentSnapshot which contains both metadata and the actual data.
+        // We use ".data()" to extract only the plain object holding the document's fields.
+        const data = event.data.after.data() as AdPerformance;
+
+        try {
+            await airtableService.createOrUpdateRecord(docId, data);
+            console.log(`Synced document ${docId} to Airtable`);
+        } catch (error) {
+            console.error(`Failed to sync document ${docId}:`, error);
         }
     }
 );

@@ -18,7 +18,7 @@ const CREATED_ADS_COLLECTION_SOLAR_VIDEO_HASHES_MAP_NAME = 'videohashes';
 const INCREMENT_COUNTER_COLLECTION = 'counters';
 const INCREMENT_COUNTER_DOC_NAME = 'global';
 
-const AD_PERFORMANCE_COLLECTION = 'ad-performance';
+export const AD_PERFORMANCE_COLLECTION = 'ad-performance';
 
 const EVENTS_COLLECTION = 'events';
 

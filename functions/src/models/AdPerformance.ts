@@ -36,4 +36,5 @@ export interface AdPerformance {
     isScaled: boolean;
     hasHooksCreated: boolean;
     hasScaled: boolean;
+    script?: string;
 }
