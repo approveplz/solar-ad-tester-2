@@ -2,117 +2,155 @@ import React, { useEffect, useState } from 'react';
 // adjust the import path below based on your project structure
 import { getAdPerformanceFirestoreAll } from '../firebase.js';
 
-const ExpandedMetrics = ({ metrics }) => {
-    const styles = {
-        container: {
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: '20px',
-            padding: '20px',
-            backgroundColor: '#f5f5f5',
-        },
-        platform: {
-            backgroundColor: '#f8f9fa',
-            borderRadius: '8px',
-            padding: '20px',
-        },
-        header: {
-            fontSize: '1.2em',
-            fontWeight: 'bold',
-            marginBottom: '15px',
-            color: '#007BFF',
-        },
-        metricsGroup: {
-            marginBottom: '20px',
-        },
-        metricsHeader: {
-            fontWeight: 'bold',
-            marginBottom: '10px',
-            color: '#495057',
-        },
-        metricRow: {
-            display: 'flex',
-            justifyContent: 'space-between',
-            margin: '5px 0',
-        },
-        label: {
-            color: '#6c757d',
-        },
-        value: {
-            fontWeight: '500',
-        },
-    };
+// Helper function for formatting currency values.
+function formatCurrency(value) {
+    return value != null ? `$${Number(value).toLocaleString()}` : '-';
+}
 
-    const renderMetrics = (timeMetrics, label) => {
-        return (
-            <div style={styles.metricsGroup}>
-                <div style={styles.metricsHeader}>{label}</div>
-                <div style={styles.metricRow}>
-                    <span style={styles.label}>Spend:</span>
-                    <span style={styles.value}>
-                        {timeMetrics?.spend ?? 'N/A'}
-                    </span>
-                </div>
-                <div style={styles.metricRow}>
-                    <span style={styles.label}>Revenue:</span>
-                    <span style={styles.value}>
-                        {timeMetrics?.revenue ?? 'N/A'}
-                    </span>
-                </div>
-                <div style={styles.metricRow}>
-                    <span style={styles.label}>ROI:</span>
-                    <span style={styles.value}>
-                        {timeMetrics?.roi ?? 'N/A'}
-                    </span>
-                </div>
-                <div style={styles.metricRow}>
-                    <span style={styles.label}>Leads:</span>
-                    <span style={styles.value}>
-                        {timeMetrics?.leads ?? 'N/A'}
-                    </span>
-                </div>
-                <div style={styles.metricRow}>
-                    <span style={styles.label}>Clicks:</span>
-                    <span style={styles.value}>
-                        {timeMetrics?.clicks ?? 'N/A'}
-                    </span>
-                </div>
-            </div>
-        );
-    };
-
-    const renderPlatformMetrics = (platformData, platformName) => {
-        return (
-            <div style={styles.platform}>
-                <div style={styles.header}>{platformName} Metrics</div>
-                {renderMetrics(platformData?.last3Days, 'Last 3 Days')}
-                {renderMetrics(platformData?.last7Days, 'Last 7 Days')}
-                {renderMetrics(platformData?.lifetime, 'Lifetime')}
-            </div>
-        );
-    };
-
-    return (
-        <div style={styles.container}>
-            {renderPlatformMetrics(metrics?.fb, 'Facebook')}
-            {renderPlatformMetrics(metrics?.ga, 'Google Analytics')}
-        </div>
-    );
+// Shared styles for cards
+const cardStyles = {
+    container: {
+        backgroundColor: '#f8f9fa',
+        borderRadius: '8px',
+        padding: '20px',
+    },
+    header: {
+        fontSize: '1.2em',
+        fontWeight: 'bold',
+        marginBottom: '15px',
+        color: '#007BFF',
+    },
+    row: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        margin: '5px 0',
+    },
+    label: {
+        color: '#6c757d',
+    },
+    value: {
+        fontWeight: '500',
+    },
 };
 
+// Renders a group of metrics, such as "Last 3 Days"
+const MetricsGroup = ({ groupName, data }) => (
+    <div>
+        <div
+            style={{
+                ...cardStyles.header,
+                marginBottom: '10px',
+                fontSize: '1em',
+            }}
+        >
+            {groupName}
+        </div>
+        <div style={cardStyles.row}>
+            <span style={cardStyles.label}>Spend:</span>
+            <span style={cardStyles.value}>{formatCurrency(data?.spend)}</span>
+        </div>
+        <div style={cardStyles.row}>
+            <span style={cardStyles.label}>Revenue:</span>
+            <span style={cardStyles.value}>
+                {formatCurrency(data?.revenue)}
+            </span>
+        </div>
+        <div style={cardStyles.row}>
+            <span style={cardStyles.label}>ROI:</span>
+            <span style={cardStyles.value}>{data?.roi ?? '-'}</span>
+        </div>
+        <div style={cardStyles.row}>
+            <span style={cardStyles.label}>Leads:</span>
+            <span style={cardStyles.value}>{data?.leads ?? '-'}</span>
+        </div>
+        <div style={cardStyles.row}>
+            <span style={cardStyles.label}>Clicks:</span>
+            <span style={cardStyles.value}>{data?.clicks ?? '-'}</span>
+        </div>
+    </div>
+);
+
+// Displays a metrics card for a given platform (Facebook or Google Analytics)
+const MetricsCard = ({ title, data }) => (
+    <div style={cardStyles.container}>
+        <div style={cardStyles.header}>{title}</div>
+        <MetricsGroup groupName="Last 3 Days" data={data?.last3Days} />
+        <MetricsGroup groupName="Last 7 Days" data={data?.last7Days} />
+        <MetricsGroup groupName="Lifetime" data={data?.lifetime} />
+    </div>
+);
+
+// Displays the ad information
+const AdInfoCard = ({ ad }) => (
+    <div style={cardStyles.container}>
+        <div style={cardStyles.header}>Ad Information</div>
+        <div style={cardStyles.row}>
+            <span style={cardStyles.label}>Active on Facebook:</span>
+            <span style={cardStyles.value}>{ad.fbIsActive ? 'Yes' : 'No'}</span>
+        </div>
+        <div style={cardStyles.row}>
+            <span style={cardStyles.label}>Download URL:</span>
+            <span style={cardStyles.value}>
+                <a
+                    href={ad.gDriveDownloadUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    Download
+                </a>
+            </span>
+        </div>
+        <div style={cardStyles.row}>
+            <span style={cardStyles.label}>Already Scaled:</span>
+            <span style={cardStyles.value}>{ad.hasScaled ? 'Yes' : 'No'}</span>
+        </div>
+        <div style={cardStyles.row}>
+            <span style={cardStyles.label}>Hooks Made:</span>
+            <span style={cardStyles.value}>
+                {ad.hasHooksCreated ? 'Yes' : 'No'}
+            </span>
+        </div>
+        <div style={cardStyles.row}>
+            <span style={cardStyles.label}>FB Ad Account:</span>
+            <span style={cardStyles.value}>{ad.fbAccountId}</span>
+        </div>
+        <div style={cardStyles.row}>
+            <span style={cardStyles.label}>FB Ad ID:</span>
+            <span style={cardStyles.value}>{ad.fbAdId}</span>
+        </div>
+        <div style={cardStyles.row}>
+            <span style={cardStyles.label}>FB Ad Set ID:</span>
+            <span style={cardStyles.value}>{ad.fbAdSetId}</span>
+        </div>
+    </div>
+);
+
+// Expanded row component showing detailed metrics and ad info
+const ExpandedAdRow = ({ metrics, ad }) => (
+    <div
+        style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: '20px',
+        }}
+    >
+        <MetricsCard title="Facebook Metrics" data={metrics?.fb} />
+        <MetricsCard title="Google Analytics Metrics" data={metrics?.ga} />
+        <AdInfoCard ad={ad} />
+    </div>
+);
+
+// Single table row for an ad (clickable to expand for details)
 const AdRow = ({ ad }) => {
     const [isExpanded, setIsExpanded] = useState(false);
-
-    const styles = {
-        td: {
-            border: '1px solid #ddd',
-            padding: '8px',
-            textAlign: 'center',
-        },
+    const cellStyle = {
+        border: '1px solid #ddd',
+        padding: '8px',
+        textAlign: 'center',
     };
 
     return (
-        <React.Fragment>
+        <>
             <tr
                 onClick={() => setIsExpanded(!isExpanded)}
                 style={{
@@ -120,50 +158,50 @@ const AdRow = ({ ad }) => {
                     backgroundColor: isExpanded ? '#f5f5f5' : 'white',
                 }}
             >
-                <td style={styles.td}>{ad.adName}</td>
-                <td style={styles.td}>{ad.vertical}</td>
-                <td style={styles.td}>
-                    <a
-                        href={ad.gDriveDownloadUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                    >
-                        Download
-                    </a>
+                <td style={cellStyle}>{ad.adName}</td>
+                <td style={cellStyle}>{ad.vertical}</td>
+                <td style={cellStyle}>
+                    {ad.performanceMetrics?.fb?.lifetime?.spend != null
+                        ? formatCurrency(
+                              ad.performanceMetrics.fb.lifetime.spend
+                          )
+                        : '-'}
                 </td>
-                <td style={styles.td}>
-                    {ad.performanceMetrics?.fb?.lifetime?.spend ?? 'N/A'}
+                <td style={cellStyle}>
+                    {ad.performanceMetrics?.fb?.lifetime?.revenue != null
+                        ? formatCurrency(
+                              ad.performanceMetrics.fb.lifetime.revenue
+                          )
+                        : '-'}
                 </td>
-                <td style={styles.td}>
-                    {ad.performanceMetrics?.fb?.lifetime?.revenue ?? 'N/A'}
+                <td style={cellStyle}>
+                    {ad.performanceMetrics?.fb?.lifetime?.roi ?? '-'}
                 </td>
-                <td style={styles.td}>
-                    {ad.performanceMetrics?.fb?.lifetime?.roi ?? 'N/A'}
+                <td style={cellStyle}>
+                    {ad.performanceMetrics?.fb?.lifetime?.leads ?? '-'}
                 </td>
-                <td style={styles.td}>
-                    {ad.performanceMetrics?.fb?.lifetime?.leads ?? 'N/A'}
-                </td>
-                <td style={styles.td}>
-                    {ad.performanceMetrics?.fb?.lifetime?.clicks ?? 'N/A'}
+                <td style={cellStyle}>
+                    {ad.performanceMetrics?.fb?.lifetime?.clicks ?? '-'}
                 </td>
             </tr>
             {isExpanded && (
                 <tr>
                     <td
-                        colSpan="8"
-                        style={{
-                            padding: '20px',
-                            border: '1px solid #ddd',
-                        }}
+                        colSpan="7"
+                        style={{ padding: '20px', border: '1px solid #ddd' }}
                     >
-                        <ExpandedMetrics metrics={ad.performanceMetrics} />
+                        <ExpandedAdRow
+                            metrics={ad.performanceMetrics}
+                            ad={ad}
+                        />
                     </td>
                 </tr>
             )}
-        </React.Fragment>
+        </>
     );
 };
 
+// Main component for fetching and displaying ad performance data
 function AdPerformanceData() {
     const [adData, setAdData] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -184,55 +222,51 @@ function AdPerformanceData() {
         fetchData();
     }, []);
 
-    const styles = {
-        container: {
-            fontFamily: '"Segoe UI", Tahoma, Geneva, Verdana, sans-serif',
-            boxSizing: 'border-box',
-            padding: '20px',
-        },
-        header: {
-            textAlign: 'center',
-            marginBottom: '20px',
-        },
-        table: {
-            width: '100%',
-            borderCollapse: 'collapse',
-            margin: '20px auto',
-        },
-        th: {
-            border: '1px solid #ddd',
-            padding: '12px 8px',
-            backgroundColor: '#007BFF',
-            color: '#fff',
-            textAlign: 'center',
-            fontWeight: 'bold',
-        },
-        td: {
-            border: '1px solid #ddd',
-            padding: '8px',
-            textAlign: 'center',
-        },
+    // Styling for layout, table, and headings
+    const containerStyle = {
+        fontFamily: '"Segoe UI", Tahoma, Geneva, Verdana, sans-serif',
+        boxSizing: 'border-box',
+        padding: '20px',
+    };
+
+    const headerStyle = {
+        textAlign: 'center',
+        marginBottom: '20px',
+    };
+
+    const tableStyle = {
+        width: '100%',
+        borderCollapse: 'collapse',
+        margin: '20px auto',
+    };
+
+    const thStyle = {
+        border: '1px solid #ddd',
+        padding: '12px 8px',
+        backgroundColor: '#007BFF',
+        color: '#fff',
+        textAlign: 'center',
+        fontWeight: 'bold',
     };
 
     return (
-        <div style={styles.container}>
-            <h1 style={styles.header}>Ad Performance Data</h1>
+        <div style={containerStyle}>
+            <h1 style={headerStyle}>Ad Performance Data</h1>
             {loading ? (
                 <p>Loading...</p>
             ) : error ? (
                 <p style={{ color: 'red' }}>{error}</p>
             ) : (
-                <table style={styles.table}>
+                <table style={tableStyle}>
                     <thead>
                         <tr>
-                            <th style={styles.th}>Ad Name</th>
-                            <th style={styles.th}>Vertical</th>
-                            <th style={styles.th}>Video</th>
-                            <th style={styles.th}>FB Lifetime Spend</th>
-                            <th style={styles.th}>FB Lifetime Revenue</th>
-                            <th style={styles.th}>FB Lifetime ROI</th>
-                            <th style={styles.th}>FB Lifetime Leads</th>
-                            <th style={styles.th}>FB Lifetime Clicks</th>
+                            <th style={thStyle}>Ad Name</th>
+                            <th style={thStyle}>Vertical</th>
+                            <th style={thStyle}>FB Lifetime Spend</th>
+                            <th style={thStyle}>FB Lifetime Revenue</th>
+                            <th style={thStyle}>FB Lifetime ROI</th>
+                            <th style={thStyle}>FB Lifetime Leads</th>
+                            <th style={thStyle}>FB Lifetime Clicks</th>
                         </tr>
                     </thead>
                     <tbody>
