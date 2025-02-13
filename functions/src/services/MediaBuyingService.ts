@@ -45,6 +45,7 @@ export class MediaBuyingService {
         ]);
 
         for (const adPerformance of firestoreAdPerformances) {
+            console.log('Processing ad performance:', adPerformance.fbAdId);
             await this.processSingleAdPerformance(
                 adPerformance,
                 bqPerformanceLast3Days,
@@ -70,7 +71,13 @@ export class MediaBuyingService {
             }`
         );
 
-        if (!adPerformance.fbIsActive) return;
+        if (!adPerformance.fbIsActive) {
+            console.log(
+                `Ad ${adPerformance.fbAdId} is not active, skipping processing`
+            );
+            return;
+        }
+        console.log(`Processing active ad ${adPerformance.fbAdId}`);
 
         adPerformance.performanceMetrics = this.buildPerformanceMetrics(
             fbAdId,

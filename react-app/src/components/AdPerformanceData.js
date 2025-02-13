@@ -1,11 +1,7 @@
 import React, { useEffect, useState } from 'react';
 // adjust the import path below based on your project structure
 import { getAdPerformanceFirestoreAll } from '../firebase.js';
-
-// Helper function for formatting currency values.
-function formatCurrency(value) {
-    return value != null ? `$${Number(value).toLocaleString()}` : '-';
-}
+import { formatCurrency, formatROI } from '../helpers.js';
 
 // Shared styles for cards
 const cardStyles = {
@@ -57,7 +53,7 @@ const MetricsGroup = ({ groupName, data }) => (
         </div>
         <div style={cardStyles.row}>
             <span style={cardStyles.label}>ROI:</span>
-            <span style={cardStyles.value}>{data?.roi ?? '-'}</span>
+            <span style={cardStyles.value}>{formatROI(data?.roi)}</span>
         </div>
         <div style={cardStyles.row}>
             <span style={cardStyles.label}>Leads:</span>
@@ -225,7 +221,7 @@ const AdRow = ({ ad }) => {
                         : '-'}
                 </td>
                 <td style={cellStyle}>
-                    {ad.performanceMetrics?.fb?.lifetime?.roi ?? '-'}
+                    {formatROI(ad.performanceMetrics?.fb?.lifetime?.roi)}
                 </td>
                 <td style={cellStyle}>
                     {ad.performanceMetrics?.fb?.lifetime?.leads ?? '-'}
