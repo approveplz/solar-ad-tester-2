@@ -41,6 +41,7 @@ import { getAdName } from './helpers.js';
 import { AD_ACCOUNT_DATA } from './adAccountConfig.js';
 import { AirtableService } from './services/AirtableService.js';
 import { onDocumentWritten } from 'firebase-functions/firestore';
+import { ApifyService } from './services/ApifyService.js';
 
 config();
 
@@ -499,6 +500,14 @@ export const uploadThirdPartyAdGetSignedUploadUrl = onRequest(
 /******************************************************************************
  * HTTP Function endpoints for testing
  ******************************************************************************/
+
+export const handleApifyRequestHttp_TEST = onRequest(
+    { timeoutSeconds: 300 },
+    async (req, res) => {
+        const apifyService = new ApifyService(process.env.APIFY_API_TOKEN || '');
+        await apifyService.run();
+    }
+);
 
 export const handleCreatomateRequestHttp_TEST = onRequest(async (req, res) => {
     console.log('creatomate request received');
