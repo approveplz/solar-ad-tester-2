@@ -79,6 +79,9 @@ export async function saveAdPerformanceFirestore(
     fbAdId: string,
     adPerformance: AdPerformance
 ) {
+    console.log(
+        `Saving ad performance for fbAdId: ${fbAdId} name: ${adPerformance.adName}`
+    );
     const db = getFirestore();
     return await db
         .collection(AD_PERFORMANCE_COLLECTION)

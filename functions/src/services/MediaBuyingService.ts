@@ -62,6 +62,14 @@ export class MediaBuyingService {
     ) {
         const fbAdId = adPerformance.fbAdId;
 
+        console.log(
+            `Processing ad - ID: ${fbAdId}, Name: ${
+                adPerformance.adName
+            }, Active Status: ${
+                adPerformance.fbIsActive ? 'Active' : 'Inactive'
+            }`
+        );
+
         if (!adPerformance.fbIsActive) return;
 
         adPerformance.performanceMetrics = this.buildPerformanceMetrics(
@@ -70,6 +78,8 @@ export class MediaBuyingService {
             bqMetrics7d,
             bqMetricsLifetime
         );
+
+        await saveAdPerformanceFirestore(adPerformance.fbAdId, adPerformance);
 
         const fbLifetimeSpend =
             adPerformance.performanceMetrics.fb?.lifetime?.spend ?? 0;
