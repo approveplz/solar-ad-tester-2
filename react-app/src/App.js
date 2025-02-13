@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import AdSettingsForm from './components/AdSettingsForm';
 import AdPerformanceData from './components/AdPerformanceData';
+import Instructions from './components/Instructions';
 import { commonSelectArrowStyles } from './styles/selectStyles';
 
 function App() {
-    const [activeView, setActiveView] = useState('settings');
+    const [activeView, setActiveView] = useState('instructions');
 
     const styles = {
         container: {
@@ -43,9 +44,13 @@ function App() {
                 onChange={handleViewChange}
                 style={styles.dropdown}
             >
+                <option value="instructions">Instructions</option>
                 <option value="settings">Ad Settings Form</option>
                 <option value="performance">Ad Performance Data</option>
             </select>
+            {activeView === 'instructions' && (
+                <Instructions key="instructions" />
+            )}
             {activeView === 'settings' && <AdSettingsForm key="settings" />}
             {activeView === 'performance' && (
                 <AdPerformanceData key="performance" />

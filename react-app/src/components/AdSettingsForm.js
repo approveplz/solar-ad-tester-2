@@ -144,7 +144,7 @@ function AdSettingsForm() {
 
     const [isFormEditable, setIsFormEditable] = useState(false);
     const [currentFormData, setCurrentFormData] = useState(initialFormData);
-    const [accountId, setAccountId] = useState('12345');
+    const [accountId, setAccountId] = useState('467161346185440');
     const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
@@ -262,7 +262,6 @@ function AdSettingsForm() {
                                     8653880687969127 (Roofing, Vincent x
                                     Digitsolution CC 2)
                                 </option>
-                                <option value="12345">TEST</option>
                             </select>
                         </label>
                     </div>
