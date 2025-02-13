@@ -125,19 +125,69 @@ const AdInfoCard = ({ ad }) => (
     </div>
 );
 
-// Expanded row component showing detailed metrics and ad info
+const PreviewVideoPlayer = ({ videoUrl }) => {
+    // Check if the URL is from Google Drive
+    if (videoUrl && videoUrl.includes('drive.google.com')) {
+        const extractFileIdFromGDriveDownloadUrl = (url) => {
+            try {
+                const queryString = url.split('?')[1];
+                const urlParams = new URLSearchParams(queryString);
+                return urlParams.get('id');
+            } catch (error) {
+                console.error('Error extracting file ID from URL:', error);
+                return null;
+            }
+        };
+
+        const fileId = extractFileIdFromGDriveDownloadUrl(videoUrl);
+        // Create the embed URL for Google Drive to allow inline playback
+        const embedUrl = fileId
+            ? `https://drive.google.com/file/d/${fileId}/preview`
+            : videoUrl;
+
+        return (
+            <iframe
+                title="Video Preview"
+                src={embedUrl}
+                width="100%"
+                height="250"
+                allow="autoplay"
+            >
+                Your browser does not support iframes.
+            </iframe>
+        );
+    } else {
+        // For non–Google Drive videos, use the HTML5 video element
+        return (
+            <video
+                controls
+                style={{ width: '100%', maxHeight: '250px' }}
+                src={videoUrl}
+            >
+                Your browser does not support the video tag.
+            </video>
+        );
+    }
+};
+
+// Expanded row component showing detailed metrics, ad info, and video player using PreviewVideoPlayer
 const ExpandedAdRow = ({ metrics, ad }) => (
-    <div
-        style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: '20px',
-        }}
-    >
-        <MetricsCard title="Facebook Metrics" data={metrics?.fb} />
-        <MetricsCard title="Google Analytics Metrics" data={metrics?.ga} />
-        <AdInfoCard ad={ad} />
-    </div>
+    <>
+        <div
+            style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: '20px',
+            }}
+        >
+            <MetricsCard title="Facebook Metrics" data={metrics?.fb} />
+            <MetricsCard title="Google Analytics Metrics" data={metrics?.ga} />
+            <AdInfoCard ad={ad} />
+        </div>
+        <div style={{ marginTop: '20px' }}>
+            <PreviewVideoPlayer videoUrl={ad.gDriveDownloadUrl} />
+        </div>
+    </>
 );
 
 // Single table row for an ad (clickable to expand for details)
@@ -202,7 +252,7 @@ const AdRow = ({ ad }) => {
 };
 
 // Main component for fetching and displaying ad performance data
-function AdPerformanceData() {
+function AdPerformanceDataView() {
     const [adData, setAdData] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -280,4 +330,4 @@ function AdPerformanceData() {
     );
 }
 
-export default AdPerformanceData;
+export default AdPerformanceDataView;

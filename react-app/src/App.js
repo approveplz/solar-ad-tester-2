@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import AdSettingsForm from './components/AdSettingsForm';
-import AdPerformanceData from './components/AdPerformanceData';
+import AdPerformanceDataView from './components/AdPerformanceData';
 import Instructions from './components/Instructions';
 import { commonSelectArrowStyles } from './styles/selectStyles';
 
@@ -53,7 +53,7 @@ function App() {
             )}
             {activeView === 'settings' && <AdSettingsForm key="settings" />}
             {activeView === 'performance' && (
-                <AdPerformanceData key="performance" />
+                <AdPerformanceDataView key="performance" />
             )}
         </div>
     );
