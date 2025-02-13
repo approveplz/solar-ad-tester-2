@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import AdSettingsForm from './components/AdSettingsForm';
 import AdPerformanceData from './components/AdPerformanceData';
+import { commonSelectArrowStyles } from './styles/selectStyles';
 
 function App() {
     const [activeView, setActiveView] = useState('settings');
@@ -18,16 +19,16 @@ function App() {
         },
         dropdown: {
             width: '250px',
-            padding: '12px 16px',
+            padding: '12px 36px 12px 16px',
             fontSize: '16px',
             marginBottom: '20px',
             border: '1px solid #007BFF',
             borderRadius: '4px',
-            backgroundColor: '#fff',
-            color: '#007BFF',
             cursor: 'pointer',
             outline: 'none',
             transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
+            ...commonSelectArrowStyles,
+            backgroundPosition: 'right 16px center',
         },
     };
 

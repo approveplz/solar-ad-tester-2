@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { saveFbAdSettings, getFbAdSettings } from '../firebase.js';
+import { commonSelectArrowStyles } from '../styles/selectStyles';
 
 function handleError(error, customMessage = 'An error occurred') {
     console.error(customMessage, error);
@@ -63,6 +64,7 @@ function AdSettingsForm() {
         container: {
             fontFamily: '"Segoe UI", Tahoma, Geneva, Verdana, sans-serif',
             boxSizing: 'border-box',
+            padding: '0 20px',
         },
         header: {
             textAlign: 'center',
@@ -97,11 +99,12 @@ function AdSettingsForm() {
         },
         select: {
             width: '100%',
-            padding: '8px',
+            padding: '8px 30px 8px 8px',
             border: '1px solid #ccc',
             borderRadius: '4px',
             marginBottom: '10px',
             boxSizing: 'border-box',
+            ...commonSelectArrowStyles,
         },
         textarea: {
             width: '100%',
