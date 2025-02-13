@@ -42,6 +42,7 @@ import { AD_ACCOUNT_DATA } from './adAccountConfig.js';
 import { AirtableService } from './services/AirtableService.js';
 import { onDocumentWritten } from 'firebase-functions/firestore';
 import { ApifyService } from './services/ApifyService.js';
+import { GoogleGeminiService } from './services/GoogleGeminiService.js';
 
 config();
 
@@ -501,10 +502,25 @@ export const uploadThirdPartyAdGetSignedUploadUrl = onRequest(
  * HTTP Function endpoints for testing
  ******************************************************************************/
 
+export const handleGoogleGeminiRequestHttp_TEST = onRequest(
+    { timeoutSeconds: 300 },
+    async (req, res) => {
+        const googleGeminiService = new GoogleGeminiService(
+            process.env.GOOGLE_GEMINI_API_KEY || ''
+        );
+        const videoUrl =
+            'https://drive.google.com/uc?export=download&id=1UCO0M0PCv-qiMQjzOx8Sgxsexjcu2-Ri';
+        const result = await googleGeminiService.getAdAnalysis(videoUrl);
+        res.status(200).json({ success: true, result });
+    }
+);
+
 export const handleApifyRequestHttp_TEST = onRequest(
     { timeoutSeconds: 300 },
     async (req, res) => {
-        const apifyService = new ApifyService(process.env.APIFY_API_TOKEN || '');
+        const apifyService = new ApifyService(
+            process.env.APIFY_API_TOKEN || ''
+        );
         await apifyService.run();
     }
 );
