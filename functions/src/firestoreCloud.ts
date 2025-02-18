@@ -3,6 +3,8 @@ import { FbAdSettings } from './models/FbAdSettings.js';
 import { CreatedFbAdInfo } from './models/CreatedFbAdInfo.js';
 import { ParsedFbAdInfo } from './models/ParsedFbAdInfo.js';
 import { AdPerformance } from './models/AdPerformance.js';
+import { ScrapedAdDataFirestore } from './models/ScrapedAdData.js';
+
 const FB_AD_SETTINGS_COLLECTION = 'fb-ad-settings';
 const CREATED_ADS_COLLECTION_SOLAR = 'created-ads-collection-solar';
 const CREATED_ADS_COLLECTION_ROOFING = 'created-ads-collection-roofing';
@@ -147,6 +149,52 @@ export async function getFbAdSettingFirestore(
         console.error(error);
         return null;
     }
+}
+/*
+Not Currently being used
+*/
+
+const SCRAPED_ADS_COLLECTION = 'scraped-ads';
+
+const ScrapedAdDataDocConverter = {
+    toFirestore: (data: ScrapedAdDataFirestore) => data,
+    fromFirestore: (snap: FirebaseFirestore.QueryDocumentSnapshot) =>
+        snap.data() as ScrapedAdDataFirestore,
+};
+
+export async function saveScrapedAdFirestore(
+    videoIdentifier: string,
+    scrapedAdData: ScrapedAdDataFirestore
+) {
+    const db = getFirestore();
+    await db
+        .collection(SCRAPED_ADS_COLLECTION)
+        .withConverter(ScrapedAdDataDocConverter)
+        .doc(videoIdentifier)
+        .set(scrapedAdData, { merge: true });
+}
+
+export async function getScrapedAdFirestore(
+    videoIdentifier: string
+): Promise<ScrapedAdDataFirestore | null> {
+    const db = getFirestore();
+    const docRef = await db
+        .collection(SCRAPED_ADS_COLLECTION)
+        .withConverter(ScrapedAdDataDocConverter)
+        .doc(videoIdentifier)
+        .get();
+    return docRef.data() || null;
+}
+
+export async function getScrapedAdsFirestoreAll(): Promise<
+    ScrapedAdDataFirestore[]
+> {
+    const db = getFirestore();
+    const snapshot = await db
+        .collection(SCRAPED_ADS_COLLECTION)
+        .withConverter(ScrapedAdDataDocConverter)
+        .get();
+    return snapshot.docs.map((doc) => doc.data());
 }
 
 export async function saveVideoHashFirestore(

@@ -43,6 +43,7 @@ import { AirtableService } from './services/AirtableService.js';
 import { onDocumentWritten } from 'firebase-functions/firestore';
 import { ApifyService } from './services/ApifyService.js';
 import { GoogleGeminiService } from './services/GoogleGeminiService.js';
+import { OpenAiService } from './services/OpenAiService.js';
 
 config();
 
@@ -508,9 +509,27 @@ export const handleGoogleGeminiRequestHttp_TEST = onRequest(
         const googleGeminiService = new GoogleGeminiService(
             process.env.GOOGLE_GEMINI_API_KEY || ''
         );
+        // const videoUrl =
+        //     'https://drive.google.com/uc?export=download&id=1UCO0M0PCv-qiMQjzOx8Sgxsexjcu2-Ri';
+
+        // test 1
         const videoUrl =
-            'https://drive.google.com/uc?export=download&id=1UCO0M0PCv-qiMQjzOx8Sgxsexjcu2-Ri';
+            'https://video.ffab1-1.fna.fbcdn.net/v/t42.1790-2/470149424_488208347080994_8952067013063724026_n.?_nc_cat=100&ccb=1-7&_nc_sid=c53f8f&_nc_ohc=IJMA6E1ysGMQ7kNvgEEAe7f&_nc_oc=Adin26crC_mDaT_ifyywPr6DZIGzCmzO6s58PyvKfyKoETRGbBk2HcRD2QNGcdS69QZup2w_V3sHRfzKuucIhRlT&_nc_zt=28&_nc_ht=video.ffab1-1.fna&_nc_gid=AzyerRuUEV7hBqKWyGbTU5g&oh=00_AYByqkDXoyB58NoQe24JX-K2o1XNCQsslbgRsKrQhFzCfw&oe=67B408F8';
         const result = await googleGeminiService.getAdAnalysis(videoUrl);
+        res.status(200).json({ success: true, result });
+    }
+);
+
+export const handleOpenAiRequestHttp_TEST = onRequest(
+    { timeoutSeconds: 300 },
+    async (req, res) => {
+        const openAiService = new OpenAiService(
+            process.env.OPENAI_API_KEY || ''
+        );
+        await openAiService.buildEmbeddingCache();
+        const result = await openAiService.findMostSimilar(
+            'The video ad features a man with curly brown hair and a short beard, standing on a sidewalk in a residential neighborhood. He is wearing a black Patagonia puffer vest over a blue and white plaid button-down shirt. The background consists of colorful houses on a steep hill, a paved road with yellow lines, and some greenery. The houses are a mix of architectural styles and colors, including red, brown, and white. He\'s facing the camera and speaking directly to the viewer. The camera is held at approximately chest level. A speech bubble-shaped graphic appears at the bottom left corner, displaying the text, "Reply to johnthebuilder04 comment How Can I Get a New Roof Without Paying Anything?" written in a sans-serif font with a user profile image to the left of the text. As the video progresses, the camera remains mostly steady but there are slight movements as the man walks. In the background, a woman in a black coat walks on the other side of the street. A yellow road sign with a winding arrow and the number 15 is visible. There is also a white sign with black lettering that reads "NO PARKING 10pm - 6am EVERYDAY". The sky appears overcast, and the lighting is soft. At the end of the video, the screen turns black and large white text appears at the top, reading "Tap The Button Below!" followed by a countdown timer displayed in a large white sans-serif font. The numbers count down from 7 to 1, taking up a large portion of the screen. There is no audio, but there is a very short, quick buzz sound at the exact moment the countdown hits "1".'
+        );
         res.status(200).json({ success: true, result });
     }
 );
@@ -518,10 +537,19 @@ export const handleGoogleGeminiRequestHttp_TEST = onRequest(
 export const handleApifyRequestHttp_TEST = onRequest(
     { timeoutSeconds: 300 },
     async (req, res) => {
-        const apifyService = new ApifyService(
-            process.env.APIFY_API_TOKEN || ''
+        const googleGeminiService = new GoogleGeminiService(
+            process.env.GOOGLE_GEMINI_API_KEY || ''
         );
-        await apifyService.run();
+        const openAiService = new OpenAiService(
+            process.env.OPENAI_API_KEY || ''
+        );
+        const apifyService = new ApifyService(
+            process.env.APIFY_API_TOKEN || '',
+            googleGeminiService,
+            openAiService
+        );
+        await apifyService.run2();
+        res.status(200).json({ success: true });
     }
 );
 
@@ -539,6 +567,7 @@ export const handleCreatomateRequestHttp_TEST = onRequest(async (req, res) => {
 
     const baseVideoUrl_16x9 =
         'https://drive.google.com/uc?export=download&id=1rh5gJXbstIyZUuOuhel7tgfhLJ2tVcSt';
+
     const baseAdName = '103-R-AZ-AZ-AZ';
     // If I use a real fbAdId it will actually creat the hooks
     const fbAdId = '';
