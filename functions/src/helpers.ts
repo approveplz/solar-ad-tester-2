@@ -1,8 +1,8 @@
-import ffmpeg from 'fluent-ffmpeg';
-import ffmpegPathImport from 'ffmpeg-static';
-const ffmpegPath = ffmpegPathImport as unknown as string;
+// import ffmpeg from 'fluent-ffmpeg';
+// import ffmpegPathImport from 'ffmpeg-static';
+// const ffmpegPath = ffmpegPathImport as unknown as string;
 
-ffmpeg.setFfmpegPath(ffmpegPath);
+// ffmpeg.setFfmpegPath(ffmpegPath);
 
 export function getAdName(
     counter: number,

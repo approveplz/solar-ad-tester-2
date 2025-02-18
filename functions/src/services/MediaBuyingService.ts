@@ -17,6 +17,7 @@ import {
 } from '../firestoreCloud.js';
 import invariant from 'tiny-invariant';
 import { SkypeService } from './SkypeService.js';
+import { TrelloService } from './TrelloService.js';
 import { getAdName, getNextWeekdayUnixSeconds } from '../helpers.js';
 
 export class MediaBuyingService {
@@ -28,7 +29,8 @@ export class MediaBuyingService {
     constructor(
         private readonly creatomateService: CreatomateService,
         private readonly bigQueryService: BigQueryService,
-        private readonly skypeService: SkypeService
+        private readonly skypeService: SkypeService,
+        private readonly trelloService: TrelloService
     ) {}
 
     async handleAdPerformanceUpdates() {
@@ -104,14 +106,16 @@ export class MediaBuyingService {
         await this.handlePerformanceBasedActions(
             adPerformance,
             metaService,
-            this.skypeService
+            this.skypeService,
+            this.trelloService
         );
     }
 
     async handlePerformanceBasedActions(
         adPerformance: AdPerformance,
         metaAdCreatorService: MetaAdCreatorService,
-        skypeService: SkypeService
+        skypeService: SkypeService,
+        trelloService: TrelloService
     ) {
         const fbRoiLifetime =
             adPerformance.performanceMetrics.fb?.lifetime?.roi ?? 0;
@@ -140,7 +144,6 @@ export class MediaBuyingService {
                 )}). But do not create hooks or scale`
             );
         } else {
-            // Handle high performance ad logic directly here
             if (
                 !adPerformance.hasHooksCreated &&
                 !adPerformance.isHook &&
@@ -169,6 +172,29 @@ export class MediaBuyingService {
                         )
                     )
                     .join('')}
+                `;
+                await skypeService.sendMessage('ALAN', message);
+            }
+
+            if (
+                !adPerformance.hasHooksCreated &&
+                !adPerformance.isHook &&
+                !adPerformance.isScaled &&
+                !adPerformance.hasScaled
+            ) {
+                const trelloCard = await this.handleCreateTrelloCard(
+                    adPerformance,
+                    trelloService
+                );
+                const message = `I've created a new Trello card on the Adstonaut board for your ad because the ROI was over ${
+                    this.LIFETIME_ROI_HOOK_THRESHOLD
+                }X
+
+                This is the ad that I've created the card for for:
+                ${skypeService.createMessageWithAdPerformanceInfo(
+                    adPerformance
+                )}
+
                 `;
                 await skypeService.sendMessage('ALAN', message);
             }
@@ -217,6 +243,21 @@ export class MediaBuyingService {
         );
         adPerformance.fbIsActive = false;
         await saveAdPerformanceFirestore(adPerformance.fbAdId, adPerformance);
+    }
+
+    async handleCreateTrelloCard(
+        originalAdPerformance: AdPerformance,
+        trelloService: TrelloService
+    ) {
+        const cardName = trelloService.getRoofingCardName(
+            originalAdPerformance.adName,
+            5
+        );
+        const trelloCard = await trelloService.createCardFromRoofingTemplate(
+            cardName,
+            originalAdPerformance.gDriveDownloadUrl
+        );
+        return trelloCard;
     }
 
     async handleCreateHooks(

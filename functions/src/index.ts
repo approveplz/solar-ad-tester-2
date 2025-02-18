@@ -44,6 +44,7 @@ import { onDocumentWritten } from 'firebase-functions/firestore';
 import { ApifyService } from './services/ApifyService.js';
 import { GoogleGeminiService } from './services/GoogleGeminiService.js';
 import { OpenAiService } from './services/OpenAiService.js';
+import { TrelloService } from './services/TrelloService.js';
 
 config();
 
@@ -239,10 +240,15 @@ export const updateAdPerformanceScheduled = onSchedule(
                 process.env.MICROSOFT_APP_ID || '',
                 process.env.MICROSOFT_APP_PASSWORD || ''
             );
+            const trelloService = new TrelloService(
+                process.env.TRELLO_API_KEY || '',
+                process.env.TRELLO_API_TOKEN || ''
+            );
             const mediaBuyingService = new MediaBuyingService(
                 creatomateService,
                 bigQueryService,
-                skypeService
+                skypeService,
+                trelloService
             );
             await mediaBuyingService.handleAdPerformanceUpdates();
         } catch (error) {
@@ -503,6 +509,22 @@ export const uploadThirdPartyAdGetSignedUploadUrl = onRequest(
  * HTTP Function endpoints for testing
  ******************************************************************************/
 
+export const handleTrelloRequestHttp_TEST = onRequest(async (req, res) => {
+    const trelloService = new TrelloService(
+        process.env.TRELLO_API_KEY || '',
+        process.env.TRELLO_API_TOKEN || ''
+    );
+    // const result = await trelloService.getLists();
+    const videoAdUrl =
+        'https://drive.google.com/file/d/1LZ6JGg8M1LMSD-h00frPqjn2gWy1FLZQ/view?usp=sharing';
+    const cardName = trelloService.getRoofingCardName('R-AZ-AZ-AZ-TEST', 5);
+    const result = await trelloService.createCardFromRoofingTemplate(
+        cardName,
+        videoAdUrl
+    );
+    res.status(200).json({ success: true, result });
+});
+
 export const handleGoogleGeminiRequestHttp_TEST = onRequest(
     { timeoutSeconds: 300 },
     async (req, res) => {
@@ -599,11 +621,16 @@ export const duplicateAdSetAndAdToCampaignHttp_TEST = onRequest(
                 process.env.MICROSOFT_APP_ID || '',
                 process.env.MICROSOFT_APP_PASSWORD || ''
             );
+            const trelloService = new TrelloService(
+                process.env.TRELLO_API_KEY || '',
+                process.env.TRELLO_API_TOKEN || ''
+            );
             const bigQueryService = new BigQueryService();
             const mediaBuyingService = new MediaBuyingService(
                 creatomateService,
                 bigQueryService,
-                skypeService
+                skypeService,
+                trelloService
             );
 
             const adPerformance = {
@@ -712,11 +739,16 @@ export const handleCreateHooksHttp_TEST = onRequest(
             process.env.MICROSOFT_APP_ID || '',
             process.env.MICROSOFT_APP_PASSWORD || ''
         );
+        const trelloService = new TrelloService(
+            process.env.TRELLO_API_KEY || '',
+            process.env.TRELLO_API_TOKEN || ''
+        );
         const bigQueryService = new BigQueryService();
         const mediaBuyingService = new MediaBuyingService(
             creatomateService,
             bigQueryService,
-            skypeService
+            skypeService,
+            trelloService
         );
         const adPerformance = {
             adName: '105-R-AZ-AZ-AZ',
@@ -775,7 +807,8 @@ export const handleCreateHooksHttp_TEST = onRequest(
         await mediaBuyingService.handlePerformanceBasedActions(
             adPerformance,
             metaAdCreatorService,
-            skypeService
+            skypeService,
+            trelloService
         );
         res.status(200).json({ success: true });
     }
