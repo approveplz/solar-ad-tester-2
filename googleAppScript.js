@@ -1,4 +1,3 @@
-// https://script.google.com/home/projects/1gV5I0pJcXZ94D2KkyxHEbVkKW6U6ABljHW7Uvy8tNac6MJ0IV5mRVKUX/edit
 function main() {
     // https://drive.google.com/drive/u/2/folders/1AwBk7bOjyuBVlfTVxZ-t4wE2IatX8O22
     const INGESTION_FOLDER_ID = '1AwBk7bOjyuBVlfTVxZ-t4wE2IatX8O22';
@@ -7,13 +6,18 @@ function main() {
         'https://us-central1-solar-ad-tester-2.cloudfunctions.net/createFbAdHttp';
     const PROCESSED_FILE_IDS_KEY = 'processedFileIds';
     const ROOFING_CC1_ACCOUNT_ID = '467161346185440';
+    const OZEMPIC_ACCOUNT_ID = '916987259877684';
 
     const properties = PropertiesService.getScriptProperties();
     const processedFileIds = JSON.parse(
         properties.getProperty(PROCESSED_FILE_IDS_KEY) || '[]'
     );
 
-    const accountId = ROOFING_CC1_ACCOUNT_ID;
+    const verticalToAccountId = {
+        R: ROOFING_CC1_ACCOUNT_ID,
+        O: OZEMPIC_ACCOUNT_ID,
+    };
+
     const sourceFolder = DriveApp.getFolderById(INGESTION_FOLDER_ID);
     const archiveFolder = DriveApp.getFolderById(ARCHIVE_FOLDER_ID);
     const files = sourceFolder.getFiles();
@@ -42,6 +46,8 @@ function main() {
             DriveApp.Access.ANYONE_WITH_LINK,
             DriveApp.Permission.VIEW
         );
+
+        const accountId = verticalToAccountId[vertical];
 
         const downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
 
