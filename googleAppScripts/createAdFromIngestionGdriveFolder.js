@@ -42,10 +42,6 @@ function main() {
 
         const { vertical, scriptWriter, ideaWriter, hookWriter } =
             processFileName(fileName);
-        file.setSharing(
-            DriveApp.Access.ANYONE_WITH_LINK,
-            DriveApp.Permission.VIEW
-        );
 
         const accountId = verticalToAccountId[vertical];
 
