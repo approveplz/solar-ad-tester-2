@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import AdSettingsForm from './components/AdSettingsForm';
-import AdPerformanceDataView from './components/AdPerformanceData';
+import AdPerformanceDataView from './components/AdPerformanceDataView';
 import Instructions from './components/Instructions';
+import AdScraperDataView from './components/AdScraperDataView';
 import { commonSelectArrowStyles } from './styles/selectStyles';
 
 function App() {
@@ -47,6 +48,7 @@ function App() {
                 <option value="instructions">Instructions</option>
                 <option value="settings">Ad Settings Form</option>
                 <option value="performance">Ad Performance Data</option>
+                <option value="ad-scraper">Ad Scraper</option>
             </select>
             {activeView === 'instructions' && (
                 <Instructions key="instructions" />
@@ -54,6 +56,9 @@ function App() {
             {activeView === 'settings' && <AdSettingsForm key="settings" />}
             {activeView === 'performance' && (
                 <AdPerformanceDataView key="performance" />
+            )}
+            {activeView === 'ad-scraper' && (
+                <AdScraperDataView key="ad-scraper" />
             )}
         </div>
     );

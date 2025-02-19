@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 // adjust the import path below based on your project structure
 import { getAdPerformanceFirestoreAll } from '../firebase.js';
 import { formatCurrency, formatROI } from '../helpers.js';
-import { VideoPreviewPlayer } from './VideoPreviewPlayer.js';
+import VideoPreviewPlayer from './VideoPreviewPlayer.js';
 // Shared styles for cards
 const cardStyles = {
     container: {
