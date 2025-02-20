@@ -6,6 +6,7 @@ import {
 import { ScrapedAdDataFirestore } from '../models/ScrapedAdDataFirestore.js';
 import { GoogleGeminiService } from './GoogleGeminiService.js';
 import { OpenAiService } from './OpenAiService.js';
+import { SkypeService } from './SkypeService.js';
 
 export interface ScrapedAdItemSnapshotCard {
     title: string;
@@ -45,16 +46,19 @@ export class ApifyService {
     private client: ApifyClient;
     private googleGeminiService: GoogleGeminiService;
     private openAiService: OpenAiService;
+    private skypeService: SkypeService;
     constructor(
         apiKey: string,
         googleGeminiService: GoogleGeminiService,
-        openAiService: OpenAiService
+        openAiService: OpenAiService,
+        skypeService: SkypeService
     ) {
         this.client = new ApifyClient({
             token: apiKey,
         });
         this.googleGeminiService = googleGeminiService;
         this.openAiService = openAiService;
+        this.skypeService = skypeService;
     }
 
     getFbAdLibraryUrlForPageIdWithImpressionYesterday(pageId: string) {
@@ -72,15 +76,11 @@ export class ApifyService {
     async execute() {
         console.log('Starting Apify Facebook Ads scraping...');
         const actorOptions = {
-            count: 100,
+            count: 1000,
             scrapeAdDetails: true,
             'scrapePageAds.activeStatus': 'all',
             period: '',
             urls: [
-                // {
-                //     url: 'https://www.facebook.com/ads/library/?active_status=active&ad_type=all&content_languages[0]=en&country=US&is_targeted_country=false&media_type=video&q=roof%20repair&search_type=page&start_date[min]=2025-01-09&start_date[max]&view_all_page_id=102217671595954',
-                //     method: 'GET',
-                // },
                 {
                     url: this.getFbAdLibraryUrlForPageIdWithImpressionYesterday(
                         '209417582254766' // roofing quote.org
@@ -146,6 +146,7 @@ export class ApifyService {
         console.log('Current video identifiers in database:');
         console.log([...duplicateVideoIdentifiers].join('\n'));
 
+        let skypMessageSent = false;
         let scrapedAdDataFirestoreToSave: ScrapedAdDataFirestore[] = [];
 
         const fiveDaysAgoTimestamp =
@@ -169,6 +170,7 @@ export class ApifyService {
                     `Skipping ad ${videoIdentifier} because its startTime (${formattedStartTime}, UNIX seconds: ${startTimeUnixSeconds}) is within the last 5 days.`
                 );
             } else {
+                console.log(`Processing ad ${videoIdentifier}`);
                 const { description } =
                     await this.googleGeminiService.getAdAnalysis(url);
 
@@ -197,9 +199,18 @@ export class ApifyService {
                         scrapedAdDataFirestoreToSave
                     );
                     scrapedAdDataFirestoreToSave = [];
+                    if (!skypMessageSent) {
+                        skypMessageSent = true;
+                        await this.skypeService.sendMessage(
+                            'ALAN',
+                            'There are new scraped ads ready for review at https://solar-ad-tester-2.web.app/'
+                        );
+                    }
                 }
             }
+        }
 
+        if (scrapedAdDataFirestoreToSave.length > 0) {
             await savedScrapedAdFirestoreBatch(scrapedAdDataFirestoreToSave);
         }
     }

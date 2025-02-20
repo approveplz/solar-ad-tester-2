@@ -1,12 +1,12 @@
 import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegPathImport from 'ffmpeg-static';
-import { PassThrough } from 'stream';
-import { getScrapedAdsFirestoreAll } from '../firestoreCloud.js';
+import { PassThrough, Readable } from 'stream';
+import { createWriteStream, unlink } from 'fs';
+import { tmpdir } from 'os';
+import { randomBytes } from 'crypto';
 
-const ffmpegPath = ffmpegPathImport as unknown as string;
-
-ffmpeg.setFfmpegPath(ffmpegPath);
+ffmpeg.setFfmpegPath(ffmpegPathImport as unknown as string);
 
 export interface AdAnalysis {
     description: string;
@@ -22,55 +22,83 @@ export class GoogleGeminiService {
         this.generativeAI = new GoogleGenerativeAI(apiKey);
     }
 
-    // Downscale a video from a URL without saving to disk.
+    // Downscale a video from a URL by downloading, processing via ffmpeg, and returning a Base64 string.
     private async downscaleVideo(videoUrl: string): Promise<string> {
-        console.log(`[GoogleGeminiService:downscaleVideo] Called`);
+        // Generate a unique temporary file path using the system's temporary directory.
+        const tempVideoPath = `${tmpdir()}/video-${randomBytes(6).toString(
+            'hex'
+        )}.mp4`;
+
+        const response = await fetch(videoUrl);
+        if (!response.ok) {
+            throw new Error(`Failed to download video: ${response.statusText}`);
+        }
+        if (!response.body) {
+            throw new Error('Failed to obtain response body from video URL.');
+        }
+
+        // Convert the WHATWG stream (returned by fetch) into a Node.js Readable stream.
+        const nodeReadable = Readable.fromWeb(response.body as any);
+
+        // Create a writable stream that writes the downloaded video to the temporary file.
+        const fileStream = createWriteStream(tempVideoPath);
+
+        // Pipe the downloaded video data into the temporary file.
+        await new Promise<void>((resolve, reject) => {
+            nodeReadable.pipe(fileStream);
+            nodeReadable.on('error', reject);
+            fileStream.on('finish', resolve);
+        });
+
+        // Process the downloaded video using ffmpeg.
         return new Promise((resolve, reject) => {
-            let finished = false; // Prevent multiple resolutions.
-            const outputStream = new PassThrough(); // Stream to capture FFmpeg output.
-            const chunks: Buffer[] = []; // Buffer to store data chunks.
+            let finished = false;
+            // Create a PassThrough stream to capture ffmpeg's output.
+            const outputStream = new PassThrough();
+            // Set output encoding to Base64 to easily collect the processed video data.
+            outputStream.setEncoding('base64');
+            const base64Chunks: string[] = [];
 
-            outputStream.on('data', (chunk: Buffer) => {
-                chunks.push(chunk);
-            });
-
-            outputStream.on('end', () => {
+            // Helper function to finalize the process and clean up.
+            const finishHandler = () => {
                 if (!finished) {
                     finished = true;
-                    resolve(Buffer.concat(chunks).toString('base64'));
+                    resolve(base64Chunks.join(''));
+                    // Delete the temporary file after processing.
+                    unlink(tempVideoPath, () => {});
                 }
-            });
+            };
 
-            outputStream.on('close', () => {
-                if (!finished) {
-                    finished = true;
-                    resolve(Buffer.concat(chunks).toString('base64'));
-                }
+            // Accumulate the Base64-encoded data chunks from the ffmpeg output.
+            outputStream.on('data', (chunk: string) => {
+                base64Chunks.push(chunk);
             });
+            outputStream.on('end', finishHandler);
+            outputStream.on('close', finishHandler);
 
-            ffmpeg(videoUrl) // Start processing the video from the URL.
-                .videoFilters('scale=iw/2:ih/2') // Scale both width and height to half.
+            // Execute ffmpeg on the temporary file.
+            ffmpeg(tempVideoPath)
+                // Apply the scaling filter to resize the video to half its width and height.
+                .videoFilters('scale=iw/2:ih/2')
+                // Set encoding options for output video.
                 .outputOptions([
-                    '-c:v libx264', // Use the H.264 codec.
-                    '-b:v 400k', // Set the target video bitrate.
-                    '-maxrate 500k', // Limit the maximum video bitrate.
-                    '-bufsize 1000k',
-                    '-preset medium',
-                    '-crf 35', // Use a higher CRF for a smaller file size.
-                    '-r 15',
-                    '-movflags frag_keyframe+empty_moov', // Make MP4 work for streaming.
+                    '-c:v libx264', // Use H.264 codec for video encoding.
+                    '-b:v 400k', // Set target video bitrate.
+                    '-maxrate 500k', // Maximum allowed bitrate.
+                    '-bufsize 1000k', // Buffer size for bitrate control.
+                    '-preset medium', // Encoding preset for balance between speed and quality.
+                    '-crf 35', // Quality setting (lower values give higher quality).
+                    '-r 15', // Set frame rate to 15 fps.
+                    '-movflags frag_keyframe+empty_moov', // Optimize MP4 for streaming.
                 ])
                 .format('mp4')
                 .on('error', (err) => {
-                    // Ignore "Output stream closed" error if data was received.
+                    // If there is an "Output stream closed" error and some data was received, try to finish.
                     if (
                         err.message.includes('Output stream closed') &&
-                        chunks.length > 0
+                        base64Chunks.length > 0
                     ) {
-                        if (!finished) {
-                            finished = true;
-                            resolve(Buffer.concat(chunks).toString('base64'));
-                        }
+                        finishHandler();
                     } else {
                         if (!finished) {
                             finished = true;
@@ -81,12 +109,12 @@ export class GoogleGeminiService {
                         }
                     }
                 })
+                // Pipe the processed data directly into our output stream.
                 .pipe(outputStream, { end: true });
         });
     }
 
     public async getAdAnalysis(videoUrl: string): Promise<AdAnalysis> {
-        console.log(`[GoogleGeminiService:getAdAnalysis] called`);
         try {
             const schema = {
                 description: 'Standardized description of the ad',
@@ -125,9 +153,9 @@ export class GoogleGeminiService {
 
             // textTranscript: Provide a word-for-word transcript of all spoken dialogue in the ad. Do not alter any words, and do not add or omit anything.
 
-            // description: Provide an extremely detailed, second-by-second play-by-play of the entire video. Focus on consistency and objectivity. Use the same wording to describe each subject every time it appears, with no synonyms or rewording. For example, if you initially say “a middle-aged man wearing a green polo shirt,” continue to refer to him exactly as “the middle-aged man wearing a green polo shirt” throughout. Describe everything you see or hear (text on screen, visuals, clothing, people, vehicles, backgrounds, brand elements, camera angles, music, voiceover characteristics, sound effects, and so on) in a strictly methodical, chronological order. Include no personal opinions or interpretations; only state observable facts. Provide the same level of detail for every second or change of scene.
+            // description: Provide an extremely detailed, second-by-second play-by-play of the entire video. Focus on consistency and objectivity. Use the same wording to describe each subject every time it appears, with no synonyms or rewording. For example, if you initially say "a middle-aged man wearing a green polo shirt," continue to refer to him exactly as "the middle-aged man wearing a green polo shirt" throughout. Describe everything you see or hear (text on screen, visuals, clothing, people, vehicles, backgrounds, brand elements, camera angles, music, voiceover characteristics, sound effects, and so on) in a strictly methodical, chronological order. Include no personal opinions or interpretations; only state observable facts. Provide the same level of detail for every second or change of scene.
 
-            // hook: Provide only the first line (spoken or displayed) that is intended to catch the viewer’s attention.
+            // hook: Provide only the first line (spoken or displayed) that is intended to catch the viewer's attention.
 
             // Do not include formatting of any kind, such as bold, italics, line breaks, or bullet points. Use plain text only. The output must always follow this exact structure for every response, with the same approach and the same descriptive terms for repeated runs of the same video.`;
 
@@ -139,14 +167,14 @@ export class GoogleGeminiService {
             //    - Spell words exactly as heard, even if they are grammatically incorrect.
 
             // 2) description: A moment-by-moment, event-by-event account of everything observable, from start to finish.
-            //    - Assign fixed labels for recurring elements (e.g., “Person A,” “Person B,” “Vehicle 1,” “Sign 1”).
-            //    - If there is a male speaker in a green shirt, always refer to him exactly as “Person A (male in green shirt).” Do not alter this phrase (no synonyms, rephrasing, or variations).
+            //    - Assign fixed labels for recurring elements (e.g., "Person A," "Person B," "Vehicle 1," "Sign 1").
+            //    - If there is a male speaker in a green shirt, always refer to him exactly as "Person A (male in green shirt)." Do not alter this phrase (no synonyms, rephrasing, or variations).
             //    - Describe each visible or audible element in the same consistent order every time. For example, always note the background setting first, then the person in frame, then clothing details, etc.
-            //    - Instead of exact timestamps, use sequential phrases like “At the start,” “Next,” “Following that,” “Immediately afterward,” “Later,” “Toward the end,” to convey the timeline without referencing seconds.
+            //    - Instead of exact timestamps, use sequential phrases like "At the start," "Next," "Following that," "Immediately afterward," "Later," "Toward the end," to convey the timeline without referencing seconds.
             //    - If you cannot be certain of a detail, write [UNKNOWN]. Do not guess or infer.
             //    - Do not incorporate any personal opinions, emotive language, or interpretation. Only objective facts.
 
-            // 3) hook: The very first line of text or spoken audio that is intended to grab the viewer’s attention.
+            // 3) hook: The very first line of text or spoken audio that is intended to grab the viewer's attention.
             //    - Provide it verbatim, with no additional words or commentary.
 
             // Important rules:
@@ -166,7 +194,7 @@ export class GoogleGeminiService {
 
             const prompt = `I want you to analyze this roofing video ad give me a standardized description.
 
-Provide an extremely detailed, moment-by-moment play-by-play of the entire video, from start to finish. Use sequential phrases like “At the start,” “Next,” “Following that,” “Immediately afterward,” “Later,” “Toward the end” to convey the timeline without referencing exact seconds. Maintain strict consistency and objectivity by using the same words or labels for each subject every time they appear (no synonyms or alternate wording). 
+Provide an extremely detailed, moment-by-moment play-by-play of the entire video, from start to finish. Use sequential phrases like "At the start," "Next," "Following that," "Immediately afterward," "Later," "Toward the end" to convey the timeline without referencing exact seconds. Maintain strict consistency and objectivity by using the same words or labels for each subject every time they appear (no synonyms or alternate wording). 
 
 Always describe each element in the same order: 
 1) Background or setting 

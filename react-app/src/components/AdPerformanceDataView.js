@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from 'react';
-// adjust the import path below based on your project structure
 import { getAdPerformanceFirestoreAll } from '../firebase.js';
 import { formatCurrency, formatROI } from '../helpers.js';
 import VideoPreviewPlayer from './VideoPreviewPlayer.js';
-// Shared styles for cards
+
 const cardStyles = {
     container: {
         backgroundColor: '#f8f9fa',
@@ -66,7 +65,6 @@ const MetricsGroup = ({ groupName, data }) => (
     </div>
 );
 
-// Displays a metrics card for a given platform (Facebook or Google Analytics)
 const MetricsCard = ({ title, data }) => (
     <div style={cardStyles.container}>
         <div style={cardStyles.header}>{title}</div>
@@ -76,7 +74,6 @@ const MetricsCard = ({ title, data }) => (
     </div>
 );
 
-// Displays the ad information
 const AdInfoCard = ({ ad }) => (
     <div style={cardStyles.container}>
         <div style={cardStyles.header}>Ad Information</div>
@@ -118,10 +115,12 @@ const AdInfoCard = ({ ad }) => (
             <span style={cardStyles.label}>FB Ad Set ID:</span>
             <span style={cardStyles.value}>{ad.fbAdSetId}</span>
         </div>
+        <div style={{ marginTop: '15px' }}>
+            <VideoPreviewPlayer videoUrl={ad.gDriveDownloadUrl} />
+        </div>
     </div>
 );
 
-// Expanded row component showing detailed metrics, ad info, and video player using PreviewVideoPlayer
 const ExpandedAdRow = ({ metrics, ad }) => (
     <>
         <div
@@ -135,13 +134,9 @@ const ExpandedAdRow = ({ metrics, ad }) => (
             <MetricsCard title="Google Analytics Metrics" data={metrics?.ga} />
             <AdInfoCard ad={ad} />
         </div>
-        <div style={{ marginTop: '20px' }}>
-            <VideoPreviewPlayer videoUrl={ad.gDriveDownloadUrl} />
-        </div>
     </>
 );
 
-// Single table row for an ad (clickable to expand for details)
 const AdRow = ({ ad }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const cellStyle = {
@@ -202,7 +197,6 @@ const AdRow = ({ ad }) => {
     );
 };
 
-// Main component for fetching and displaying ad performance data
 function AdPerformanceDataView() {
     const [adData, setAdData] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -223,7 +217,6 @@ function AdPerformanceDataView() {
         fetchData();
     }, []);
 
-    // Styling for layout, table, and headings
     const containerStyle = {
         fontFamily: '"Segoe UI", Tahoma, Geneva, Verdana, sans-serif',
         boxSizing: 'border-box',

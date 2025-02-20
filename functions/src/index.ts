@@ -230,7 +230,7 @@ export const watchCloudStorageUploads = onObjectFinalized(async (event) => {
 
 export const scrapeAdsScheduled = onSchedule(
     // 14:00 UTC is 7:00 PDT
-    { schedule: 'every day 14:00', timeoutSeconds: 540 },
+    { schedule: 'every day 14:00', timeoutSeconds: 540, memory: '2GiB' },
     async () => {
         const googleGeminiService = new GoogleGeminiService(
             process.env.GOOGLE_GEMINI_API_KEY || ''
@@ -238,17 +238,26 @@ export const scrapeAdsScheduled = onSchedule(
         const openAiService = new OpenAiService(
             process.env.OPENAI_API_KEY || ''
         );
+        const skypeService = new SkypeService(
+            process.env.MICROSOFT_APP_ID || '',
+            process.env.MICROSOFT_APP_PASSWORD || ''
+        );
         const apifyService = new ApifyService(
             process.env.APIFY_API_TOKEN || '',
             googleGeminiService,
-            openAiService
+            openAiService,
+            skypeService
         );
         await apifyService.execute();
     }
 );
 
 export const updateAdPerformanceScheduled = onSchedule(
-    { schedule: 'every 1 hours', timeoutSeconds: 540 },
+    {
+        schedule: 'every 1 hours',
+        timeoutSeconds: 540,
+        memory: '1GiB',
+    },
     async () => {
         try {
             const creatomateService = await CreatomateService.create(
@@ -316,7 +325,7 @@ export const syncAdPerformance = onDocumentWritten(
 
 // Called from Google Apps Script
 export const createFbAdHttp = onRequest(
-    { timeoutSeconds: 540 },
+    { timeoutSeconds: 540, memory: '1GiB' },
     async (req, res) => {
         try {
             // Validate required request body parameters
@@ -570,10 +579,15 @@ export const handleApifyRequestHttp_TEST = onRequest(
         const openAiService = new OpenAiService(
             process.env.OPENAI_API_KEY || ''
         );
+        const skypeService = new SkypeService(
+            process.env.MICROSOFT_APP_ID || '',
+            process.env.MICROSOFT_APP_PASSWORD || ''
+        );
         const apifyService = new ApifyService(
             process.env.APIFY_API_TOKEN || '',
             googleGeminiService,
-            openAiService
+            openAiService,
+            skypeService
         );
         await apifyService.execute();
         res.status(200).json({ success: true });
@@ -706,6 +720,7 @@ export const duplicateAdSetAndAdToCampaignHttp_TEST = onRequest(
                 metaAdCreatorService,
                 20000
             );
+            res.status(200).json({ success: true });
 
             return;
         } catch (error) {
