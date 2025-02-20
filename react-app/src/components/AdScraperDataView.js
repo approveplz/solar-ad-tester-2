@@ -13,7 +13,6 @@ function UnprocessedVideoCard({
     onConfirmDuplicate,
     onNotADuplicate,
     onUseAsAd,
-    onDontUseAsAd,
     onSave,
 }) {
     const { scrapedAdDataFirestore, uiState } = videoDataItem;
@@ -61,6 +60,16 @@ function UnprocessedVideoCard({
                         <strong>Formatted Start Time:</strong> <br />
                         {scrapedAdDataFirestore.formattedStartTime}
                     </p>
+                    <p>
+                        <strong>Ad Running For:</strong> <br />
+                        {Math.floor(
+                            (Date.now() -
+                                scrapedAdDataFirestore.startTimeUnixSeconds *
+                                    1000) /
+                                (1000 * 60 * 60 * 24)
+                        )}{' '}
+                        days
+                    </p>
 
                     <div
                         style={{
@@ -69,7 +78,7 @@ function UnprocessedVideoCard({
                             marginBottom: '8px',
                         }}
                     >
-                        {uiState.isDuplicateHandled ? (
+                        {uiState.duplicateStatus.processed ? (
                             <span
                                 style={{
                                     backgroundColor: '#28a745',
@@ -137,42 +146,62 @@ function UnprocessedVideoCard({
                         )}
                     </div>
                     <div style={{ display: 'flex', gap: '8px' }}>
-                        <button
-                            onClick={() =>
-                                onUseAsAd(
-                                    scrapedAdDataFirestore.videoIdentifier
-                                )
-                            }
-                            style={{
-                                ...buttonStyle,
-                                backgroundColor: 'green',
-                                color: '#fff',
-                            }}
-                        >
-                            Use as Ad
-                        </button>
-                        <button
-                            onClick={() =>
-                                onDontUseAsAd(
-                                    scrapedAdDataFirestore.videoIdentifier
-                                )
-                            }
-                            style={{
-                                ...buttonStyle,
-                                backgroundColor: 'red',
-                                color: '#fff',
-                            }}
-                        >
-                            Don't Use as Ad
-                        </button>
+                        {uiState.isAdUsageHandled ? (
+                            <span
+                                style={{
+                                    backgroundColor: '#28a745',
+                                    color: '#fff',
+                                    padding: '8px 12px',
+                                    borderRadius: '4px',
+                                }}
+                            >
+                                Ad Usage Status Updated{' '}
+                                <span style={{ marginLeft: '4px' }}>✓</span>
+                            </span>
+                        ) : (
+                            <button
+                                disabled={!uiState.duplicateStatus.processed}
+                                onClick={() =>
+                                    onUseAsAd(
+                                        videoDataItem.scrapedAdDataFirestore
+                                            .videoIdentifier,
+                                        uiState.duplicateStatus.originalVideoId
+                                    )
+                                }
+                                style={{
+                                    ...buttonStyle,
+                                    backgroundColor: !uiState.duplicateStatus
+                                        .processed
+                                        ? '#ccc'
+                                        : 'green',
+                                    color: !uiState.duplicateStatus.processed
+                                        ? '#666'
+                                        : '#fff',
+                                    cursor: !uiState.duplicateStatus.processed
+                                        ? 'not-allowed'
+                                        : 'pointer',
+                                }}
+                            >
+                                Use as Ad
+                            </button>
+                        )}
                     </div>
                     <div style={{ marginTop: '12px' }}>
                         <button
+                            disabled={!uiState.duplicateStatus.processed}
                             onClick={onSave}
                             style={{
                                 ...buttonStyle,
-                                backgroundColor: '#007BFF',
-                                color: '#fff',
+                                backgroundColor: !uiState.duplicateStatus
+                                    .processed
+                                    ? '#ccc'
+                                    : '#007BFF',
+                                color: !uiState.duplicateStatus.processed
+                                    ? '#666'
+                                    : '#fff',
+                                cursor: !uiState.duplicateStatus.processed
+                                    ? 'not-allowed'
+                                    : 'pointer',
                             }}
                         >
                             Save
@@ -216,6 +245,10 @@ function UnprocessedVideoCard({
                                     <strong>Similarity Score:</strong>
                                     <br />
                                     {neighbor.similarityScore}
+                                </p>
+                                <p>
+                                    <strong>Used for FB ad:</strong> <br />
+                                    {neighbor.isUsedForAd ? 'Yes' : 'No'}
                                 </p>
                             </div>
                         ))}
@@ -264,12 +297,21 @@ function ArchiveVideoCard({ video }) {
 
 function AdScraperDataView() {
     const [videoData, setVideoData] = useState([]);
+    const [loading, setLoading] = useState(false);
     const videoIdentifiersToDelete = useRef([]);
     const videoIdentifiersToUpdate = useRef({});
+    const videoIdentifiersToUseAsAd = useRef([]);
 
     const getNearestNeighbors = (firestoreData, scrapedAdsFirestore, topK) => {
         const currentEmbedding = firestoreData.descriptionEmbedding;
-        const neighbors = scrapedAdsFirestore.map((scrapedAd) => {
+
+        // Filter out the current video from the scraped ads list.
+        const filteredAds = scrapedAdsFirestore.filter(
+            (scrapedAd) =>
+                scrapedAd.videoIdentifier !== firestoreData.videoIdentifier
+        );
+
+        const neighbors = filteredAds.map((scrapedAd) => {
             const similarityScore = getCosineSimilarity(
                 currentEmbedding,
                 scrapedAd.descriptionEmbedding
@@ -278,16 +320,15 @@ function AdScraperDataView() {
                 similarityScore,
                 videoIdentifier: scrapedAd.videoIdentifier,
                 processed: scrapedAd.processed,
+                isUsedForAd: scrapedAd.isUsedForAd,
             };
         });
 
         neighbors.sort((a, b) => {
             const scoreDiff = b.similarityScore - a.similarityScore;
-            if (Math.abs(scoreDiff) < 0.05) {
-                // If similarity scores are nearly equal (difference less than 0.05),
-                // prioritize items with processed === true.
+            if (Math.abs(scoreDiff) < 0.15) {
                 if (a.processed === b.processed) {
-                    return 0;
+                    return scoreDiff;
                 }
                 return a.processed ? -1 : 1;
             }
@@ -297,35 +338,47 @@ function AdScraperDataView() {
         return neighbors.slice(0, topK);
     };
 
-    // Extract the data fetching logic into its own function.
+    // Update loadData to show loading indicators during the data fetch
     const loadData = useCallback(async () => {
-        const scrapedAdsFirestore = await getScrapedAdsFirestoreAll();
-        const combinedData = scrapedAdsFirestore.map((firestoreData) => {
-            const nearestNeighbors = getNearestNeighbors(
-                firestoreData,
-                scrapedAdsFirestore,
-                2
-            );
+        setLoading(true);
+        try {
+            const scrapedAdsFirestore = await getScrapedAdsFirestoreAll();
+            const combinedData = scrapedAdsFirestore.map((firestoreData) => {
+                const nearestNeighbors = getNearestNeighbors(
+                    firestoreData,
+                    scrapedAdsFirestore,
+                    2
+                );
 
-            const nearestNeighborsVideoIdentifiers = nearestNeighbors.map(
-                (neighbor) => ({
-                    videoIdentifier: neighbor.videoIdentifier,
-                    processed: neighbor.processed,
-                    similarityScore: neighbor.similarityScore,
-                })
-            );
-            return {
-                scrapedAdDataFirestore: firestoreData,
-                uiState: {
-                    isDuplicateHandled: false,
-                    nearestNeighbors: nearestNeighborsVideoIdentifiers,
-                },
-            };
-        });
-        setVideoData(combinedData);
+                const nearestNeighborsVideoIdentifiers = nearestNeighbors.map(
+                    (neighbor) => ({
+                        videoIdentifier: neighbor.videoIdentifier,
+                        processed: neighbor.processed,
+                        similarityScore: neighbor.similarityScore,
+                        isUsedForAd: neighbor.isUsedForAd,
+                    })
+                );
+                return {
+                    scrapedAdDataFirestore: firestoreData,
+                    uiState: {
+                        duplicateStatus: {
+                            processed: false,
+                            originalVideoId: null,
+                            type: null,
+                        },
+                        nearestNeighbors: nearestNeighborsVideoIdentifiers,
+                        isAdUsageHandled: false,
+                    },
+                };
+            });
+            setVideoData(combinedData);
+        } catch (error) {
+            console.error('Error loading data:', error);
+        } finally {
+            setLoading(false);
+        }
     }, []);
 
-    // Call loadData when the component mounts.
     useEffect(() => {
         loadData();
     }, [loadData]);
@@ -355,15 +408,19 @@ function AdScraperDataView() {
 
         setVideoData((prevData) => {
             return prevData.map((item) => {
-                const { scrapedAdDataFirestore } = item;
                 if (
-                    scrapedAdDataFirestore.videoIdentifier === videoIdentifier
+                    item.scrapedAdDataFirestore.videoIdentifier ===
+                    videoIdentifier
                 ) {
                     return {
                         ...item,
                         uiState: {
                             ...item.uiState,
-                            isDuplicateHandled: true,
+                            duplicateStatus: {
+                                processed: true,
+                                originalVideoId: duplicateVideoIdentifier,
+                                type: 'duplicate',
+                            },
                         },
                     };
                 }
@@ -380,7 +437,7 @@ function AdScraperDataView() {
                     videoIdentifier
             ).scrapedAdDataFirestore
         );
-        scrapedAdDataFirestore.potentialDuplicateVideoIdentifiers = [];
+
         scrapedAdDataFirestore.processed = true;
 
         videoIdentifiersToUpdate.current[videoIdentifier] =
@@ -396,7 +453,11 @@ function AdScraperDataView() {
                         ...item,
                         uiState: {
                             ...item.uiState,
-                            isDuplicateHandled: true,
+                            duplicateStatus: {
+                                processed: true,
+                                originalVideoId: videoIdentifier,
+                                type: 'original',
+                            },
                         },
                     };
                 }
@@ -405,36 +466,113 @@ function AdScraperDataView() {
         );
     };
 
-    const handleUseAsAd = (videoIdentifier) => {
-        // TODO: Mark video as "Use as Ad".
+    const handleUseAsAd = async (videoIdentifier, videoIdentifierToUseAsAd) => {
+        videoIdentifiersToUseAsAd.current.push(videoIdentifierToUseAsAd);
+        setVideoData((prevData) =>
+            prevData.map((item) => {
+                if (
+                    item.scrapedAdDataFirestore.videoIdentifier ===
+                    videoIdentifier
+                ) {
+                    return {
+                        ...item,
+                        uiState: {
+                            ...item.uiState,
+                            isAdUsageHandled: true,
+                        },
+                    };
+                }
+                return item;
+            })
+        );
     };
 
-    const handleDontUseAsAd = (videoIdentifier) => {
-        // TODO: Mark video as "Don't Use as Ad".
+    const uploadVideoToGdriveIngestionFolder = async (videoIdentifier) => {
+        try {
+            const uploadVideoToGdriveIngestionFolderUrl =
+                'https://script.google.com/macros/s/AKfycbyLUySjI86tMvM1ZhQdAtkhR0rnu_jYNIByekhyGlM7DBBDnSBb3zmqQh17xRThSXEfyA/exec';
+            const videoDataItem = videoData.find(
+                (item) =>
+                    item.scrapedAdDataFirestore.videoIdentifier ===
+                    videoIdentifier
+            );
+            const videoUrl = videoDataItem.scrapedAdDataFirestore.url;
+
+            const fetchUrl = new URL(uploadVideoToGdriveIngestionFolderUrl);
+            fetchUrl.searchParams.append('fileUrl', videoUrl);
+            fetchUrl.searchParams.append('videoIdentifier', videoIdentifier);
+
+            const response = await fetch(fetchUrl);
+            if (!response.ok) {
+                throw new Error('Failed to upload video to Google Drive');
+            }
+            return videoIdentifier;
+        } catch (error) {
+            console.error('Error uploading video to Google Drive:', error);
+            return null;
+        }
     };
 
     const handleSave = async () => {
-        // Execute deletions in parallel
-        await Promise.all(
-            videoIdentifiersToDelete.current.map(async (videoIdentifier) =>
-                deleteScrapedAdFirestore(videoIdentifier)
-            )
-        );
-        videoIdentifiersToDelete.current = [];
+        setLoading(true);
+        try {
+            // Delete videos from firestore
+            await Promise.all(
+                videoIdentifiersToDelete.current.map(async (videoIdentifier) =>
+                    deleteScrapedAdFirestore(videoIdentifier)
+                )
+            );
+            videoIdentifiersToDelete.current = [];
 
-        // Execute updates in parallel
-        await Promise.all(
-            Object.keys(videoIdentifiersToUpdate.current).map(
-                async (videoIdentifier) =>
-                    saveScrapedAdFirestore(
-                        videoIdentifiersToUpdate.current[videoIdentifier]
-                    )
-            )
-        );
-        videoIdentifiersToUpdate.current = {};
+            // Update firestore with assigned duplicates
+            await Promise.all(
+                Object.keys(videoIdentifiersToUpdate.current).map(
+                    async (videoIdentifier) =>
+                        saveScrapedAdFirestore(
+                            videoIdentifiersToUpdate.current[videoIdentifier]
+                        )
+                )
+            );
+            videoIdentifiersToUpdate.current = {};
 
-        // Refresh data by calling loadData directly
-        await loadData();
+            // Upload videos to Google Drive Ingestion Folder to create ads
+            const successfullyUploadedVideoIdentifiers = await Promise.all(
+                videoIdentifiersToUseAsAd.current.map(async (videoIdentifier) =>
+                    uploadVideoToGdriveIngestionFolder(videoIdentifier)
+                )
+            );
+
+            console.log({ successfullyUploadedVideoIdentifiers });
+
+            await Promise.all(
+                successfullyUploadedVideoIdentifiers.map(
+                    async (videoIdentifier) => {
+                        const scrapedAdDataFirestoreOfVideoToUseAsAd =
+                            structuredClone(
+                                videoData.find(
+                                    (item) =>
+                                        item.scrapedAdDataFirestore
+                                            .videoIdentifier === videoIdentifier
+                                ).scrapedAdDataFirestore
+                            );
+                        scrapedAdDataFirestoreOfVideoToUseAsAd.isUsedForAd = true;
+                        scrapedAdDataFirestoreOfVideoToUseAsAd.processed = true;
+                        return saveScrapedAdFirestore(
+                            scrapedAdDataFirestoreOfVideoToUseAsAd
+                        );
+                    }
+                )
+            );
+
+            videoIdentifiersToUseAsAd.current = [];
+
+            // Refresh data after saving
+            await loadData();
+        } catch (error) {
+            console.error('Error during save:', error);
+        } finally {
+            setLoading(false);
+        }
     };
 
     // Group unprocessed videos by company using pageName
@@ -471,45 +609,83 @@ function AdScraperDataView() {
         }, {});
 
     return (
-        <div style={{ padding: '20px', minWidth: '1000px', margin: '0 auto' }}>
-            <div style={{ marginBottom: '40px' }}>
-                <h2>Unprocessed Videos </h2>
-                {Object.keys(unprocessedVideosByPage).map((pageName) => (
-                    <div key={pageName} style={{ marginBottom: '24px' }}>
-                        <h3>{pageName}</h3>
-                        <div
-                            style={{
-                                display: 'flex',
-                                flexDirection: 'column',
-                            }}
-                        >
-                            {unprocessedVideosByPage[pageName].map((item) => (
-                                <UnprocessedVideoCard
-                                    key={
-                                        item.scrapedAdDataFirestore
-                                            .videoIdentifier
-                                    }
-                                    videoDataItem={item}
-                                    allVideoData={videoData}
-                                    onConfirmDuplicate={handleConfirmDuplicate}
-                                    onNotADuplicate={handleNotADuplicate}
-                                    onUseAsAd={handleUseAsAd}
-                                    onDontUseAsAd={handleDontUseAsAd}
-                                    onSave={handleSave}
-                                />
-                            ))}
-                        </div>
+        <div>
+            {loading && (
+                <div
+                    style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: '100%',
+                        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 10000,
+                    }}
+                >
+                    <div
+                        style={{
+                            backgroundColor: '#fff',
+                            padding: '20px 40px',
+                            borderRadius: '8px',
+                            boxShadow: '0 4px 10px rgba(0,0,0,0.2)',
+                            fontSize: '24px',
+                            fontWeight: 'bold',
+                        }}
+                    >
+                        Loading...
                     </div>
-                ))}
-            </div>
+                </div>
+            )}
+            <div
+                style={{
+                    padding: '20px',
+                    minWidth: '1000px',
+                    margin: '0 auto',
+                }}
+            >
+                <div style={{ marginBottom: '40px' }}>
+                    <h2>Unprocessed Videos </h2>
+                    {Object.keys(unprocessedVideosByPage).map((pageName) => (
+                        <div key={pageName} style={{ marginBottom: '24px' }}>
+                            <h3>{pageName}</h3>
+                            <div
+                                style={{
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                }}
+                            >
+                                {unprocessedVideosByPage[pageName].map(
+                                    (item) => (
+                                        <UnprocessedVideoCard
+                                            key={
+                                                item.scrapedAdDataFirestore
+                                                    .videoIdentifier
+                                            }
+                                            videoDataItem={item}
+                                            allVideoData={videoData}
+                                            onConfirmDuplicate={
+                                                handleConfirmDuplicate
+                                            }
+                                            onNotADuplicate={
+                                                handleNotADuplicate
+                                            }
+                                            onUseAsAd={handleUseAsAd}
+                                            onSave={handleSave}
+                                        />
+                                    )
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                </div>
 
-            {/* Archive Section */}
-            <div>
-                <h2>Archive (Processed Videos)</h2>
-                {Object.keys(processedVideosByPage).length === 0 ? (
-                    <p>No processed videos.</p>
-                ) : (
-                    Object.keys(processedVideosByPage).map((pageName) => (
+                {/* Archive Section */}
+                <div>
+                    <h2>Archive (Processed Videos)</h2>
+                    {Object.keys(processedVideosByPage).map((pageName) => (
                         <div key={pageName} style={{ marginBottom: '24px' }}>
                             <h3>{pageName}</h3>
                             <div
@@ -530,8 +706,8 @@ function AdScraperDataView() {
                                 ))}
                             </div>
                         </div>
-                    ))
-                )}
+                    ))}
+                </div>
             </div>
         </div>
     );
