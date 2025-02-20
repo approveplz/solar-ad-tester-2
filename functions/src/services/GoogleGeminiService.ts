@@ -9,20 +9,9 @@ const ffmpegPath = ffmpegPathImport as unknown as string;
 ffmpeg.setFfmpegPath(ffmpegPath);
 
 export interface AdAnalysis {
-    textTranscript: string;
     description: string;
-    hook: string;
 }
 
-export interface DuplicateVideoCheck {
-    isVideoDuplicate: boolean;
-    duplicateVideoIdentifier?: string;
-    duplicateVideoReasoning: string;
-    confidence: number;
-}
-/*
-Not Currently being used
-*/
 export class GoogleGeminiService {
     private generativeAI: GoogleGenerativeAI;
 
@@ -96,131 +85,104 @@ export class GoogleGeminiService {
         });
     }
 
-    async compareVideosToConfirmDuplicate(
-        mainVideoUrl: string,
-        duplicateVideoUrl: string
-    ): Promise<boolean> {
-        console.log(
-            `[GoogleGeminiService:compareVideosToConfirmDuplicate] Called with mainVideoUrl: ${mainVideoUrl}, duplicateVideoUrl: ${duplicateVideoUrl}`
-        );
-        try {
-            const schema = {
-                description: 'Duplicate video check',
-                type: SchemaType.OBJECT,
-                properties: {
-                    isVideoDuplicate: {
-                        type: SchemaType.BOOLEAN,
-                        description: 'Whether the video is a duplicate',
-                        nullable: false,
-                    },
-                },
-                required: ['isVideoDuplicate'],
-            };
-
-            const compareTwoVideosPrompt = `
-                You are an expert in video content analysis, specializing in duplicate detection. Your task is to determine if two very similar videos are identical or variations of the same promotion.
-                Compare Video A and Video B. Both videos present the same roofing offer or promotion. Determine if they are the identical advertisement, or if they are variations of the same promotion. Consider these factors rigorously:
-
-                Visual Identity: Are the exact same scenes used in the same order? Check for differences in intro/outro screens, text overlays, and any visual elements, no matter how small.
-
-                Audio Identity: Are the exact same voiceovers used, word for word? Compare background music, sound effects, and audio quality for any discrepancies.
-
-                Specific Script/Messaging: Even if the core offer is the same, does the specific wording used to present the offer vary? Are different examples given, or different claims made?
-
-                Presenters/Actors: Are the same EXACT people featured throughout both videos? Are there the same number of people doing EXACTLY the same thing? Different presenters always indicate different ads.
-
-                The videos are only considered identical if all of these factors are perfectly consistent. If any discrepancies are detected, isDuplicateVideo should be false.
-                `;
-
-            const mainVideoData = await this.downscaleVideo(mainVideoUrl);
-            const mainVideoPayload = {
-                inlineData: {
-                    data: mainVideoData,
-                    mimeType: 'video/mp4',
-                },
-            };
-            const duplicateVideoData = await this.downscaleVideo(
-                duplicateVideoUrl
-            );
-            const duplicateVideoPayload = {
-                inlineData: {
-                    data: duplicateVideoData,
-                    mimeType: 'video/mp4',
-                },
-            };
-
-            const model = this.generativeAI.getGenerativeModel({
-                model: 'gemini-2.0-flash',
-                generationConfig: {
-                    responseMimeType: 'application/json',
-                    responseSchema: schema,
-                },
-            });
-
-            const result = await model.generateContent([
-                compareTwoVideosPrompt,
-                mainVideoPayload,
-                duplicateVideoPayload,
-            ]);
-            const compareVideosResponseJson = result.response.text();
-            const compareVideosResponseObj = JSON.parse(
-                compareVideosResponseJson
-            );
-            return compareVideosResponseObj.isVideoDuplicate;
-        } catch (error) {
-            console.error(
-                '[GoogleGeminiService:compareVideosToConfirmDuplicate] Error:',
-                error
-            );
-            throw error;
-        }
-    }
-
     public async getAdAnalysis(videoUrl: string): Promise<AdAnalysis> {
         console.log(`[GoogleGeminiService:getAdAnalysis] called`);
         try {
             const schema = {
-                description: 'Ad transcript and type info',
+                description: 'Standardized description of the ad',
                 type: SchemaType.OBJECT,
                 properties: {
-                    textTranscript: {
+                    description: {
                         type: SchemaType.STRING,
                         description: 'Transcript of the ad',
                         nullable: false,
                     },
-                    description: {
-                        type: SchemaType.STRING,
-                        description: 'Description of the ad',
-                        nullable: false,
-                    },
-                    hook: {
-                        type: SchemaType.STRING,
-                        description: 'The hook of the ad',
-                        nullable: false,
-                    },
                 },
-                required: ['textTranscript', 'description', 'hook'],
+                required: ['description'],
             };
 
-            const prompt = `I want you to analyze this roofing video ad. Do NOT include formatting in your response, including bold, or newlines.
+            // const prompt = `I want you to analyze this roofing video ad. Do NOT include formatting in your response, including bold, or newlines.
 
-            I want you to return the transcript of the ad word for word, in the textTranscript section.
-            
-            I want you to create an EXTREMELY detailed, second-by-second play-by-play description of what happens in the ad, in the description section. Explain this video to someone who has never seen it before, as if they are completely blind and rely solely on your description.
-            
-            Include absolutely *all* details, no matter how small they may seem. This includes:
-            
-            *   **Specific wording of all text on screen:** Note the font, color, size, and how it animates or appears.
-            *   **Visuals described in excruciating detail:** Clothing (colors, styles, materials, specific articles), setting (indoor/outdoor, time of day, architectural details, weather conditions), demographics of people shown (age, gender, ethnicity, apparent mood, facial expressions, body language, specific actions, interactions), objects present, vehicles (make, model, color), animals, and any notable details about these visuals.
-            *   **Sound:** Describe all sounds including music (genre, tempo, instrumentation, mood), voiceovers (tone, gender, accent), sound effects (specific sounds, when they occur, their intensity), and background noise.
-            *   **Camera movements:** Note camera angles (close-up, wide shot, medium shot), camera movements (panning, tilting, zooming), and any special effects (slow motion, fast motion, transitions).
-            *   **Sequence of events:** Detail the exact order in which everything happens, including cuts between scenes and the duration of each shot (if you can estimate).
-            *   **Branding:** Note any logos, brand colors, or other branding elements that appear.
-            
-            Do not include timestamps in your description. Aim for maximum detail and length. Imagine you are providing a highly detailed narration for a visually impaired person.
-            
-            I want you to return the exact text of the hook of the ad, in the hook section. Ensure the hook is the very first line spoken or displayed that is intended to grab the viewer's attention.
-            `;
+            // I want you to return the transcript of the ad word for word, in the textTranscript section.
+
+            // I want you to create an EXTREMELY detailed, second-by-second play-by-play description of what happens in the ad, in the description section. Explain this video to someone who has never seen it before, as if they are completely blind and rely solely on your description.
+
+            // Include absolutely *all* details, no matter how small they may seem. This includes:
+
+            // *   **Specific wording of all text on screen:** Note the font, color, size, and how it animates or appears.
+            // *   **Visuals described in excruciating detail:** Clothing (colors, styles, materials, specific articles), setting (indoor/outdoor, time of day, architectural details, weather conditions), demographics of people shown (age, gender, ethnicity, apparent mood, facial expressions, body language, specific actions, interactions), objects present, vehicles (make, model, color), animals, and any notable details about these visuals.
+            // *   **Sound:** Describe all sounds including music (genre, tempo, instrumentation, mood), voiceovers (tone, gender, accent), sound effects (specific sounds, when they occur, their intensity), and background noise.
+            // *   **Camera movements:** Note camera angles (close-up, wide shot, medium shot), camera movements (panning, tilting, zooming), and any special effects (slow motion, fast motion, transitions).
+            // *   **Sequence of events:** Detail the exact order in which everything happens, including cuts between scenes and the duration of each shot (if you can estimate).
+            // *   **Branding:** Note any logos, brand colors, or other branding elements that appear.
+
+            // Do not include timestamps in your description. Aim for maximum detail and length. Imagine you are providing a highly detailed narration for a visually impaired person.
+
+            // I want you to return the exact text of the hook of the ad, in the hook section. Ensure the hook is the very first line spoken or displayed that is intended to grab the viewer's attention.
+            // `;
+
+            //             const prompt = `I want you to analyze this roofing video ad and produce a JSON-style response containing three keys: textTranscript, description, and hook.
+
+            // textTranscript: Provide a word-for-word transcript of all spoken dialogue in the ad. Do not alter any words, and do not add or omit anything.
+
+            // description: Provide an extremely detailed, second-by-second play-by-play of the entire video. Focus on consistency and objectivity. Use the same wording to describe each subject every time it appears, with no synonyms or rewording. For example, if you initially say “a middle-aged man wearing a green polo shirt,” continue to refer to him exactly as “the middle-aged man wearing a green polo shirt” throughout. Describe everything you see or hear (text on screen, visuals, clothing, people, vehicles, backgrounds, brand elements, camera angles, music, voiceover characteristics, sound effects, and so on) in a strictly methodical, chronological order. Include no personal opinions or interpretations; only state observable facts. Provide the same level of detail for every second or change of scene.
+
+            // hook: Provide only the first line (spoken or displayed) that is intended to catch the viewer’s attention.
+
+            // Do not include formatting of any kind, such as bold, italics, line breaks, or bullet points. Use plain text only. The output must always follow this exact structure for every response, with the same approach and the same descriptive terms for repeated runs of the same video.`;
+
+            //             const prompt = `I want you to analyze this roofing video ad and produce a JSON-style response with three fields: textTranscript, description, and hook. The output must always follow this exact schema:
+
+            // 1) textTranscript: A verbatim, word-for-word transcript of all spoken words.
+            //    - Do not omit or add any words.
+            //    - Use [UNKNOWN] if speech is unclear or indiscernible.
+            //    - Spell words exactly as heard, even if they are grammatically incorrect.
+
+            // 2) description: A moment-by-moment, event-by-event account of everything observable, from start to finish.
+            //    - Assign fixed labels for recurring elements (e.g., “Person A,” “Person B,” “Vehicle 1,” “Sign 1”).
+            //    - If there is a male speaker in a green shirt, always refer to him exactly as “Person A (male in green shirt).” Do not alter this phrase (no synonyms, rephrasing, or variations).
+            //    - Describe each visible or audible element in the same consistent order every time. For example, always note the background setting first, then the person in frame, then clothing details, etc.
+            //    - Instead of exact timestamps, use sequential phrases like “At the start,” “Next,” “Following that,” “Immediately afterward,” “Later,” “Toward the end,” to convey the timeline without referencing seconds.
+            //    - If you cannot be certain of a detail, write [UNKNOWN]. Do not guess or infer.
+            //    - Do not incorporate any personal opinions, emotive language, or interpretation. Only objective facts.
+
+            // 3) hook: The very first line of text or spoken audio that is intended to grab the viewer’s attention.
+            //    - Provide it verbatim, with no additional words or commentary.
+
+            // Important rules:
+            // - Do not use any formatting such as bold, italics, bullet points, headings, or newlines.
+            // - Use plain text only and follow the same sequence and sentence structure for each repeated run of the same video.
+            // - Never vary your wording, synonyms, or descriptions between runs. The same video should yield the exact same output every time.
+            // - If something is repeated in the video, use the same wording each time it appears.
+            // - Return your response in the following template:
+
+            // {
+            //   "textTranscript": "...",
+            //   "description": "...",
+            //   "hook": "..."
+            // }
+
+            // Do not add or remove any keys from the JSON.`;
+
+            const prompt = `I want you to analyze this roofing video ad give me a standardized description.
+
+Provide an extremely detailed, moment-by-moment play-by-play of the entire video, from start to finish. Use sequential phrases like “At the start,” “Next,” “Following that,” “Immediately afterward,” “Later,” “Toward the end” to convey the timeline without referencing exact seconds. Maintain strict consistency and objectivity by using the same words or labels for each subject every time they appear (no synonyms or alternate wording). 
+
+Always describe each element in the same order: 
+1) Background or setting 
+2) People in frame 
+3) Clothing details 
+4) Actions or expressions 
+5) On-screen text (font, color, size, animation) 
+6) Camera angles or movements 
+
+When describing people:
+- Provide specific physical details (gender, approximate complexion, hair style/color, attire) in exactly the same format each time they appear.  
+- If the attire or hair appears different in another shot, do not guess. Use [UNKNOWN] unless you are absolutely certain.  
+- If you cannot determine a detail, write [UNKNOWN]. Do not guess or infer.  
+If the same background is shown repeatedly, use the same wording each time. Do not use synonyms.
+
+Do not include any formatting such as bold, italics, bullet points, or line breaks. Return plain text only.`;
 
             const model = this.generativeAI.getGenerativeModel({
                 model: 'gemini-2.0-flash',
@@ -247,126 +209,6 @@ export class GoogleGeminiService {
         } catch (error) {
             console.error(
                 `[GoogleGeminiService:getAdAnalysis] Error processing videoUrl`,
-                error
-            );
-            throw error;
-        }
-    }
-
-    public async checkIfDuplicateVideoByDescriptions(
-        videoUrl: string
-    ): Promise<DuplicateVideoCheck> {
-        console.log(
-            `[GoogleGeminiService:checkIfDuplicateVideoByDescriptions]`
-        );
-        try {
-            const schema = {
-                description: 'Duplicate video check',
-                type: SchemaType.OBJECT,
-                properties: {
-                    isVideoDuplicate: {
-                        type: SchemaType.BOOLEAN,
-                        description: 'Whether the video is a duplicate',
-                        nullable: false,
-                    },
-                    duplicateVideoIdentifier: {
-                        type: SchemaType.STRING,
-                        description:
-                            'The video identifier of the duplicate video',
-                        nullable: true,
-                    },
-                    duplicateVideoReasoning: {
-                        type: SchemaType.STRING,
-                        description: 'The reasoning for the duplicate video',
-                        nullable: false,
-                    },
-                    confidence: {
-                        type: SchemaType.NUMBER,
-                        description: 'The confidence score of the duplicate',
-                        nullable: false,
-                    },
-                },
-                required: [
-                    'isVideoDuplicate',
-                    'duplicateVideoIdentifier',
-                    'duplicateVideoReasoning',
-                    'confidence',
-                ],
-            };
-
-            const scrapedAdDataFirestore = await getScrapedAdsFirestoreAll();
-            const otherDescriptions = scrapedAdDataFirestore
-                .map(
-                    (ad) =>
-                        `VIDEO IDENTIFIER: ${ad.videoIdentifier}, VIDEO DESCRIPTION: ${ad.description}\n`
-                )
-                .join('\n');
-
-            const prompt = `
-            You are an expert in video content analysis, specializing in duplicate detection. Your task is to determine if the uploaded video is a duplicate of any of the OTHER VIDEOS based on their text descriptions.
-
-These are all roofing videos and will likely have the same offer, but your task is to identify EXACT duplicates, not just videos that are similar in topic.
-
-Here are the descriptions of the OTHER VIDEOS (formatted as VIDEO IDENTIFIER, VIDEO DESCRIPTION):
-${otherDescriptions}
-
-In 'isVideoDuplicate', return 'true' if the video is a duplicate of any of the other videos, and 'false' otherwise.
-
-CRITICAL: For duplicate detection, require ALL of the following criteria to match another ad in the other ad descriptions:
-
-Identical Visuals: Every scene must have the same actors (if applicable), clothing, setting, camera angles, lighting, and overall composition. **Specifically, ensure the individuals present are the EXACT same. Pay close attention to facial features, hair color/style, body type, and any distinguishing marks. Clothing must match identically, including color, style, and any patterns.**
-
-Identical Scene Sequence: The order of the scenes must be exactly the same.
-
-Matching Scene Duration: The duration of each corresponding scene must be approximately equal (within 1 second).
-
-Exact Textual Overlays and Narration: All on-screen text and spoken words must be identical. Minor differences in phrasing disqualify the video.
-
-'isVideoDuplicate: true' ONLY if ALL criteria match exactly. Even minor differences (e.g., a changed word, different shirt color, slightly different camera angle, different house, different worker, **different person even with similar traits**) make it 'false'.
-
-Be EXTREMELY CONFIDENT in your determination. Ask yourself these questions for each potential match:
-
-Am I absolutely certain beyond a reasonable doubt that the video is EXACTLY the same as another ad, and not just a similar variation?
-
-Are ALL aspects of every scene identical? Have I meticulously checked the visuals, scene sequence, duration, and text?
-
-Could there be any subtle differences in the actors, clothing, setting, lighting, camera angles, on-screen text, or narration? **Are the faces and bodies of the individuals demonstrably the same in every detail? Is the clothing absolutely identical?**
-
-If you have ANY doubt, return false.
-
-In 'confidence', return a number between 0 and 100, indicating your confidence in your determination. Assign a confidence score of 95 or higher ONLY if you are completely sure of your determination, and lower scores for less certain matches. If isVideoDuplicate is false, the confidence score should generally be high (e.g., 80 or higher) because you're confidently asserting non-duplication.
-
-In 'duplicateVideoIdentifier', specify the exact video identifier of the matching video, if applicable. If isVideoDuplicate is false, set this to null. Make sure the video identifier is EXACTLY the same as the one in the OTHER VIDEOS section and make sure it exists. There may be multiple other videos that are duplicates. Make sure you check all of these and ONLY return the video identifier of the video that MOST CLOSELY matches uploaded video.
-
-In 'duplicateVideoReasoning', provide a detailed and scene-specific explanation of why you believe the video is or is not a duplicate of the other video. Include specific details about the visuals, scene sequence, and textual elements that support your determination. For example: "Not a duplicate. While both videos show roof repair, this video features a red-shirted worker while the other shows a blue-shirted worker. Also, this video shows shingles being nailed in place at 0:05, while the other shows shingles being torn off at that time. **Crucially, the individuals presenting the information are different. One has a rounder face, lighter hair and is wearing a baseball cap, while the other has a longer face, darker hair, and no hat**.
-`;
-
-            const model = this.generativeAI.getGenerativeModel({
-                model: 'gemini-2.0-flash',
-                generationConfig: {
-                    responseMimeType: 'application/json',
-                    responseSchema: schema,
-                },
-            });
-
-            // Downscale the video and get its Base64 data.
-            // The limit for 1.5 and 2.0 flash is around 20MB.
-            const videoData = await this.downscaleVideo(videoUrl);
-            const videoPayload = {
-                inlineData: {
-                    data: videoData,
-                    mimeType: 'video/mp4',
-                },
-            };
-
-            const result = await model.generateContent([prompt, videoPayload]);
-            const responseJson = result.response.text();
-            const responseObj: DuplicateVideoCheck = JSON.parse(responseJson);
-
-            return responseObj;
-        } catch (error) {
-            console.error(
-                `[GoogleGeminiService:checkIfDuplicateVideoByDescriptions] Error processing videoUrl (${videoUrl}):`,
                 error
             );
             throw error;
