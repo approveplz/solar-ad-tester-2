@@ -326,7 +326,7 @@ function AdScraperDataView() {
 
         neighbors.sort((a, b) => {
             const scoreDiff = b.similarityScore - a.similarityScore;
-            if (Math.abs(scoreDiff) < 0.15) {
+            if (Math.abs(scoreDiff) < 0.02) {
                 if (a.processed === b.processed) {
                     return scoreDiff;
                 }
