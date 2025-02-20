@@ -10,8 +10,8 @@ export interface ScrapedAdDataFirestore {
     processed: boolean;
     pageName: string;
     pageId: string;
-    textTranscript: string;
-    hook: string;
+    textTranscript?: string;
+    hook?: string;
     duplicateVideoIdentifiers?: string[];
     descriptionEmbedding?: number[];
 }
