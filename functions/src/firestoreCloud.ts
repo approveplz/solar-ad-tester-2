@@ -3,7 +3,7 @@ import { FbAdSettings } from './models/FbAdSettings.js';
 import { CreatedFbAdInfo } from './models/CreatedFbAdInfo.js';
 import { ParsedFbAdInfo } from './models/ParsedFbAdInfo.js';
 import { AdPerformance } from './models/AdPerformance.js';
-import { ScrapedAdDataFirestore } from './models/ScrapedAdData.js';
+import { ScrapedAdDataFirestore } from './models/ScrapedAdDataFirestore.js';
 
 const FB_AD_SETTINGS_COLLECTION = 'fb-ad-settings';
 const CREATED_ADS_COLLECTION_SOLAR = 'created-ads-collection-solar';
@@ -150,9 +150,6 @@ export async function getFbAdSettingFirestore(
         return null;
     }
 }
-/*
-Not Currently being used
-*/
 
 const SCRAPED_ADS_COLLECTION = 'scraped-ads';
 
@@ -172,6 +169,29 @@ export async function saveScrapedAdFirestore(
         .withConverter(ScrapedAdDataDocConverter)
         .doc(videoIdentifier)
         .set(scrapedAdData, { merge: true });
+}
+
+export async function savedScrapedAdFirestoreBatch(
+    ads: ScrapedAdDataFirestore[]
+): Promise<void> {
+    if (ads.length === 0) {
+        return;
+    }
+
+    const db = getFirestore();
+    const adCollectionRef = db
+        .collection(SCRAPED_ADS_COLLECTION)
+        .withConverter(ScrapedAdDataDocConverter);
+
+    let batch = db.batch();
+
+    for (const ad of ads) {
+        // Use the videoIdentifier as the document ID.
+        const docRef = adCollectionRef.doc(ad.videoIdentifier);
+        batch.set(docRef, ad, { merge: true });
+    }
+
+    await batch.commit();
 }
 
 export async function getScrapedAdFirestore(
@@ -196,6 +216,10 @@ export async function getScrapedAdsFirestoreAll(): Promise<
         .get();
     return snapshot.docs.map((doc) => doc.data());
 }
+
+/*
+Not Currently being used
+*/
 
 export async function saveVideoHashFirestore(
     adType: 'SOLAR' | 'ROOFING',
