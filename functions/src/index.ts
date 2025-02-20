@@ -228,6 +228,25 @@ export const watchCloudStorageUploads = onObjectFinalized(async (event) => {
     });
 });
 
+export const scrapeAdsScheduled = onSchedule(
+    // 14:00 UTC is 7:00 PDT
+    { schedule: 'every day 14:00', timeoutSeconds: 540 },
+    async () => {
+        const googleGeminiService = new GoogleGeminiService(
+            process.env.GOOGLE_GEMINI_API_KEY || ''
+        );
+        const openAiService = new OpenAiService(
+            process.env.OPENAI_API_KEY || ''
+        );
+        const apifyService = new ApifyService(
+            process.env.APIFY_API_TOKEN || '',
+            googleGeminiService,
+            openAiService
+        );
+        await apifyService.execute();
+    }
+);
+
 export const updateAdPerformanceScheduled = onSchedule(
     { schedule: 'every 1 hours', timeoutSeconds: 540 },
     async () => {
@@ -542,22 +561,8 @@ export const handleGoogleGeminiRequestHttp_TEST = onRequest(
     }
 );
 
-export const handleOpenAiRequestHttp_TEST = onRequest(
-    { timeoutSeconds: 300 },
-    async (req, res) => {
-        const openAiService = new OpenAiService(
-            process.env.OPENAI_API_KEY || ''
-        );
-        await openAiService.buildEmbeddingCache();
-        const result = await openAiService.findMostSimilar(
-            'The video ad features a man with curly brown hair and a short beard, standing on a sidewalk in a residential neighborhood. He is wearing a black Patagonia puffer vest over a blue and white plaid button-down shirt. The background consists of colorful houses on a steep hill, a paved road with yellow lines, and some greenery. The houses are a mix of architectural styles and colors, including red, brown, and white. He\'s facing the camera and speaking directly to the viewer. The camera is held at approximately chest level. A speech bubble-shaped graphic appears at the bottom left corner, displaying the text, "Reply to johnthebuilder04 comment How Can I Get a New Roof Without Paying Anything?" written in a sans-serif font with a user profile image to the left of the text. As the video progresses, the camera remains mostly steady but there are slight movements as the man walks. In the background, a woman in a black coat walks on the other side of the street. A yellow road sign with a winding arrow and the number 15 is visible. There is also a white sign with black lettering that reads "NO PARKING 10pm - 6am EVERYDAY". The sky appears overcast, and the lighting is soft. At the end of the video, the screen turns black and large white text appears at the top, reading "Tap The Button Below!" followed by a countdown timer displayed in a large white sans-serif font. The numbers count down from 7 to 1, taking up a large portion of the screen. There is no audio, but there is a very short, quick buzz sound at the exact moment the countdown hits "1".'
-        );
-        res.status(200).json({ success: true, result });
-    }
-);
-
 export const handleApifyRequestHttp_TEST = onRequest(
-    { timeoutSeconds: 300 },
+    { timeoutSeconds: 500 },
     async (req, res) => {
         const googleGeminiService = new GoogleGeminiService(
             process.env.GOOGLE_GEMINI_API_KEY || ''
@@ -570,7 +575,7 @@ export const handleApifyRequestHttp_TEST = onRequest(
             googleGeminiService,
             openAiService
         );
-        await apifyService.run2();
+        await apifyService.execute();
         res.status(200).json({ success: true });
     }
 );
