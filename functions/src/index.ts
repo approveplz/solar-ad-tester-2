@@ -407,6 +407,8 @@ export const createFbAdHttp = onRequest(
                 fbAdId
             );
 
+            const isFromTrelloCard = scriptWriter === 'AT' || hookWriter === 'AT' || ideaWriter === 'AT';
+
             const adPerformance: AdPerformance = {
                 counter: nextCounter,
                 fbAccountId: accountId,
@@ -426,6 +428,7 @@ export const createFbAdHttp = onRequest(
                 hasHooksCreated: false,
                 isScaled: false,
                 hasScaled: false,
+                isFromTrelloCard,
                 hasTrelloCardCreated: false,
             };
 

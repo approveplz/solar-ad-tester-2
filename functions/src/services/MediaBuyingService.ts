@@ -129,6 +129,9 @@ export class MediaBuyingService {
         const fbRoiLast3Days =
             adPerformance.performanceMetrics.fb?.last3Days?.roi ?? 0;
 
+        const leadsLifetime =
+            adPerformance.performanceMetrics.fb?.lifetime?.leads ?? 0;
+
         if (adPerformance.hasScaled) {
             console.log(
                 `Ad ${adPerformance.fbAdId} has already been scaled, skipping processing`
@@ -152,7 +155,10 @@ ${skypeService.createMessageWithAdPerformanceInfo(adPerformance)}`;
         }
 
         // Let ad run because its profitable, but dont create hooks, tello card, or scale.
-        if (fbRoiLifetime < this.LIFETIME_ROI_HOOK_THRESHOLD) {
+        if (
+            fbRoiLifetime < this.LIFETIME_ROI_HOOK_THRESHOLD &&
+            leadsLifetime > 1
+        ) {
             console.log(
                 `Ad ${
                     adPerformance.fbAdId
@@ -208,7 +214,8 @@ ${hookAdPerformances
         // Ad above threshold to scale. Scale if not yet scaled.
         if (
             fbRoiLifetime >= this.LIFETIME_ROI_SCALING_THRESHOLD &&
-            !adPerformance.hasScaled
+            !adPerformance.hasScaled &&
+            leadsLifetime >= 3
         ) {
             const scaledAdDailyBudgetCents = 20000;
             const scaledAdPerformance = await this.handleScaling(
