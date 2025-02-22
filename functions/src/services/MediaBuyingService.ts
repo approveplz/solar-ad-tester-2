@@ -526,6 +526,13 @@ ${skypeService.createMessageWithAdPerformanceInfo(scaledAdPerformance, false)}`;
         const fbMetricsLifetime = bqMetricsLifetime?.find(
             (m) => m.Platform === 'FB' && m.AdID === fbAdId
         );
+        const costPerLead3d =
+            (fbMetrics3d?.total_cost || 0) / (fbMetrics3d?.leads || 0);
+        const costPerLead7d =
+            (fbMetrics7d?.total_cost || 0) / (fbMetrics7d?.leads || 0);
+        const costPerLeadLifetime =
+            (fbMetricsLifetime?.total_cost || 0) /
+            (fbMetricsLifetime?.leads || 0);
 
         return {
             fb: {
@@ -535,6 +542,7 @@ ${skypeService.createMessageWithAdPerformanceInfo(scaledAdPerformance, false)}`;
                     roi: fbMetrics3d?.ROI ?? 0,
                     leads: fbMetrics3d?.leads ?? 0,
                     clicks: fbMetrics3d?.total_clicks ?? 0,
+                    costPerLead: costPerLead3d,
                 },
                 last7Days: {
                     spend: fbMetrics7d?.total_cost ?? 0,
@@ -542,6 +550,7 @@ ${skypeService.createMessageWithAdPerformanceInfo(scaledAdPerformance, false)}`;
                     roi: fbMetrics7d?.ROI ?? 0,
                     leads: fbMetrics7d?.leads ?? 0,
                     clicks: fbMetrics7d?.total_clicks ?? 0,
+                    costPerLead: costPerLead7d,
                 },
                 lifetime: {
                     spend: fbMetricsLifetime?.total_cost ?? 0,
@@ -549,6 +558,7 @@ ${skypeService.createMessageWithAdPerformanceInfo(scaledAdPerformance, false)}`;
                     roi: fbMetricsLifetime?.ROI ?? 0,
                     leads: fbMetricsLifetime?.leads ?? 0,
                     clicks: fbMetricsLifetime?.total_clicks ?? 0,
+                    costPerLead: costPerLeadLifetime,
                 },
             },
         };

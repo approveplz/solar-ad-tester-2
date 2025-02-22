@@ -4,6 +4,7 @@ export interface TimeBasedMetrics {
     roi: number;
     leads: number;
     clicks: number;
+    costPerLead: number;
 }
 
 export interface PlatformMetrics {
