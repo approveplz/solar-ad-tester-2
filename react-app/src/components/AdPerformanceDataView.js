@@ -151,7 +151,7 @@ const AdRow = ({ ad }) => {
                 onClick={() => setIsExpanded(!isExpanded)}
                 style={{
                     cursor: 'pointer',
-                    backgroundColor: isExpanded ? '#f5f5f5' : 'white',
+                    backgroundColor: ad.fbIsActive ? 'white' : 'pink',
                 }}
             >
                 <td style={cellStyle}>{ad.adName}</td>
@@ -264,9 +264,11 @@ function AdPerformanceDataView() {
                         </tr>
                     </thead>
                     <tbody>
-                        {adData.map((ad, index) => (
-                            <AdRow key={index} ad={ad} />
-                        ))}
+                        {[...adData]
+                            .sort((a, b) => b.fbIsActive - a.fbIsActive)
+                            .map((ad, index) => (
+                                <AdRow key={index} ad={ad} />
+                            ))}
                     </tbody>
                 </table>
             )}

@@ -28,6 +28,7 @@ const db = getFirestore(app);
 // Cant share code between client and cloud functions. Too lazy to setup a symbolic link
 const FB_AD_SETTINGS_COLLECTION = 'fb-ad-settings';
 const AD_PERFORMANCE_COLLECTION = 'ad-performance';
+const SCRAPED_ADS_COLLECTION = 'scraped-ads';
 
 export async function saveFbAdSettings(accountId, fbAdSettings) {
     try {
@@ -60,10 +61,12 @@ export async function getAdPerformanceFirestoreAll() {
     const snapshot = await getDocs(collectionRef);
     return snapshot.docs.map((doc) => doc.data());
 }
-/*
-Not Currently being used
-*/
-const SCRAPED_ADS_COLLECTION = 'scraped-ads';
+
+export async function getAdPerformanceFirestore(fbAdId) {
+    const docRef = doc(db, AD_PERFORMANCE_COLLECTION, fbAdId);
+    const docSnap = await getDoc(docRef);
+    return docSnap.data();
+}
 
 export async function getScrapedAdsFirestoreAll() {
     const collectionRef = collection(db, SCRAPED_ADS_COLLECTION);
