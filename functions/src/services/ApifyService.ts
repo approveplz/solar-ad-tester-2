@@ -117,7 +117,6 @@ export class ApifyService {
         //     `./parsedActorResponse-${pageId}.json`,
         //     JSON.stringify(parsedActorResponse, null, 2)
         // );
-
         // const parsedActorResponse: {
         //     [key: string]: {
         //         videoIdentifier: string;
@@ -128,7 +127,9 @@ export class ApifyService {
         //         pageName: string;
         //         adArchiveId: string;
         //     };
-        // } = JSON.parse(fs.readFileSync(`./parsedActorResponse-${pageId}.json`, 'utf8'));
+        // } = JSON.parse(
+        //     fs.readFileSync(`./parsedActorResponse-${pageId}.json`, 'utf8')
+        // );
 
         const scrapedAdDataFirestoreAll: ScrapedAdDataFirestore[] =
             await getScrapedAdsFirestoreAll();
