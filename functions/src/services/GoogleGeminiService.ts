@@ -24,23 +24,37 @@ export class GoogleGeminiService {
 
     // Downscale a video from a URL by downloading, processing via ffmpeg, and returning a Base64 string.
     private async downscaleVideo(videoUrl: string): Promise<string> {
-        // Generate a unique temporary file path using the system's temporary directory.
-        const tempVideoPath = `${tmpdir()}/video-${randomBytes(6).toString(
-            'hex'
-        )}.mp4`;
-
-        const response = await fetch(videoUrl);
+        console.log(
+            `[GoogleGeminiService:downscaleVideo] Attempting to fetch video from URL: ${videoUrl}`
+        );
+        let response;
+        try {
+            response = await fetch(videoUrl);
+        } catch (fetchError) {
+            console.error(
+                `[GoogleGeminiService:downscaleVideo] Error fetching URL: ${videoUrl}`,
+                fetchError
+            );
+            throw fetchError;
+        }
         if (!response.ok) {
-            throw new Error(`Failed to download video: ${response.statusText}`);
+            const errMsg = `Failed to download video: ${response.status} ${response.statusText} from URL: ${videoUrl}`;
+            console.error(`[GoogleGeminiService:downscaleVideo] ${errMsg}`);
+            throw new Error(errMsg);
         }
         if (!response.body) {
-            throw new Error('Failed to obtain response body from video URL.');
+            const errMsg = `Failed to obtain response body from video URL: ${videoUrl}`;
+            console.error(`[GoogleGeminiService:downscaleVideo] ${errMsg}`);
+            throw new Error(errMsg);
         }
 
         // Convert the WHATWG stream (returned by fetch) into a Node.js Readable stream.
         const nodeReadable = Readable.fromWeb(response.body as any);
 
-        // Create a writable stream that writes the downloaded video to the temporary file.
+        // Generate a unique temporary file path using the system's temporary directory.
+        const tempVideoPath = `${tmpdir()}/video-${randomBytes(6).toString(
+            'hex'
+        )}.mp4`;
         const fileStream = createWriteStream(tempVideoPath);
 
         // Pipe the downloaded video data into the temporary file.
@@ -103,7 +117,7 @@ export class GoogleGeminiService {
                         if (!finished) {
                             finished = true;
                             console.error(
-                                `[GoogleGeminiService:downscaleVideo] Error: ${err.message}`
+                                `[GoogleGeminiService:downscaleVideo] Error during ffmpeg processing: ${err.message}`
                             );
                             reject(err);
                         }
