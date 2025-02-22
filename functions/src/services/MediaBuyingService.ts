@@ -117,6 +117,13 @@ export class MediaBuyingService {
         skypeService: SkypeService,
         trelloService: TrelloService
     ) {
+        if (adPerformance.hasScaled) {
+            console.log(
+                `Ad ${adPerformance.fbAdId} has already been scaled, skipping processing`
+            );
+            return;
+        }
+
         const fbRoiLifetime =
             adPerformance.performanceMetrics.fb?.lifetime?.roi ?? 0;
         const fbRoiLast3Days =
@@ -147,7 +154,27 @@ export class MediaBuyingService {
             if (
                 !adPerformance.hasHooksCreated &&
                 !adPerformance.isHook &&
-                !adPerformance.isScaled &&
+                !adPerformance.hasScaled
+            ) {
+                const trelloCard = await this.handleCreateTrelloCard(
+                    adPerformance,
+                    trelloService
+                );
+                const message = `I've created a new Trello card on the Adstonaut board for your ad because the ROI was over ${
+                    this.LIFETIME_ROI_HOOK_THRESHOLD
+                }X
+
+                This is the ad that I've created the card for for:
+                ${skypeService.createMessageWithAdPerformanceInfo(
+                    adPerformance
+                )}
+
+                `;
+                await skypeService.sendMessage('ALAN', message);
+            }
+            if (
+                !adPerformance.hasHooksCreated &&
+                !adPerformance.isHook &&
                 !adPerformance.hasScaled
             ) {
                 const hookAdPerformances = await this.handleCreateHooks(
@@ -172,29 +199,6 @@ export class MediaBuyingService {
                         )
                     )
                     .join('')}
-                `;
-                await skypeService.sendMessage('ALAN', message);
-            }
-
-            if (
-                !adPerformance.hasHooksCreated &&
-                !adPerformance.isHook &&
-                !adPerformance.isScaled &&
-                !adPerformance.hasScaled
-            ) {
-                const trelloCard = await this.handleCreateTrelloCard(
-                    adPerformance,
-                    trelloService
-                );
-                const message = `I've created a new Trello card on the Adstonaut board for your ad because the ROI was over ${
-                    this.LIFETIME_ROI_HOOK_THRESHOLD
-                }X
-
-                This is the ad that I've created the card for for:
-                ${skypeService.createMessageWithAdPerformanceInfo(
-                    adPerformance
-                )}
-
                 `;
                 await skypeService.sendMessage('ALAN', message);
             }
