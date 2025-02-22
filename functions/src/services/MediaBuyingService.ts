@@ -116,6 +116,13 @@ export class MediaBuyingService {
         skypeService: SkypeService,
         trelloService: TrelloService
     ) {
+        let mediaBuyer;
+        if (adPerformance.fbAccountId === '8653880687969127') {
+            mediaBuyer = 'MA';
+        } else {
+            mediaBuyer = 'AZ';
+        }
+
         if (adPerformance.hasScaled) {
             console.log(
                 `Ad ${adPerformance.fbAdId} has already been scaled, skipping processing`
@@ -139,7 +146,7 @@ I've paused your ad because the ROI was under 1.00X
             
 This is the ad that I've paused:
 ${skypeService.createMessageWithAdPerformanceInfo(adPerformance)}`;
-            await skypeService.sendMessage('ALAN', message);
+            await skypeService.sendMessage(mediaBuyer, message);
         } else if (fbRoiLifetime < this.LIFETIME_ROI_HOOK_THRESHOLD) {
             console.log(
                 `Ad ${
@@ -152,7 +159,8 @@ ${skypeService.createMessageWithAdPerformanceInfo(adPerformance)}`;
             if (
                 !adPerformance.hasHooksCreated &&
                 !adPerformance.isHook &&
-                !adPerformance.hasScaled
+                !adPerformance.hasScaled &&
+                !adPerformance.hasTrelloCardCreated
             ) {
                 const trelloCard = await this.handleCreateTrelloCard(
                     adPerformance,
@@ -165,7 +173,7 @@ I've created a new Trello card on the Adstonaut board for your ad because the RO
 
 This is the ad that I've created the card for for:
 ${skypeService.createMessageWithAdPerformanceInfo(adPerformance)}`;
-                await skypeService.sendMessage('ALAN', message);
+                await skypeService.sendMessage(mediaBuyer, message);
             }
             if (
                 !adPerformance.hasHooksCreated &&
@@ -179,7 +187,7 @@ ${skypeService.createMessageWithAdPerformanceInfo(adPerformance)}`;
                 const message = `
 I've created hooks for your ad because the ROI was over ${
                     this.LIFETIME_ROI_HOOK_THRESHOLD
-                }X
+                }x
 
 This is the ad that I've created hooks for:
 ${skypeService.createMessageWithAdPerformanceInfo(adPerformance)}
@@ -188,7 +196,7 @@ These are the hooks that I've created:
 ${hookAdPerformances
     .map((hook) => skypeService.createMessageWithAdPerformanceInfo(hook, false))
     .join('')} `;
-                await skypeService.sendMessage('ALAN', message);
+                await skypeService.sendMessage(mediaBuyer, message);
             }
 
             if (
@@ -216,7 +224,7 @@ This is the scaled ad that I've created for you with a daily budget of $${(
                 ).toFixed(2)}:
 It will start running the next weekday.
 ${skypeService.createMessageWithAdPerformanceInfo(scaledAdPerformance, false)}`;
-                await skypeService.sendMessage('ALAN', message);
+                await skypeService.sendMessage(mediaBuyer, message);
             }
         }
     }
@@ -244,6 +252,11 @@ ${skypeService.createMessageWithAdPerformanceInfo(scaledAdPerformance, false)}`;
         const trelloCard = await trelloService.createCardFromRoofingTemplate(
             cardName,
             originalAdPerformance.gDriveDownloadUrl
+        );
+        originalAdPerformance.hasTrelloCardCreated = true;
+        await saveAdPerformanceFirestore(
+            originalAdPerformance.fbAdId,
+            originalAdPerformance
         );
         return trelloCard;
     }

@@ -426,6 +426,7 @@ export const createFbAdHttp = onRequest(
                 hasHooksCreated: false,
                 isScaled: false,
                 hasScaled: false,
+                hasTrelloCardCreated: false,
             };
 
             await saveAdPerformanceFirestore(fbAdId, adPerformance);
@@ -678,6 +679,7 @@ export const duplicateAdSetAndAdToCampaignHttp_TEST = onRequest(
                 isScaled: false,
                 hasHooksCreated: false,
                 hasScaled: false,
+                hasTrelloCardCreated: false,
                 performanceMetrics: {
                     fb: {
                         last3Days: {
@@ -796,6 +798,7 @@ export const handleCreateHooksHttp_TEST = onRequest(
             isScaled: false,
             hasHooksCreated: false,
             hasScaled: false,
+            hasTrelloCardCreated: false,
             performanceMetrics: {
                 fb: {
                     last3Days: {

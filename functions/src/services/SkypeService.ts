@@ -25,11 +25,11 @@ export class SkypeService {
             conversationId: '19:e0852f1802d84ea688b0f005459f901a@thread.skype',
             isGroup: true,
         },
-        MARCUS: {
+        MA: {
             conversationId: '8:live:marcusawakuni',
             isGroup: false,
         },
-        ALAN: {
+        AZ: {
             conversationId: '29:1VfeA7iWoDuqsjKUNPSpumzuzAkBzEqORXCX78Kt3k3o',
             isGroup: false,
         },

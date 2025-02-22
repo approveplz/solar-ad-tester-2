@@ -36,5 +36,6 @@ export interface AdPerformance {
     isScaled: boolean;
     hasHooksCreated: boolean;
     hasScaled: boolean;
+    hasTrelloCardCreated: boolean;
     script?: string;
 }
