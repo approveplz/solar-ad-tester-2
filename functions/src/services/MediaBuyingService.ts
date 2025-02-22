@@ -24,6 +24,7 @@ export class MediaBuyingService {
     private LIFETIME_SPEND_THRESHOLD = 40;
     private LIFETIME_ROI_SCALING_THRESHOLD = 1.5;
     private LIFETIME_ROI_HOOK_THRESHOLD = 1.3;
+    private LIFETIME_TRELLO_CARD_CREATION_THRESHOLD = 1.3;
 
     constructor(
         private readonly creatomateService: CreatomateService,
@@ -123,6 +124,11 @@ export class MediaBuyingService {
             mediaBuyer = 'AZ';
         }
 
+        const fbRoiLifetime =
+            adPerformance.performanceMetrics.fb?.lifetime?.roi ?? 0;
+        const fbRoiLast3Days =
+            adPerformance.performanceMetrics.fb?.last3Days?.roi ?? 0;
+
         if (adPerformance.hasScaled) {
             console.log(
                 `Ad ${adPerformance.fbAdId} has already been scaled, skipping processing`
@@ -130,64 +136,63 @@ export class MediaBuyingService {
             return;
         }
 
-        const fbRoiLifetime =
-            adPerformance.performanceMetrics.fb?.lifetime?.roi ?? 0;
-        const fbRoiLast3Days =
-            adPerformance.performanceMetrics.fb?.last3Days?.roi ?? 0;
-
+        // Pause underperforming ad.
         if (fbRoiLifetime < 1 || fbRoiLast3Days < 1) {
             await this.pauseUnderperformingAd(
                 adPerformance,
                 metaAdCreatorService
             );
-
             const message = `
 I've paused your ad because the ROI was under 1.00X
             
 This is the ad that I've paused:
 ${skypeService.createMessageWithAdPerformanceInfo(adPerformance)}`;
             await skypeService.sendMessage(mediaBuyer, message);
-        } else if (fbRoiLifetime < this.LIFETIME_ROI_HOOK_THRESHOLD) {
+            return;
+        }
+
+        // Let ad run because its profitable, but dont create hooks, tello card, or scale.
+        if (fbRoiLifetime < this.LIFETIME_ROI_HOOK_THRESHOLD) {
             console.log(
                 `Ad ${
                     adPerformance.fbAdId
                 } in profitable range (ROI: ${fbRoiLifetime.toFixed(
                     2
-                )}). But do not create hooks or scale`
+                )}). But do not create hooks, tello card, or scale`
             );
-        } else {
-            if (
-                !adPerformance.hasHooksCreated &&
-                !adPerformance.isHook &&
-                !adPerformance.hasScaled &&
-                !adPerformance.hasTrelloCardCreated
-            ) {
-                const trelloCard = await this.handleCreateTrelloCard(
-                    adPerformance,
-                    trelloService
-                );
-                const message = `
-I've created a new Trello card on the Adstonaut board for your ad because the ROI was over ${
-                    this.LIFETIME_ROI_HOOK_THRESHOLD
-                }x
+            return;
+        }
 
-This is the ad that I've created the card for for:
+        // Ad above threshold to create a Trello card. Create one if one has not been created yet and its not a hook.
+        if (
+            fbRoiLifetime >= this.LIFETIME_TRELLO_CARD_CREATION_THRESHOLD &&
+            !adPerformance.isHook &&
+            !adPerformance.hasTrelloCardCreated
+        ) {
+            const trelloCard = await this.handleCreateTrelloCard(
+                adPerformance,
+                trelloService
+            );
+            const message = `
+I've created a new Trello card on the Adstonaut board for your ad because the ROI was over ${
+                this.LIFETIME_TRELLO_CARD_CREATION_THRESHOLD
+            }x
+
+This is the ad that I've created the card for:
 ${skypeService.createMessageWithAdPerformanceInfo(adPerformance)}`;
-                await skypeService.sendMessage(mediaBuyer, message);
-            }
-            if (
-                !adPerformance.hasHooksCreated &&
-                !adPerformance.isHook &&
-                !adPerformance.hasScaled
-            ) {
-                const hookAdPerformances = await this.handleCreateHooks(
-                    adPerformance,
-                    metaAdCreatorService
-                );
-                const message = `
+            await skypeService.sendMessage(mediaBuyer, message);
+        }
+
+        // Ad above threshold to create hooks. Create hooks if not yet created and its not a hook.
+        if (!adPerformance.hasHooksCreated && !adPerformance.isHook) {
+            const hookAdPerformances = await this.handleCreateHooks(
+                adPerformance,
+                metaAdCreatorService
+            );
+            const message = `
 I've created hooks for your ad because the ROI was over ${
-                    this.LIFETIME_ROI_HOOK_THRESHOLD
-                }x
+                this.LIFETIME_ROI_HOOK_THRESHOLD
+            }x
 
 This is the ad that I've created hooks for:
 ${skypeService.createMessageWithAdPerformanceInfo(adPerformance)}
@@ -196,36 +201,38 @@ These are the hooks that I've created:
 ${hookAdPerformances
     .map((hook) => skypeService.createMessageWithAdPerformanceInfo(hook, false))
     .join('')} `;
-                await skypeService.sendMessage(mediaBuyer, message);
-            }
 
-            if (
-                fbRoiLifetime >= this.LIFETIME_ROI_SCALING_THRESHOLD &&
-                !adPerformance.isScaled &&
-                !adPerformance.hasScaled
-            ) {
-                const scaledAdDailyBudgetCents = 20000;
-                const scaledAdPerformance = await this.handleScaling(
-                    adPerformance,
-                    metaAdCreatorService,
-                    scaledAdDailyBudgetCents
-                );
+            await skypeService.sendMessage(mediaBuyer, message);
+        }
 
-                const message = `
+        // Ad above threshold to scale. Scale if not yet scaled.
+        if (
+            fbRoiLifetime >= this.LIFETIME_ROI_SCALING_THRESHOLD &&
+            !adPerformance.hasScaled
+        ) {
+            const scaledAdDailyBudgetCents = 20000;
+            const scaledAdPerformance = await this.handleScaling(
+                adPerformance,
+                metaAdCreatorService,
+                scaledAdDailyBudgetCents
+            );
+
+            const message = `
 I've scaled your ad for you because the ROI was over ${
-                    this.LIFETIME_ROI_SCALING_THRESHOLD
-                }x
+                this.LIFETIME_ROI_SCALING_THRESHOLD
+            }x
 
 This is the original ad that I've scaled:
 ${skypeService.createMessageWithAdPerformanceInfo(adPerformance)}
 
 This is the scaled ad that I've created for you with a daily budget of $${(
-                    scaledAdDailyBudgetCents / 100
-                ).toFixed(2)}:
-It will start running the next weekday.
-${skypeService.createMessageWithAdPerformanceInfo(scaledAdPerformance, false)}`;
-                await skypeService.sendMessage(mediaBuyer, message);
-            }
+                scaledAdDailyBudgetCents / 100
+            ).toFixed(2)}:
+${skypeService.createMessageWithAdPerformanceInfo(scaledAdPerformance, false)}
+
+It will start running the next weekday.`;
+
+            await skypeService.sendMessage(mediaBuyer, message);
         }
     }
 
