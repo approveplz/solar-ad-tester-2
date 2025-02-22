@@ -1,3 +1,4 @@
+import fs from 'fs';
 import { ApifyClient } from 'apify-client';
 import {
     getScrapedAdsFirestoreAll,
@@ -7,7 +8,6 @@ import { ScrapedAdDataFirestore } from '../models/ScrapedAdDataFirestore.js';
 import { GoogleGeminiService } from './GoogleGeminiService.js';
 import { OpenAiService } from './OpenAiService.js';
 import { SkypeService } from './SkypeService.js';
-
 export interface ScrapedAdItemSnapshotCard {
     title: string;
     video_hd_url: string;
@@ -47,6 +47,10 @@ export class ApifyService {
     private googleGeminiService: GoogleGeminiService;
     private openAiService: OpenAiService;
     private skypeService: SkypeService;
+
+    ROOFING_QUOTE_ORG_PAGE_ID = '209417582254766';
+    COST_GUIDE_PAGE_ID = '102217671595954';
+
     constructor(
         apiKey: string,
         googleGeminiService: GoogleGeminiService,
@@ -70,11 +74,13 @@ export class ApifyService {
         const day = yesterday.getDate().toString().padStart(2, '0');
         const startDateMin = `${year}-${month}-${day}`;
 
-        return `https://www.facebook.com/ads/library/?active_status=active&ad_type=all&content_languages[0]=en&country=US&is_targeted_country=false&media_type=video&search_type=page&start_date[min]=${startDateMin}&start_date[max]&view_all_page_id=${pageId}`;
+        return `https://www.facebook.com/ads/library/?active_status=active&ad_type=all&content_languages[0]=en&country=US&is_targeted_country=false&media_type=video&q=roof&search_type=page&start_date[min]=${startDateMin}&start_date[max]&view_all_page_id=${pageId}`;
     }
 
-    async execute() {
-        console.log('Starting Apify Facebook Ads scraping...');
+    async execute(pageId: string) {
+        console.log(
+            `Starting Apify Facebook Ads scraping for pageId: ${pageId}`
+        );
         const actorOptions = {
             count: 1000,
             scrapeAdDetails: true,
@@ -83,38 +89,32 @@ export class ApifyService {
             urls: [
                 {
                     url: this.getFbAdLibraryUrlForPageIdWithImpressionYesterday(
-                        '209417582254766' // roofing quote.org
+                        pageId
                     ),
                     method: 'GET',
                 },
-                // {
-                //     url: this.getFbAdLibraryUrlForPageIdWithImpressionYesterday(
-                //         '102217671595954' // cost guide
-                //     ),
-                //     method: 'GET',
-                // },
             ],
         };
 
         const actorName = 'curious_coder/facebook-ads-library-scraper';
-        console.log(`Starting actor: ${actorName}`);
 
         const run = await this.client.actor(actorName).call(actorOptions);
 
-        console.log(`Actor ${actorName} fetching results from dataset...`);
+        console.log(
+            `Actor ${actorName} fetching results from dataset for pageId: ${pageId}`
+        );
         const { items: scrapedAdItems } = (await this.client
             .dataset(run.defaultDatasetId)
             .listItems()) as unknown as { items: ScrapedAdItem[] };
 
         console.log(
-            `Actor ${actorName} retrieved ${scrapedAdItems.length} items from dataset`
+            `Actor ${actorName} retrieved ${scrapedAdItems.length} items from dataset for pageId: ${pageId}`
         );
 
         const parsedActorResponse = this.parseActorResponse(scrapedAdItems);
 
-        // import fs from 'fs';
         // await fs.promises.writeFile(
-        //     './parsedActorResponse.json',
+        //     `./parsedActorResponse-${pageId}.json`,
         //     JSON.stringify(parsedActorResponse, null, 2)
         // );
 
@@ -128,7 +128,7 @@ export class ApifyService {
         //         pageName: string;
         //         adArchiveId: string;
         //     };
-        // } = JSON.parse(fs.readFileSync('./parsedActorResponse.json', 'utf8'));
+        // } = JSON.parse(fs.readFileSync(`./parsedActorResponse-${pageId}.json`, 'utf8'));
 
         const scrapedAdDataFirestoreAll: ScrapedAdDataFirestore[] =
             await getScrapedAdsFirestoreAll();
@@ -142,9 +142,6 @@ export class ApifyService {
                 );
             }
         });
-
-        console.log('Current video identifiers in database:');
-        console.log([...duplicateVideoIdentifiers].join('\n'));
 
         let skypMessageSent = false;
         let scrapedAdDataFirestoreToSave: ScrapedAdDataFirestore[] = [];
