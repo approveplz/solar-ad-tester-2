@@ -345,7 +345,7 @@ function AdScraperDataView() {
 
         neighbors.sort((a, b) => {
             const scoreDiff = b.similarityScore - a.similarityScore;
-            if (Math.abs(scoreDiff) < 0.02) {
+            if (Math.abs(scoreDiff) < 0.01) {
                 if (a.processed === b.processed) {
                     return scoreDiff;
                 }
@@ -703,9 +703,12 @@ function AdScraperDataView() {
                             >
                                 <h3
                                     style={{ cursor: 'pointer' }}
-                                    onClick={() => toggleUnprocessedPage(pageName)}
+                                    onClick={() =>
+                                        toggleUnprocessedPage(pageName)
+                                    }
                                 >
-                                    {pageName} {isUnprocessedExpanded ? '[-]' : '[+]'}
+                                    {pageName}{' '}
+                                    {isUnprocessedExpanded ? '[-]' : '[+]'}
                                 </h3>
                                 {isUnprocessedExpanded && (
                                     <div
@@ -746,7 +749,8 @@ function AdScraperDataView() {
                 <div>
                     <h2>Archive (Processed Videos)</h2>
                     {Object.keys(processedVideosByPage).map((pageName) => {
-                        const isArchiveExpanded = !collapsedArchivePages.has(pageName);
+                        const isArchiveExpanded =
+                            !collapsedArchivePages.has(pageName);
                         return (
                             <div
                                 key={pageName}
@@ -756,7 +760,8 @@ function AdScraperDataView() {
                                     style={{ cursor: 'pointer' }}
                                     onClick={() => toggleArchivePage(pageName)}
                                 >
-                                    {pageName} {isArchiveExpanded ? '[-]' : '[+]'}
+                                    {pageName}{' '}
+                                    {isArchiveExpanded ? '[-]' : '[+]'}
                                 </h3>
                                 {isArchiveExpanded && (
                                     <div
