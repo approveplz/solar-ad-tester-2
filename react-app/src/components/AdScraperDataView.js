@@ -239,7 +239,15 @@ function UnprocessedVideoCard({
                                 <p>
                                     <strong>Processed:</strong>
                                     <br />
-                                    {neighbor.processed ? 'Yes' : 'No'}
+                                    <span
+                                        style={{
+                                            color: neighbor.processed
+                                                ? 'green'
+                                                : 'inherit',
+                                        }}
+                                    >
+                                        {neighbor.processed ? 'Yes' : 'No'}
+                                    </span>
                                 </p>
                                 <p>
                                     <strong>Similarity Score:</strong>
@@ -267,7 +275,6 @@ function ArchiveVideoCard({ video }) {
         marginBottom: '16px',
         boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
     };
-
     return (
         <div style={cardStyle}>
             <VideoPreviewPlayer videoUrl={video.url} />
@@ -286,7 +293,9 @@ function ArchiveVideoCard({ video }) {
             </p>
             <p>
                 <strong>Used for FB ad:</strong>{' '}
-                {video.isUsedForAd ? 'Yes' : 'No'}
+                <span style={{ color: video.isUsedForAd ? 'red' : 'inherit' }}>
+                    {video.isUsedForAd ? 'Yes' : 'No'}
+                </span>
             </p>
             <p>
                 <strong>Company:</strong> {video.pageName}
@@ -298,6 +307,16 @@ function ArchiveVideoCard({ video }) {
 function AdScraperDataView() {
     const [videoData, setVideoData] = useState([]);
     const [loading, setLoading] = useState(false);
+
+    // For unprocessed pages: when a page is in this set, it is collapsed.
+    const [unprocessedCollapsedPages, setUnprocessedCollapsedPages] = useState(
+        new Set()
+    );
+    // For processed (archived) pages: when a page is in this set, it is collapsed.
+    const [collapsedArchivePages, setCollapsedArchivePages] = useState(
+        new Set()
+    );
+
     const videoIdentifiersToDelete = useRef([]);
     const videoIdentifiersToUpdate = useRef({});
     const videoIdentifiersToUseAsAd = useRef([]);
@@ -575,6 +594,32 @@ function AdScraperDataView() {
         }
     };
 
+    // Toggle collapse/expand for unprocessed pages.
+    const toggleUnprocessedPage = (pageName) => {
+        setUnprocessedCollapsedPages((prev) => {
+            const newSet = new Set(prev);
+            if (newSet.has(pageName)) {
+                newSet.delete(pageName); // Expand page
+            } else {
+                newSet.add(pageName); // Collapse page
+            }
+            return newSet;
+        });
+    };
+
+    // Toggle collapse/expand for archived (processed) pages.
+    const toggleArchivePage = (pageName) => {
+        setCollapsedArchivePages((prev) => {
+            const newSet = new Set(prev);
+            if (newSet.has(pageName)) {
+                newSet.delete(pageName); // Expand page
+            } else {
+                newSet.add(pageName); // Collapse page
+            }
+            return newSet;
+        });
+    };
+
     // Group unprocessed videos by company using pageName
     const unprocessedVideosByPage = videoData
         .filter((item) => !item.scrapedAdDataFirestore.processed)
@@ -647,66 +692,100 @@ function AdScraperDataView() {
                 }}
             >
                 <div style={{ marginBottom: '40px' }}>
-                    <h2>Unprocessed Videos </h2>
-                    {Object.keys(unprocessedVideosByPage).map((pageName) => (
-                        <div key={pageName} style={{ marginBottom: '24px' }}>
-                            <h3>{pageName}</h3>
+                    <h2>Unprocessed Videos</h2>
+                    {Object.keys(unprocessedVideosByPage).map((pageName) => {
+                        const isUnprocessedExpanded =
+                            !unprocessedCollapsedPages.has(pageName);
+                        return (
                             <div
-                                style={{
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                }}
+                                key={pageName}
+                                style={{ marginBottom: '24px' }}
                             >
-                                {unprocessedVideosByPage[pageName].map(
-                                    (item) => (
-                                        <UnprocessedVideoCard
-                                            key={
-                                                item.scrapedAdDataFirestore
-                                                    .videoIdentifier
-                                            }
-                                            videoDataItem={item}
-                                            allVideoData={videoData}
-                                            onConfirmDuplicate={
-                                                handleConfirmDuplicate
-                                            }
-                                            onNotADuplicate={
-                                                handleNotADuplicate
-                                            }
-                                            onUseAsAd={handleUseAsAd}
-                                            onSave={handleSave}
-                                        />
-                                    )
+                                <h3
+                                    style={{ cursor: 'pointer' }}
+                                    onClick={() => toggleUnprocessedPage(pageName)}
+                                >
+                                    {pageName} {isUnprocessedExpanded ? '[-]' : '[+]'}
+                                </h3>
+                                {isUnprocessedExpanded && (
+                                    <div
+                                        style={{
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                        }}
+                                    >
+                                        {unprocessedVideosByPage[pageName].map(
+                                            (item) => (
+                                                <UnprocessedVideoCard
+                                                    key={
+                                                        item
+                                                            .scrapedAdDataFirestore
+                                                            .videoIdentifier
+                                                    }
+                                                    videoDataItem={item}
+                                                    allVideoData={videoData}
+                                                    onConfirmDuplicate={
+                                                        handleConfirmDuplicate
+                                                    }
+                                                    onNotADuplicate={
+                                                        handleNotADuplicate
+                                                    }
+                                                    onUseAsAd={handleUseAsAd}
+                                                    onSave={handleSave}
+                                                />
+                                            )
+                                        )}
+                                    </div>
                                 )}
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
 
                 {/* Archive Section */}
                 <div>
                     <h2>Archive (Processed Videos)</h2>
-                    {Object.keys(processedVideosByPage).map((pageName) => (
-                        <div key={pageName} style={{ marginBottom: '24px' }}>
-                            <h3>{pageName}</h3>
+                    {Object.keys(processedVideosByPage).map((pageName) => {
+                        const isArchiveExpanded = !collapsedArchivePages.has(pageName);
+                        return (
                             <div
-                                style={{
-                                    display: 'grid',
-                                    gridTemplateColumns: 'repeat(2, 1fr)',
-                                    gap: '16px',
-                                }}
+                                key={pageName}
+                                style={{ marginBottom: '24px' }}
                             >
-                                {processedVideosByPage[pageName].map((item) => (
-                                    <ArchiveVideoCard
-                                        key={
-                                            item.scrapedAdDataFirestore
-                                                .videoIdentifier
-                                        }
-                                        video={item.scrapedAdDataFirestore}
-                                    />
-                                ))}
+                                <h3
+                                    style={{ cursor: 'pointer' }}
+                                    onClick={() => toggleArchivePage(pageName)}
+                                >
+                                    {pageName} {isArchiveExpanded ? '[-]' : '[+]'}
+                                </h3>
+                                {isArchiveExpanded && (
+                                    <div
+                                        style={{
+                                            display: 'grid',
+                                            gridTemplateColumns:
+                                                'repeat(2, 1fr)',
+                                            gap: '16px',
+                                        }}
+                                    >
+                                        {processedVideosByPage[pageName].map(
+                                            (item) => (
+                                                <ArchiveVideoCard
+                                                    key={
+                                                        item
+                                                            .scrapedAdDataFirestore
+                                                            .videoIdentifier
+                                                    }
+                                                    video={
+                                                        item.scrapedAdDataFirestore
+                                                    }
+                                                />
+                                            )
+                                        )}
+                                    </div>
+                                )}
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             </div>
         </div>
