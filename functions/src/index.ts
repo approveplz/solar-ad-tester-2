@@ -245,14 +245,27 @@ export const scrapeAdsScheduled = onSchedule(
         const apifyService = new ApifyService(
             process.env.APIFY_API_TOKEN || '',
             googleGeminiService,
-            openAiService,
-            skypeService
+            openAiService
         );
 
-        await Promise.allSettled([
+        const hasNewAdsArr = await Promise.allSettled([
             apifyService.execute(apifyService.ROOFING_QUOTE_ORG_PAGE_ID),
             apifyService.execute(apifyService.COST_GUIDE_PAGE_ID),
+            apifyService.execute(apifyService.TRUSTED_ROOF_EXPERTS),
+            apifyService.execute(apifyService.HOME_IMPROVEMENT_QUOTES),
+            apifyService.execute(apifyService.ROOF_REPLACEMENT_PROGRAM),
         ]);
+
+        const hasNewAds = hasNewAdsArr.some(
+            (result) => result.status === 'fulfilled' && result.value
+        );
+
+        if (hasNewAds) {
+            await skypeService.sendMessage(
+                'AZ',
+                'There are new scraped ads ready for review at https://solar-ad-tester-2.web.app/'
+            );
+        }
     }
 );
 
@@ -407,7 +420,10 @@ export const createFbAdHttp = onRequest(
                 fbAdId
             );
 
-            const isFromTrelloCard = scriptWriter === 'AT' || hookWriter === 'AT' || ideaWriter === 'AT';
+            const isFromTrelloCard =
+                scriptWriter === 'AT' ||
+                hookWriter === 'AT' ||
+                ideaWriter === 'AT';
 
             const adPerformance: AdPerformance = {
                 counter: nextCounter,
@@ -594,13 +610,26 @@ export const handleApifyRequestHttp_TEST = onRequest(
         const apifyService = new ApifyService(
             process.env.APIFY_API_TOKEN || '',
             googleGeminiService,
-            openAiService,
-            skypeService
+            openAiService
         );
-        await Promise.allSettled([
+        const hasNewAdsArr = await Promise.allSettled([
             apifyService.execute(apifyService.ROOFING_QUOTE_ORG_PAGE_ID),
             apifyService.execute(apifyService.COST_GUIDE_PAGE_ID),
+            apifyService.execute(apifyService.TRUSTED_ROOF_EXPERTS),
+            apifyService.execute(apifyService.HOME_IMPROVEMENT_QUOTES),
+            apifyService.execute(apifyService.ROOF_REPLACEMENT_PROGRAM),
         ]);
+
+        const hasNewAds = hasNewAdsArr.some(
+            (result) => result.status === 'fulfilled' && result.value
+        );
+
+        if (hasNewAds) {
+            await skypeService.sendMessage(
+                'AZ',
+                'There are new scraped ads ready for review at https://solar-ad-tester-2.web.app/'
+            );
+        }
         res.status(200).json({ success: true });
     }
 );

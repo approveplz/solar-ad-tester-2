@@ -46,23 +46,23 @@ export class ApifyService {
     private client: ApifyClient;
     private googleGeminiService: GoogleGeminiService;
     private openAiService: OpenAiService;
-    private skypeService: SkypeService;
 
     ROOFING_QUOTE_ORG_PAGE_ID = '209417582254766';
     COST_GUIDE_PAGE_ID = '102217671595954';
+    TRUSTED_ROOF_EXPERTS = '559056717286850';
+    HOME_IMPROVEMENT_QUOTES = '100134353176277'; // https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=US&is_targeted_country=false&media_type=all&search_type=page&view_all_page_id=100134353176277
+    ROOF_REPLACEMENT_PROGRAM = '471319589403925';
 
     constructor(
         apiKey: string,
         googleGeminiService: GoogleGeminiService,
-        openAiService: OpenAiService,
-        skypeService: SkypeService
+        openAiService: OpenAiService
     ) {
         this.client = new ApifyClient({
             token: apiKey,
         });
         this.googleGeminiService = googleGeminiService;
         this.openAiService = openAiService;
-        this.skypeService = skypeService;
     }
 
     getFbAdLibraryUrlForPageIdWithImpressionYesterday(pageId: string) {
@@ -144,11 +144,14 @@ export class ApifyService {
             }
         });
 
-        let skypMessageSent = false;
+        let hasNewAds = false;
         let scrapedAdDataFirestoreToSave: ScrapedAdDataFirestore[] = [];
 
-        const fiveDaysAgoTimestamp =
-            Math.floor(Date.now() / 1000) - 5 * 24 * 60 * 60;
+        const fourDaysAgoTimestamp =
+            Math.floor(Date.now() / 1000) - 4 * 24 * 60 * 60;
+
+        const sixtyDaysAgoTimestamp =
+            Math.floor(Date.now() / 1000) - 60 * 24 * 60 * 60;
 
         for (const {
             formattedStartTime,
@@ -163,9 +166,12 @@ export class ApifyService {
                 console.log(
                     `Ad already exists or is a duplicate: ${videoIdentifier}. Skipping...`
                 );
-            } else if (startTimeUnixSeconds > fiveDaysAgoTimestamp) {
+            } else if (
+                startTimeUnixSeconds > fourDaysAgoTimestamp ||
+                startTimeUnixSeconds < sixtyDaysAgoTimestamp
+            ) {
                 console.log(
-                    `Skipping ad ${videoIdentifier} because its startTime (${formattedStartTime}, UNIX seconds: ${startTimeUnixSeconds}) is within the last 5 days.`
+                    `Skipping ad ${videoIdentifier} because its startTime (${formattedStartTime}, UNIX seconds: ${startTimeUnixSeconds}) is newer than 4 days or orlder than or 60 days.`
                 );
             } else {
                 console.log(`Processing ad ${videoIdentifier}`);
@@ -197,13 +203,7 @@ export class ApifyService {
                         scrapedAdDataFirestoreToSave
                     );
                     scrapedAdDataFirestoreToSave = [];
-                    if (!skypMessageSent) {
-                        skypMessageSent = true;
-                        await this.skypeService.sendMessage(
-                            'ALAN',
-                            'There are new scraped ads ready for review at https://solar-ad-tester-2.web.app/'
-                        );
-                    }
+                    hasNewAds = true;
                 }
             }
         }
@@ -211,6 +211,7 @@ export class ApifyService {
         if (scrapedAdDataFirestoreToSave.length > 0) {
             await savedScrapedAdFirestoreBatch(scrapedAdDataFirestoreToSave);
         }
+        return hasNewAds;
     }
 
     formatDate(timeUnixSeconds: number) {

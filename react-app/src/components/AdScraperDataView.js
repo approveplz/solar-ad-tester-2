@@ -620,17 +620,19 @@ function AdScraperDataView() {
         });
     };
 
+    // Calculate the total count of unprocessed videos
+    const unprocessedVideos = videoData.filter(
+        (item) => !item.scrapedAdDataFirestore.processed
+    );
     // Group unprocessed videos by company using pageName
-    const unprocessedVideosByPage = videoData
-        .filter((item) => !item.scrapedAdDataFirestore.processed)
-        .reduce((acc, item) => {
-            const pageName = item.scrapedAdDataFirestore.pageName;
-            if (!acc[pageName]) {
-                acc[pageName] = [];
-            }
-            acc[pageName].push(item);
-            return acc;
-        }, {});
+    const unprocessedVideosByPage = unprocessedVideos.reduce((acc, item) => {
+        const pageName = item.scrapedAdDataFirestore.pageName;
+        if (!acc[pageName]) {
+            acc[pageName] = [];
+        }
+        acc[pageName].push(item);
+        return acc;
+    }, {});
 
     // Sort each company's videos by startTimeUnixSeconds (earlier first).
     Object.keys(unprocessedVideosByPage).forEach((company) => {
@@ -652,6 +654,15 @@ function AdScraperDataView() {
             acc[pageName].push(item);
             return acc;
         }, {});
+
+    Object.keys(processedVideosByPage).forEach((company) => {
+        processedVideosByPage[company].sort((a, b) => {
+            return (
+                b.scrapedAdDataFirestore.isUsedForAd -
+                a.scrapedAdDataFirestore.isUsedForAd
+            );
+        });
+    });
 
     return (
         <div>
@@ -692,7 +703,7 @@ function AdScraperDataView() {
                 }}
             >
                 <div style={{ marginBottom: '40px' }}>
-                    <h2>Unprocessed Videos</h2>
+                    <h2>Unprocessed Videos: {unprocessedVideos.length}</h2>
                     {Object.keys(unprocessedVideosByPage).map((pageName) => {
                         const isUnprocessedExpanded =
                             !unprocessedCollapsedPages.has(pageName);
