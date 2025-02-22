@@ -10,7 +10,6 @@ import { CreatomateMetadata, CreatomateService } from './CreatomateService.js';
 import { AdPerformance, PerformanceMetrics } from '../models/AdPerformance.js';
 import {
     getAdPerformanceFirestoreAll,
-    getAdPerformanceFirestoreById,
     saveAdPerformanceFirestore,
     getEventFirestoreDocRef,
     setEventFirestore,
@@ -136,11 +135,10 @@ export class MediaBuyingService {
             );
 
             const message = `
-            I've paused your ad because the ROI was under 1.00X
+I've paused your ad because the ROI was under 1.00X
             
-            This is the ad that I've paused:
-            ${skypeService.createMessageWithAdPerformanceInfo(adPerformance)}
-            `;
+This is the ad that I've paused:
+${skypeService.createMessageWithAdPerformanceInfo(adPerformance)}`;
             await skypeService.sendMessage('ALAN', message);
         } else if (fbRoiLifetime < this.LIFETIME_ROI_HOOK_THRESHOLD) {
             console.log(
@@ -160,16 +158,13 @@ export class MediaBuyingService {
                     adPerformance,
                     trelloService
                 );
-                const message = `I've created a new Trello card on the Adstonaut board for your ad because the ROI was over ${
+                const message = `
+I've created a new Trello card on the Adstonaut board for your ad because the ROI was over ${
                     this.LIFETIME_ROI_HOOK_THRESHOLD
-                }X
+                }x
 
-                This is the ad that I've created the card for for:
-                ${skypeService.createMessageWithAdPerformanceInfo(
-                    adPerformance
-                )}
-
-                `;
+This is the ad that I've created the card for for:
+${skypeService.createMessageWithAdPerformanceInfo(adPerformance)}`;
                 await skypeService.sendMessage('ALAN', message);
             }
             if (
@@ -181,25 +176,18 @@ export class MediaBuyingService {
                     adPerformance,
                     metaAdCreatorService
                 );
-                const message = `I've created hooks for your ad because the ROI was over ${
+                const message = `
+I've created hooks for your ad because the ROI was over ${
                     this.LIFETIME_ROI_HOOK_THRESHOLD
                 }X
 
-                This is the ad that I've created hooks for:
-                ${skypeService.createMessageWithAdPerformanceInfo(
-                    adPerformance
-                )}
-                
-                These are the hooks that I've created:
-                ${hookAdPerformances
-                    .map((hook) =>
-                        skypeService.createMessageWithAdPerformanceInfo(
-                            hook,
-                            false
-                        )
-                    )
-                    .join('')}
-                `;
+This is the ad that I've created hooks for:
+${skypeService.createMessageWithAdPerformanceInfo(adPerformance)}
+
+These are the hooks that I've created:
+${hookAdPerformances
+    .map((hook) => skypeService.createMessageWithAdPerformanceInfo(hook, false))
+    .join('')} `;
                 await skypeService.sendMessage('ALAN', message);
             }
 
@@ -214,24 +202,20 @@ export class MediaBuyingService {
                     metaAdCreatorService,
                     scaledAdDailyBudgetCents
                 );
-                const message = `I've scaled your ad for you because the ROI was over ${
-                    this.LIFETIME_ROI_SCALING_THRESHOLD
-                }X
-                
-                This is the original ad that I've scaled:
-                ${skypeService.createMessageWithAdPerformanceInfo(
-                    adPerformance
-                )}
 
-                This is the scaled ad that I've created for you with a daily budget of $${(
+                const message = `
+I've scaled your ad for you because the ROI was over ${
+                    this.LIFETIME_ROI_SCALING_THRESHOLD
+                }x
+
+This is the original ad that I've scaled:
+${skypeService.createMessageWithAdPerformanceInfo(adPerformance)}
+
+This is the scaled ad that I've created for you with a daily budget of $${(
                     scaledAdDailyBudgetCents / 100
                 ).toFixed(2)}:
-                It will start running the next weekday.
-                ${skypeService.createMessageWithAdPerformanceInfo(
-                    scaledAdPerformance,
-                    false
-                )}
-                `;
+It will start running the next weekday.
+${skypeService.createMessageWithAdPerformanceInfo(scaledAdPerformance, false)}`;
                 await skypeService.sendMessage('ALAN', message);
             }
         }
