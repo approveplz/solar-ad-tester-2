@@ -248,7 +248,11 @@ export const scrapeAdsScheduled = onSchedule(
             openAiService,
             skypeService
         );
-        await apifyService.execute();
+
+        await Promise.allSettled([
+            apifyService.execute(apifyService.ROOFING_QUOTE_ORG_PAGE_ID),
+            apifyService.execute(apifyService.COST_GUIDE_PAGE_ID),
+        ]);
     }
 );
 
@@ -589,7 +593,10 @@ export const handleApifyRequestHttp_TEST = onRequest(
             openAiService,
             skypeService
         );
-        await apifyService.execute();
+        await Promise.allSettled([
+            apifyService.execute(apifyService.ROOFING_QUOTE_ORG_PAGE_ID),
+            apifyService.execute(apifyService.COST_GUIDE_PAGE_ID),
+        ]);
         res.status(200).json({ success: true });
     }
 );
