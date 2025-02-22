@@ -24,9 +24,6 @@ export class GoogleGeminiService {
 
     // Downscale a video from a URL by downloading, processing via ffmpeg, and returning a Base64 string.
     private async downscaleVideo(videoUrl: string): Promise<string> {
-        console.log(
-            `[GoogleGeminiService:downscaleVideo] Attempting to fetch video from URL: ${videoUrl}`
-        );
         let response;
         try {
             response = await fetch(videoUrl);
@@ -77,7 +74,8 @@ export class GoogleGeminiService {
             const finishHandler = () => {
                 if (!finished) {
                     finished = true;
-                    resolve(base64Chunks.join(''));
+                    const result = base64Chunks.join('');
+                    resolve(result);
                     // Delete the temporary file after processing.
                     unlink(tempVideoPath, () => {});
                 }
@@ -89,23 +87,43 @@ export class GoogleGeminiService {
             });
             outputStream.on('end', finishHandler);
             outputStream.on('close', finishHandler);
+            outputStream.on('error', (err) => {
+                console.error(
+                    `[GoogleGeminiService:downscaleVideo] outputStream error: ${err.message}`
+                );
+                if (!finished) {
+                    finished = true;
+                    reject(err);
+                }
+            });
 
-            // Execute ffmpeg on the temporary file.
             ffmpeg(tempVideoPath)
-                // Apply the scaling filter to resize the video to half its width and height.
-                .videoFilters('scale=iw/2:ih/2')
-                // Set encoding options for output video.
+                // Apply scaling to half the width and height. This handles odd dimensions.
+                .videoFilters('scale=floor(iw/2/2)*2:floor(ih/2/2)*2')
+                // Set encoding options.
                 .outputOptions([
-                    '-c:v libx264', // Use H.264 codec for video encoding.
-                    '-b:v 400k', // Set target video bitrate.
-                    '-maxrate 500k', // Maximum allowed bitrate.
-                    '-bufsize 1000k', // Buffer size for bitrate control.
-                    '-preset medium', // Encoding preset for balance between speed and quality.
-                    '-crf 35', // Quality setting (lower values give higher quality).
-                    '-r 15', // Set frame rate to 15 fps.
-                    '-movflags frag_keyframe+empty_moov', // Optimize MP4 for streaming.
+                    '-c:v libx264',
+                    '-b:v 400k',
+                    '-maxrate 500k',
+                    '-bufsize 1000k',
+                    '-preset medium',
+                    '-crf 35',
+                    '-r 15',
+                    '-movflags frag_keyframe+empty_moov',
                 ])
                 .format('mp4')
+                // For debugging.
+                // .on('stderr', (stderrLine) => {
+                //     console.log(
+                //         `[GoogleGeminiService:downscaleVideo] ffmpeg stderr: ${stderrLine}`
+                //     );
+                // })
+                // .on('codecData', (data) => {
+                //     console.log(
+                //         `[GoogleGeminiService:downscaleVideo] ffmpeg codecData:`,
+                //         data
+                //     );
+                // })
                 .on('error', (err) => {
                     // If there is an "Output stream closed" error and some data was received, try to finish.
                     if (
@@ -117,13 +135,13 @@ export class GoogleGeminiService {
                         if (!finished) {
                             finished = true;
                             console.error(
-                                `[GoogleGeminiService:downscaleVideo] Error during ffmpeg processing: ${err.message}`
+                                `[GoogleGeminiService:downscaleVideo] Error during ffmpeg processing url: ${videoUrl}. Error: ${err.message}`
                             );
                             reject(err);
                         }
                     }
                 })
-                // Pipe the processed data directly into our output stream.
+                .on('end', finishHandler)
                 .pipe(outputStream, { end: true });
         });
     }
