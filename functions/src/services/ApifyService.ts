@@ -209,6 +209,7 @@ export class ApifyService {
         }
 
         if (scrapedAdDataFirestoreToSave.length > 0) {
+            hasNewAds = true;
             await savedScrapedAdFirestoreBatch(scrapedAdDataFirestoreToSave);
         }
         return hasNewAds;
