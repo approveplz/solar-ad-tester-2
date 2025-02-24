@@ -117,7 +117,7 @@ export class MediaBuyingService {
         skypeService: SkypeService,
         trelloService: TrelloService
     ) {
-        let mediaBuyer;
+        let mediaBuyer: string;
         if (adPerformance.fbAccountId === '8653880687969127') {
             mediaBuyer = 'MA';
         } else {
@@ -191,14 +191,15 @@ ${skypeService.createMessageWithAdPerformanceInfo(adPerformance)}`;
 
         // Ad above threshold to create hooks. Create hooks if not yet created and its not a hook.
         if (!adPerformance.hasHooksCreated && !adPerformance.isHook) {
-            const hookAdPerformances = await this.handleCreateHooks(
-                adPerformance,
-                metaAdCreatorService
-            );
-            const message = `
+            try {
+                const hookAdPerformances = await this.handleCreateHooks(
+                    adPerformance,
+                    metaAdCreatorService
+                );
+                const message = `
 I've created hooks for your ad because the ROI was over ${
-                this.LIFETIME_ROI_HOOK_THRESHOLD
-            }x
+                    this.LIFETIME_ROI_HOOK_THRESHOLD
+                }x
 
 This is the ad that I've created hooks for:
 ${skypeService.createMessageWithAdPerformanceInfo(adPerformance)}
@@ -208,7 +209,13 @@ ${hookAdPerformances
     .map((hook) => skypeService.createMessageWithAdPerformanceInfo(hook, false))
     .join('')} `;
 
-            await skypeService.sendMessage(mediaBuyer, message);
+                await skypeService.sendMessage(mediaBuyer, message);
+            } catch (error) {
+                console.error(
+                    `Failed to create hooks for ad ${adPerformance.fbAdId}:`,
+                    error
+                );
+            }
         }
 
         // Ad above threshold to scale. Scale if not yet scaled.
