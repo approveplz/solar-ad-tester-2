@@ -158,3 +158,36 @@ export async function uploadCsvToStorage(
     const fileCloudStorageUri = `gs://${bucket.name}/${destFileName}`;
     return { fileCloudStorageUri };
 }
+
+export async function uploadFileToStorage(
+    fileStream: Readable,
+    folder: string,
+    fileName: string,
+    mimeType: string
+): Promise<{ fileCloudStorageUri: string }> {
+    const destFileName = `${folder}/${fileName}`;
+    const bucket = getStorage().bucket();
+    const file = bucket.file(destFileName);
+
+    try {
+        await new Promise<void>((resolve, reject) => {
+            fileStream
+                .pipe(
+                    file.createWriteStream({
+                        metadata: {
+                            contentType: mimeType,
+                        },
+                    })
+                )
+                .on('finish', resolve)
+                .on('error', reject);
+        });
+        console.log(`File uploaded successfully to ${destFileName}`);
+    } catch (error) {
+        console.error(`Error uploading file to ${destFileName}`, error);
+        throw error;
+    }
+
+    const fileCloudStorageUri = `gs://${bucket.name}/${destFileName}`;
+    return { fileCloudStorageUri };
+}

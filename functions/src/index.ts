@@ -28,6 +28,7 @@ import {
     getSignedUploadUrl,
     getSignedDownloadUrl,
     uploadCsvToStorage,
+    uploadFileToStorage,
 } from './firebaseStorageCloud.js';
 import { AdPerformance } from './models/AdPerformance.js';
 import { BigQueryService } from './services/BigQueryService.js';
@@ -48,6 +49,7 @@ import { OpenAiService } from './services/OpenAiService.js';
 import { TrelloService } from './services/TrelloService.js';
 import { Readable } from 'stream';
 import { Agent } from 'undici';
+import { ZipcodeService } from './services/ZipcodeService.js';
 
 config();
 
@@ -339,8 +341,9 @@ export const syncAdPerformance = onDocumentWritten(
     }
 );
 
+// TODO: Remove this
 export const saveRoofingZipsScheduled = onSchedule(
-    { schedule: 'every day 12:00', timeoutSeconds: 180, memory: '1GiB' },
+    { schedule: 'every day 12:00', timeoutSeconds: 180, memory: '2GiB' },
     async () => {
         // Get today's date in PDT formatted as "YYYYMMDD"
         const pdtDateStr = new Date().toLocaleDateString('sv-SE', {
@@ -396,60 +399,79 @@ export const saveRoofingZipsScheduled = onSchedule(
     }
 );
 
+export const saveFilteredRoofingZipsScheduled = onSchedule(
+    { schedule: 'every day 12:00', timeoutSeconds: 180, memory: '2GiB' },
+    async () => {
+        try {
+            const zipcodeService = new ZipcodeService();
+            const roofingRecordsObj =
+                await zipcodeService.getUpdatedCsvRecords();
+            const { date } = roofingRecordsObj;
+
+            const roofingRecordsObjJson = JSON.stringify(
+                roofingRecordsObj,
+                null,
+                2
+            );
+            const nodeStream = Readable.from([roofingRecordsObjJson]);
+            const fileName = `affiliate_demand_${date}.json`;
+
+            const { fileCloudStorageUri } = await uploadFileToStorage(
+                nodeStream,
+                'roofing-zips-filtered',
+                fileName,
+                'application/json'
+            );
+
+            console.log(
+                `Filtered roofing ZIPs JSON file stored at: ${fileCloudStorageUri}`
+            );
+        } catch (error: unknown) {
+            console.error(
+                'Error during scheduled filtered roofing ZIPs task:',
+                error
+            );
+            throw error;
+        }
+    }
+);
+
 export const saveRoofingZipsHttp = onRequest(
     { timeoutSeconds: 180 },
-    async (req, res) => {
+    async (req: Request, res: Response) => {
         try {
-            // Get today's date in PDT formatted as "YYYYMMDD"
-            const pdtDateStr = new Date().toLocaleDateString('sv-SE', {
-                timeZone: 'America/Los_Angeles',
-            });
-            const [year, month, day] = pdtDateStr.split('-');
-            const dateStr = `${year}${month}${day}`;
-            console.log({ dateStr });
+            // Instantiate the ZipcodeService to fetch, parse, and filter CSV records.
+            const zipcodeService = new ZipcodeService();
+            const roofingRecordsObj =
+                await zipcodeService.getUpdatedCsvRecords();
+            const { date, records } = roofingRecordsObj;
 
-            // Construct URL using the PDT date
-            const fileUrl = `https://nx-live.s3.amazonaws.com/prices/affiliate_demand_${dateStr}.csv`;
-            console.log(`Fetching CSV from: ${fileUrl}`);
-
-            // Create a local custom agent with extended timeout settings
-            const localAgent = new Agent({
-                connectTimeout: 1 * 60 * 1000, // 1 minute to establish the TCP connection
-                headersTimeout: 1 * 60 * 1000, // 1 minute to wait for response headers
-                bodyTimeout: 3 * 60 * 1000, // 3 minutes to receive the response body
-            });
-
-            // Execute the fetch with the custom agent and a User-Agent header
-            const response = await fetch(fileUrl, {
-                dispatcher: localAgent, // Use the custom agent for this request
-                headers: {
-                    'User-Agent':
-                        'Mozilla/5.0 (compatible; FirebaseCloudFunctions)',
-                },
-            } as any);
-
-            if (!response.ok || !response.body) {
-                throw new Error(
-                    `Failed to fetch CSV. Status: ${response.status}`
-                );
-            }
-
-            // Generate a file name that includes the date
-            const fileName = `affiliate_demand_${dateStr}.csv`;
-
-            // Convert the Web ReadableStream to a NodeJS stream
-            const webReadable =
-                response.body as unknown as import('stream/web').ReadableStream<any>;
-            const nodeStream = Readable.fromWeb(webReadable);
-
-            // Upload the CSV to storage
-            const { fileCloudStorageUri } = await uploadCsvToStorage(
-                fileName,
-                nodeStream
+            const roofingRecordsObjJson = JSON.stringify(
+                roofingRecordsObj,
+                null,
+                2
             );
-            console.log(`CSV file stored at: ${fileCloudStorageUri}`);
 
-            res.status(200).json({ success: true, fileCloudStorageUri });
+            // Convert the JSON string to a Node.js stream.
+            const nodeStream = Readable.from([roofingRecordsObjJson]);
+
+            // Define the file name with a .json extension.
+            const fileName = `affiliate_demand_${date}.json`;
+
+            // Upload the JSON file to storage.
+            const { fileCloudStorageUri } = await uploadFileToStorage(
+                nodeStream,
+                'roofing-zips-filtered',
+                fileName,
+                'application/json'
+            );
+            console.log(`JSON file stored at: ${fileCloudStorageUri}`);
+
+            res.status(200).json({
+                success: true,
+                fileCloudStorageUri,
+                roofingRecordsObj,
+            });
         } catch (error: unknown) {
             console.error('Error during HTTP roofing ZIPs task:', error);
             res.status(500).json({
