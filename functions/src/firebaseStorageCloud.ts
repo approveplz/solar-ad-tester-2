@@ -1,5 +1,5 @@
 import fetch from 'node-fetch';
-import stream from 'stream';
+import stream, { Readable } from 'stream';
 import { getStorage } from 'firebase-admin/storage';
 
 // export const OZEMPIC_THUMBNAIL_IMG_FILEPATH = 'O/O-thumbnail.jpeg';
@@ -125,4 +125,36 @@ export async function getAllFilesInFolderWithSignedUrls(folderName: string) {
         );
         throw error;
     }
+}
+
+export async function uploadCsvToStorage(
+    fileName: string,
+    csvStream: Readable
+): Promise<{ fileCloudStorageUri: string }> {
+    const folder = 'roofing-zips'; //
+    const destFileName = `${folder}/${fileName}`;
+    const bucket = getStorage().bucket();
+    const file = bucket.file(destFileName);
+
+    try {
+        await new Promise((resolve, reject) => {
+            csvStream
+                .pipe(
+                    file.createWriteStream({
+                        metadata: {
+                            contentType: 'text/csv',
+                        },
+                    })
+                )
+                .on('finish', resolve)
+                .on('error', reject);
+        });
+        console.log(`CSV file uploaded successfully as ${destFileName}`);
+    } catch (error) {
+        console.error(`Error uploading CSV file as ${destFileName}`, error);
+        throw error;
+    }
+
+    const fileCloudStorageUri = `gs://${bucket.name}/${destFileName}`;
+    return { fileCloudStorageUri };
 }

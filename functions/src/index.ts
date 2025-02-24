@@ -27,6 +27,7 @@ import {
 import {
     getSignedUploadUrl,
     getSignedDownloadUrl,
+    uploadCsvToStorage,
 } from './firebaseStorageCloud.js';
 import { AdPerformance } from './models/AdPerformance.js';
 import { BigQueryService } from './services/BigQueryService.js';
@@ -45,6 +46,8 @@ import { ApifyService } from './services/ApifyService.js';
 import { GoogleGeminiService } from './services/GoogleGeminiService.js';
 import { OpenAiService } from './services/OpenAiService.js';
 import { TrelloService } from './services/TrelloService.js';
+import { Readable } from 'stream';
+import { Agent } from 'undici';
 
 config();
 
@@ -332,6 +335,127 @@ export const syncAdPerformance = onDocumentWritten(
             console.log(`Synced document ${docId} to Airtable`);
         } catch (error) {
             console.error(`Failed to sync document ${docId}:`, error);
+        }
+    }
+);
+
+export const saveRoofingZipsScheduled = onSchedule(
+    { schedule: 'every day 12:00', timeoutSeconds: 180, memory: '1GiB' },
+    async () => {
+        // Get today's date in PDT formatted as "YYYYMMDD"
+        const pdtDateStr = new Date().toLocaleDateString('sv-SE', {
+            timeZone: 'America/Los_Angeles',
+        });
+        const [year, month, day] = pdtDateStr.split('-');
+        const dateStr = `${year}${month}${day}`;
+        console.log({ dateStr });
+
+        // Construct URL using the PDT date
+        const fileUrl = `https://nx-live.s3.amazonaws.com/prices/affiliate_demand_${dateStr}.csv`;
+        console.log(`Fetching CSV from: ${fileUrl}`);
+
+        // Create a local custom agent with extended timeout settings
+        const localAgent = new Agent({
+            connectTimeout: 1 * 60 * 1000, // 1 minute to establish the TCP connection
+            headersTimeout: 1 * 60 * 1000, // 1 minute to wait for response headers
+            bodyTimeout: 3 * 60 * 1000, // 3 minutes to receive the response body
+        });
+
+        try {
+            // Execute the fetch with the custom agent and a User-Agent header
+            const response = await fetch(fileUrl, {
+                dispatcher: localAgent, // Use the custom agent for this request
+                headers: {
+                    'User-Agent':
+                        'Mozilla/5.0 (compatible; FirebaseCloudFunctions)',
+                },
+            } as any);
+
+            if (!response.ok || !response.body) {
+                throw new Error(
+                    `Failed to fetch CSV. Status: ${response.status}`
+                );
+            }
+
+            // Generate a file name that includes the date
+            const fileName = `affiliate_demand_${dateStr}.csv`;
+
+            // Convert the Web ReadableStream to a Node.js stream
+            const webReadable =
+                response.body as unknown as import('stream/web').ReadableStream<any>;
+            const nodeStream = Readable.fromWeb(webReadable);
+            const { fileCloudStorageUri } = await uploadCsvToStorage(
+                fileName,
+                nodeStream
+            );
+            console.log(`CSV file stored at: ${fileCloudStorageUri}`);
+        } catch (error) {
+            console.error('Error during roofing ZIPs scheduled task:', error);
+            throw error;
+        }
+    }
+);
+
+export const saveRoofingZipsHttp = onRequest(
+    { timeoutSeconds: 180 },
+    async (req, res) => {
+        try {
+            // Get today's date in PDT formatted as "YYYYMMDD"
+            const pdtDateStr = new Date().toLocaleDateString('sv-SE', {
+                timeZone: 'America/Los_Angeles',
+            });
+            const [year, month, day] = pdtDateStr.split('-');
+            const dateStr = `${year}${month}${day}`;
+            console.log({ dateStr });
+
+            // Construct URL using the PDT date
+            const fileUrl = `https://nx-live.s3.amazonaws.com/prices/affiliate_demand_${dateStr}.csv`;
+            console.log(`Fetching CSV from: ${fileUrl}`);
+
+            // Create a local custom agent with extended timeout settings
+            const localAgent = new Agent({
+                connectTimeout: 1 * 60 * 1000, // 1 minute to establish the TCP connection
+                headersTimeout: 1 * 60 * 1000, // 1 minute to wait for response headers
+                bodyTimeout: 3 * 60 * 1000, // 3 minutes to receive the response body
+            });
+
+            // Execute the fetch with the custom agent and a User-Agent header
+            const response = await fetch(fileUrl, {
+                dispatcher: localAgent, // Use the custom agent for this request
+                headers: {
+                    'User-Agent':
+                        'Mozilla/5.0 (compatible; FirebaseCloudFunctions)',
+                },
+            } as any);
+
+            if (!response.ok || !response.body) {
+                throw new Error(
+                    `Failed to fetch CSV. Status: ${response.status}`
+                );
+            }
+
+            // Generate a file name that includes the date
+            const fileName = `affiliate_demand_${dateStr}.csv`;
+
+            // Convert the Web ReadableStream to a NodeJS stream
+            const webReadable =
+                response.body as unknown as import('stream/web').ReadableStream<any>;
+            const nodeStream = Readable.fromWeb(webReadable);
+
+            // Upload the CSV to storage
+            const { fileCloudStorageUri } = await uploadCsvToStorage(
+                fileName,
+                nodeStream
+            );
+            console.log(`CSV file stored at: ${fileCloudStorageUri}`);
+
+            res.status(200).json({ success: true, fileCloudStorageUri });
+        } catch (error: unknown) {
+            console.error('Error during HTTP roofing ZIPs task:', error);
+            res.status(500).json({
+                success: false,
+                error: error instanceof Error ? error.message : String(error),
+            });
         }
     }
 );
