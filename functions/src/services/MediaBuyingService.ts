@@ -461,14 +461,14 @@ It will start running the next weekday.`;
         return scaledAdPerformance;
     }
 
-    handleCreateAd = async (
+    public async handleCreateAd(
         metaAdCreatorService: MetaAdCreatorService,
         fbAdSettings: FbAdSettings,
         campaignId: string,
         videoUuid: string,
         videoFileUrl: string,
         thumbnailFilePath: string = ''
-    ): Promise<Ad> => {
+    ): Promise<Ad> {
         const adSetNameAndAdName = `${videoUuid}`;
 
         const adSet: AdSet = await metaAdCreatorService.createAdSet({
@@ -483,7 +483,7 @@ It will start running the next weekday.`;
             videoFileUrl,
         });
 
-        // Use facebook generated thumbnail
+        // Use Facebook generated thumbnail
         const videoObject = await adVideo.read(['picture']);
         const fbGeneratedThumbnailUrl = videoObject.picture;
 
@@ -502,7 +502,7 @@ It will start running the next weekday.`;
         });
 
         return new Ad(ad.id);
-    };
+    }
 
     private async duplicateAdSetAndAdToCampaignWithUpdates(
         fbAdId: string,

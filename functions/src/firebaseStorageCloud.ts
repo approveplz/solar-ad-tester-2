@@ -191,3 +191,27 @@ export async function uploadFileToStorage(
     const fileCloudStorageUri = `gs://${bucket.name}/${destFileName}`;
     return { fileCloudStorageUri };
 }
+
+export async function downloadFileFromStorage(
+    folderName: string,
+    fileName: string
+): Promise<{ fileBuffer: Buffer; contentType: string }> {
+    const filePath = `${folderName}/${fileName}`;
+    const bucket = getStorage().bucket();
+    const file = bucket.file(filePath);
+
+    try {
+        // Download the file content as a buffer.
+        const [fileBuffer] = await file.download();
+
+        // Retrieve the file metadata to get the contentType.
+        const [metadata] = await file.getMetadata();
+        const contentType = metadata.contentType ?? 'application/octet-stream';
+
+        console.log(`File downloaded successfully from ${filePath}`);
+        return { fileBuffer, contentType };
+    } catch (error) {
+        console.error(`Error downloading file from ${filePath}`, error);
+        throw error;
+    }
+}
