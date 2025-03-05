@@ -1,5 +1,4 @@
 import { FbAdSettings } from '../models/FbAdSettings.js';
-import { getFbAdSettings } from '../index.js';
 import { Ad, AdCreative, AdSet, AdVideo } from 'facebook-nodejs-business-sdk';
 import MetaAdCreatorService from './MetaAdCreatorService.js';
 import {
@@ -13,11 +12,18 @@ import {
     saveAdPerformanceFirestore,
     getEventFirestoreDocRef,
     setEventFirestore,
+    getFbAdSettingFirestore,
 } from '../firestoreCloud.js';
 import invariant from 'tiny-invariant';
 import { SkypeService } from './SkypeService.js';
 import { TrelloService } from './TrelloService.js';
 import { getAdName, getNextWeekdayUnixSeconds } from '../helpers.js';
+import { ZipcodeObj } from './ZipcodeService.js';
+import { ZipcodeService } from './ZipcodeService.js';
+import { FbApiAdSetTargeting } from '../models/MetaApiSchema.js';
+import { downloadFileFromStorage } from '../firebaseStorageCloud.js';
+import { FbApiGeoLocations } from '../models/MetaApiSchema.js';
+import { AD_ACCOUNT_DATA } from '../adAccountConfig.js';
 
 export class MediaBuyingService {
     private metAdCreatorServices: Record<string, MetaAdCreatorService> = {};
@@ -390,11 +396,10 @@ It will start running the next weekday.`;
                     originalIdeaWriter,
                     'AZ'
                 )}-HOOK:${hookName}`;
-                const originalFbAdSettings: FbAdSettings =
-                    await getFbAdSettings(originalFbAccountId);
+
                 const hookAd = await this.handleCreateAd(
                     metaAdCreatorService,
-                    originalFbAdSettings,
+                    originalFbAccountId,
                     originalFbCampaignId,
                     hookAdName,
                     creatomateUrl
@@ -461,15 +466,93 @@ It will start running the next weekday.`;
         return scaledAdPerformance;
     }
 
+    public async getFbAdSettings(fbAccountId: string) {
+        // Account ID determines if ad type is O or R
+        const fbAdSettings: FbAdSettings | null = await getFbAdSettingFirestore(
+            fbAccountId
+        );
+        if (fbAdSettings) {
+            invariant(
+                fbAdSettings.adSetParams.adSetTargeting,
+                'adSetTargeting must exist'
+            );
+            const { age_max, age_min, genders } =
+                fbAdSettings.adSetParams.adSetTargeting;
+
+            // Get geo locations from most recent zipcodes for roofing. These change daily
+            const targetingGeoLocations =
+                await this.getAdSetTargetingGeoLocationsMostRecentZipcodes();
+
+            const targeting: FbApiAdSetTargeting = {
+                ...AD_ACCOUNT_DATA[fbAccountId as keyof typeof AD_ACCOUNT_DATA]
+                    .targeting,
+                ...targetingGeoLocations,
+                age_max,
+                age_min,
+                genders,
+            };
+
+            invariant(
+                targeting.geo_locations,
+                'geo_locations must exist in targeting'
+            );
+
+            fbAdSettings.adSetParams.adSetTargeting = targeting;
+        } else {
+            throw new Error(
+                `No ad settings found for accountId: ${fbAccountId}`
+            );
+        }
+
+        return fbAdSettings;
+    }
+
+    public async getAdSetTargetingGeoLocationsMostRecentZipcodes(): Promise<{
+        geo_locations: FbApiGeoLocations;
+    }> {
+        const folderName = 'roofing-zips-filtered';
+        const todayDateStr = ZipcodeService.getTodayZipcodeFileDate();
+        const fileName = `affiliate_demand_${todayDateStr}.json`;
+
+        const { fileBuffer, contentType } = await downloadFileFromStorage(
+            folderName,
+            fileName
+        );
+
+        if (contentType !== 'application/json') {
+            throw new Error(`Invalid content type: ${contentType}`);
+        }
+
+        const zipCodesObj: ZipcodeObj = JSON.parse(fileBuffer.toString());
+        const { records } = zipCodesObj;
+
+        const zipcodes = records.map((record) => record.zipCode);
+        const validUniqueZipcodes =
+            await ZipcodeService.filterUniqueValidZipcodes(zipcodes);
+
+        const validUniqueFbTargetingZipcodes = validUniqueZipcodes.map(
+            (zipCode) => ({ key: `US:${zipCode}` })
+        );
+
+        // const testingZips = zips.slice(0, 3500);
+
+        return {
+            geo_locations: {
+                zips: validUniqueFbTargetingZipcodes,
+            },
+        };
+    }
+
     public async handleCreateAd(
         metaAdCreatorService: MetaAdCreatorService,
-        fbAdSettings: FbAdSettings,
+        fbAccountId: string,
         campaignId: string,
         videoUuid: string,
         videoFileUrl: string,
         thumbnailFilePath: string = ''
     ): Promise<Ad> {
         const adSetNameAndAdName = `${videoUuid}`;
+        const fbAdSettings = await this.getFbAdSettings(fbAccountId);
 
         const adSet: AdSet = await metaAdCreatorService.createAdSet({
             name: adSetNameAndAdName,

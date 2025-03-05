@@ -1,5 +1,6 @@
 import { Agent } from 'undici';
 import { parse } from 'csv-parse/sync';
+import { downloadFileFromStorage } from '../firebaseStorageCloud.js';
 
 export interface CsvRecord {
     taskId: number;
@@ -10,19 +11,33 @@ export interface CsvRecord {
     avg: number;
 }
 
+export interface ZipcodeObj {
+    date: string;
+    records: {
+        taskId: number;
+        category: string;
+        task: string;
+        zipCode: string;
+        density: number;
+        avg: number;
+    }[];
+}
+
 export class ZipcodeService {
-    public async getUpdatedCsvRecords(): Promise<{
-        date: string;
-        records: CsvRecord[];
-    }> {
-        // Get today's date in PDT as "YYYYMMDD"
+    public static getTodayZipcodeFileDate(): string {
         const pdtDateStr = new Date().toLocaleDateString('sv-SE', {
             timeZone: 'America/Los_Angeles',
         });
         // pdtDateStr is in "YYYY-MM-DD"; remove dashes to get "YYYYMMDD"
         const [year, month, day] = pdtDateStr.split('-');
-        const dateStr = `${year}${month}${day}`;
+        return `${year}${month}${day}`;
+    }
 
+    public async getCurrentCsvRecords(): Promise<{
+        date: string;
+        records: CsvRecord[];
+    }> {
+        const dateStr = ZipcodeService.getTodayZipcodeFileDate();
         const fileUrl = `https://nx-live.s3.amazonaws.com/prices/affiliate_demand_${dateStr}.csv`;
         console.log(`Fetching CSV from URL: ${fileUrl}`);
 
@@ -133,6 +148,37 @@ export class ZipcodeService {
 
         return records.filter((record) =>
             roofingCategories.includes(record.category)
+        );
+    }
+
+    public static async filterUniqueValidZipcodes(
+        roofingZipcodes: string[]
+    ): Promise<string[]> {
+        const folderName = 'valid-zips-us';
+        // This only needs to change if we update the valid zipcodes file in firebase storage
+        const fileName = 'valid-zips-20250227.csv';
+        const { fileBuffer: validZipcodesBuffer, contentType } =
+            await downloadFileFromStorage(folderName, fileName);
+
+        if (contentType !== 'text/csv') {
+            throw new Error(`Invalid content type: ${contentType}`);
+        }
+
+        const validZipcodeRecords = parse(validZipcodesBuffer.toString(), {
+            skip_empty_lines: true,
+        });
+
+        // Flatten records assuming each row is an array with a single zip code string
+        const validZipcodes = validZipcodeRecords.map((row: string[]) =>
+            row[0].trim()
+        );
+
+        const validZipcodesSet = new Set(validZipcodes);
+
+        const uniqueRoofingZipcodes = [...new Set(roofingZipcodes)];
+
+        return uniqueRoofingZipcodes.filter((zipcode) =>
+            validZipcodesSet.has(zipcode)
         );
     }
 }

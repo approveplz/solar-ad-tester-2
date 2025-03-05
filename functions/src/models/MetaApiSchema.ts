@@ -50,6 +50,20 @@ export interface FbApiCreateAdRequest {
 
 // Facebook API Objects
 
+export interface FbApiGeoZipLocation {
+    key: string;
+    name?: string;
+    primary_city_id?: number;
+    region_id?: number;
+    country?: string;
+}
+
+export interface FbApiGeoLocations {
+    zips?: FbApiGeoZipLocation[];
+    location_types?: string[];
+    location_cluster_ids?: { key: string }[];
+}
+
 export interface FbApiAdSetTargeting {
     age_max: number;
     age_min: number;
@@ -64,18 +78,7 @@ export interface FbApiAdSetTargeting {
         }[];
         location_types: string[];
     };
-    geo_locations?: {
-        zips?: {
-            key: string;
-            name: string;
-            primary_city_id: number;
-            region_id: number;
-            country: string;
-        }[];
-        countries?: string[];
-        location_types?: string[];
-        location_cluster_ids?: { key: string }[];
-    };
+    geo_locations: FbApiGeoLocations;
     brand_safety_content_filter_levels?: string[];
     targeting_automation?: {
         // 1 for true

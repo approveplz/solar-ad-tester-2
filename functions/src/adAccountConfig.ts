@@ -35,10 +35,10 @@ export const AD_ACCOUNT_DATA: AdAccountConfigData = {
         campaignId: '120215523703190415',
         scalingCampaignId: '120216751824410415',
         targeting: {
-            geo_locations: {
-                location_types: ['home', 'recent'],
-                location_cluster_ids: [{ key: '9096931440399416' }],
-            },
+            // geo_locations: {
+            //     location_types: ['home', 'recent'],
+            //     location_cluster_ids: [{ key: '9096931440399416' }],
+            // },
             excluded_custom_audiences: [
                 {
                     id: '120214060134290415',

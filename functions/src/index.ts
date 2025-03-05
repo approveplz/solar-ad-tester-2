@@ -1,13 +1,11 @@
 import { onRequest } from 'firebase-functions/v2/https';
 import { Request, Response } from 'express';
-import { onObjectFinalized } from 'firebase-functions/v2/storage';
 import { initializeApp, cert } from 'firebase-admin/app';
 import invariant from 'tiny-invariant';
 import serviceAccount from './solar-ad-tester-2-firebase-adminsdk-3iokc-bd8ce8732d.json' assert { type: 'json' };
 import { config } from 'dotenv';
 import MetaAdCreatorService from './services/MetaAdCreatorService.js';
-import { FbAdSettings } from './models/FbAdSettings.js';
-import { FbApiAdSetTargeting } from './models/MetaApiSchema.js';
+
 import {
     Ad,
     AdCreative,
@@ -29,6 +27,7 @@ import {
     getSignedDownloadUrl,
     uploadCsvToStorage,
     uploadFileToStorage,
+    downloadFileFromStorage,
 } from './firebaseStorageCloud.js';
 import { AdPerformance } from './models/AdPerformance.js';
 import { BigQueryService } from './services/BigQueryService.js';
@@ -48,7 +47,6 @@ import { GoogleGeminiService } from './services/GoogleGeminiService.js';
 import { OpenAiService } from './services/OpenAiService.js';
 import { TrelloService } from './services/TrelloService.js';
 import { Readable } from 'stream';
-import { Agent } from 'undici';
 import { ZipcodeService } from './services/ZipcodeService.js';
 
 config();
@@ -56,223 +54,11 @@ config();
 const UUID_FIELD_NAME = 'uuid';
 const AD_TYPE_FIELD_NAME = 'ad_type';
 const ACCOUNT_ID_FIELD_NAME = 'account_id';
-const IMAGE_BYTES_FIELD_NAME = 'image_bytes';
 
 initializeApp({
     credential: cert(serviceAccount as any),
     storageBucket: 'solar-ad-tester-2.appspot.com',
 });
-
-export const getFbAdSettings = async (accountId: string) => {
-    // Account ID determines if ad type is O or R
-    const fbAdSettings = await getFbAdSettingFirestore(accountId);
-    if (fbAdSettings) {
-        invariant(
-            fbAdSettings.adSetParams.adSetTargeting,
-            'adSetTargeting must exist'
-        );
-        const { age_max, age_min, genders } =
-            fbAdSettings.adSetParams.adSetTargeting;
-
-        // Get targeting
-        const targeting: FbApiAdSetTargeting = {
-            ...AD_ACCOUNT_DATA[accountId as keyof typeof AD_ACCOUNT_DATA]
-                .targeting,
-            age_max,
-            age_min,
-            genders,
-        };
-
-        fbAdSettings.adSetParams.adSetTargeting = targeting;
-    } else {
-        throw new Error(`No ad settings found for accountId: ${accountId}`);
-    }
-
-    return fbAdSettings;
-};
-
-const handleCreateAd = async (
-    metaAdCreatorService: MetaAdCreatorService,
-    fbAdSettings: FbAdSettings,
-    campaignId: string,
-    videoUuid: string,
-    videoFileUrl: string,
-    thumbnailFilePath: string = ''
-) => {
-    const adSetNameAndAdName = `${videoUuid}`;
-
-    const adSet: AdSet = await metaAdCreatorService.createAdSet({
-        name: adSetNameAndAdName,
-        campaignId,
-        fbAdSettings,
-    });
-
-    // Create Ad Video
-    const adVideo: AdVideo = await metaAdCreatorService.uploadAdVideo({
-        scrapedAdArchiveId: videoUuid,
-        videoFileUrl,
-    });
-
-    // Use facebook generated thumbnail
-    const videoObject = await adVideo.read(['picture']);
-    const fbGeneratedThumbnailUrl = videoObject.picture;
-
-    const adCreative: AdCreative = await metaAdCreatorService.createAdCreative(
-        `Creative-${adSetNameAndAdName}`,
-        adVideo,
-        thumbnailFilePath || fbGeneratedThumbnailUrl,
-        fbAdSettings
-    );
-
-    const ad: Ad = await metaAdCreatorService.createAd({
-        name: adSetNameAndAdName,
-        adSet,
-        adCreative,
-    });
-
-    return ad;
-};
-
-export const watchCloudStorageUploads = onObjectFinalized(async (event) => {
-    console.log('watched cloud storage uploads triggered');
-    const WATCHED_FOLDERS = Object.keys(AD_ACCOUNT_DATA);
-
-    const { name: filePath, contentType } = event.data;
-
-    const [folder, fileName, ...rest] = filePath.split('/');
-
-    console.log({ folder, eventData: event.data });
-
-    if (!WATCHED_FOLDERS.includes(folder)) {
-        return;
-    }
-
-    console.log('watch cloud storage uploads running');
-
-    if (contentType !== 'video/mp4') {
-        console.error(
-            `Non-video file uploaded. filePath: ${filePath}. contentType: ${contentType}`
-        );
-        return;
-    }
-
-    console.log(
-        `Triggering function for upload in watched folder: ${folder}. filePath: ${filePath}`
-    );
-
-    const { url: downloadUrl, uuid } = await getSignedDownloadUrl(filePath);
-
-    invariant(uuid && typeof uuid === 'string', 'uuid must exist');
-
-    const accountId = folder;
-
-    const fbAdSettings = await getFbAdSettings(accountId);
-
-    invariant(fbAdSettings !== null, `fbAdSettings is null`);
-
-    const adAccountData =
-        AD_ACCOUNT_DATA[accountId as keyof typeof AD_ACCOUNT_DATA];
-    invariant(
-        adAccountData,
-        `ad account data not found in constants for account id: ${accountId}`
-    );
-
-    const { campaignId } = adAccountData;
-
-    invariant(
-        campaignId,
-        `Campaign ID not found in AD_ACCOUNT_DATA for account ID: ${accountId}`
-    );
-
-    const metaAdCreatorService = new MetaAdCreatorService({
-        appId: process.env.FACEBOOK_APP_ID || '',
-        appSecret: process.env.FACEBOOK_APP_SECRET || '',
-        accessToken: process.env.FACEBOOK_ACCESS_TOKEN || '',
-        accountId: accountId || '',
-        apiVersion: '20.0',
-    });
-
-    // /* Create Campaign */
-    // // const campaignName = `[facebook] - [GLP-1] - [AZ] - [USA] - [All] - [GLP-V1] - [Auto Creative Testing] - [1]`;
-    // const campaignName = `[facebook] - [ROOFING] - [AZ] - [USA] - [All] - [Auto Creative Testing] - [1]`;
-
-    // const campaign: Campaign = await metaAdCreatorService.createCampaign({
-    //     name: campaignName,
-    //     fbAdSettings,
-    // });
-    // campaignId = campaign.id; // Campaign ID if we create it here
-
-    const ad = await handleCreateAd(
-        metaAdCreatorService,
-        fbAdSettings,
-        campaignId,
-        uuid,
-        downloadUrl
-    );
-
-    // Send adId and adName to Make.com webhook
-    const adResponse = (await (ad.get(['name', ' id']) as unknown)) as {
-        name: string;
-        id: string;
-    };
-
-    const adName = adResponse.name;
-    const adId = adResponse.id;
-    console.log({ ad, adName, adId });
-    const makeWebhookUrl =
-        'https://hook.us1.make.com/w08iv7ieulywlnb91i594d93c1mqks7y';
-    const makeWebhookPayload = {
-        adId,
-        adName,
-        accountId,
-    };
-
-    await fetch(makeWebhookUrl, {
-        method: 'POST',
-        body: JSON.stringify(makeWebhookPayload),
-    });
-});
-
-export const scrapeAdsScheduled = onSchedule(
-    // 14:00 UTC is 7:00 PDT
-    { schedule: 'every day 14:00', timeoutSeconds: 540, memory: '2GiB' },
-    async () => {
-        const googleGeminiService = new GoogleGeminiService(
-            process.env.GOOGLE_GEMINI_API_KEY || ''
-        );
-        const openAiService = new OpenAiService(
-            process.env.OPENAI_API_KEY || ''
-        );
-        const skypeService = new SkypeService(
-            process.env.MICROSOFT_APP_ID || '',
-            process.env.MICROSOFT_APP_PASSWORD || ''
-        );
-        const apifyService = new ApifyService(
-            process.env.APIFY_API_TOKEN || '',
-            googleGeminiService,
-            openAiService
-        );
-
-        const hasNewAdsArr = await Promise.allSettled([
-            apifyService.execute(apifyService.ROOFING_QUOTE_ORG_PAGE_ID),
-            apifyService.execute(apifyService.COST_GUIDE_PAGE_ID),
-            apifyService.execute(apifyService.TRUSTED_ROOF_EXPERTS),
-            apifyService.execute(apifyService.HOME_IMPROVEMENT_QUOTES),
-            apifyService.execute(apifyService.ROOF_REPLACEMENT_PROGRAM),
-        ]);
-
-        const hasNewAds = hasNewAdsArr.some(
-            (result) => result.status === 'fulfilled' && result.value
-        );
-
-        if (hasNewAds) {
-            await skypeService.sendMessage(
-                'AZ',
-                'There are new scraped ads ready for review at https://solar-ad-tester-2.web.app/'
-            );
-        }
-    }
-);
 
 export const updateAdPerformanceScheduled = onSchedule(
     {
@@ -341,71 +127,13 @@ export const syncAdPerformance = onDocumentWritten(
     }
 );
 
-// TODO: Remove this
-export const saveRoofingZipsScheduled = onSchedule(
-    { schedule: 'every day 12:00', timeoutSeconds: 180, memory: '2GiB' },
-    async () => {
-        // Get today's date in PDT formatted as "YYYYMMDD"
-        const pdtDateStr = new Date().toLocaleDateString('sv-SE', {
-            timeZone: 'America/Los_Angeles',
-        });
-        const [year, month, day] = pdtDateStr.split('-');
-        const dateStr = `${year}${month}${day}`;
-        console.log({ dateStr });
-
-        // Construct URL using the PDT date
-        const fileUrl = `https://nx-live.s3.amazonaws.com/prices/affiliate_demand_${dateStr}.csv`;
-        console.log(`Fetching CSV from: ${fileUrl}`);
-
-        // Create a local custom agent with extended timeout settings
-        const localAgent = new Agent({
-            connectTimeout: 1 * 60 * 1000, // 1 minute to establish the TCP connection
-            headersTimeout: 1 * 60 * 1000, // 1 minute to wait for response headers
-            bodyTimeout: 3 * 60 * 1000, // 3 minutes to receive the response body
-        });
-
-        try {
-            // Execute the fetch with the custom agent and a User-Agent header
-            const response = await fetch(fileUrl, {
-                dispatcher: localAgent, // Use the custom agent for this request
-                headers: {
-                    'User-Agent':
-                        'Mozilla/5.0 (compatible; FirebaseCloudFunctions)',
-                },
-            } as any);
-
-            if (!response.ok || !response.body) {
-                throw new Error(
-                    `Failed to fetch CSV. Status: ${response.status}`
-                );
-            }
-
-            // Generate a file name that includes the date
-            const fileName = `affiliate_demand_${dateStr}.csv`;
-
-            // Convert the Web ReadableStream to a Node.js stream
-            const webReadable =
-                response.body as unknown as import('stream/web').ReadableStream<any>;
-            const nodeStream = Readable.fromWeb(webReadable);
-            const { fileCloudStorageUri } = await uploadCsvToStorage(
-                fileName,
-                nodeStream
-            );
-            console.log(`CSV file stored at: ${fileCloudStorageUri}`);
-        } catch (error) {
-            console.error('Error during roofing ZIPs scheduled task:', error);
-            throw error;
-        }
-    }
-);
-
 export const saveFilteredRoofingZipsScheduled = onSchedule(
     { schedule: 'every day 12:00', timeoutSeconds: 180, memory: '2GiB' },
     async () => {
         try {
             const zipcodeService = new ZipcodeService();
             const roofingRecordsObj =
-                await zipcodeService.getUpdatedCsvRecords();
+                await zipcodeService.getCurrentCsvRecords();
             const { date } = roofingRecordsObj;
 
             const roofingRecordsObjJson = JSON.stringify(
@@ -443,7 +171,7 @@ export const saveRoofingZipsHttp = onRequest(
             // Instantiate the ZipcodeService to fetch, parse, and filter CSV records.
             const zipcodeService = new ZipcodeService();
             const roofingRecordsObj =
-                await zipcodeService.getUpdatedCsvRecords();
+                await zipcodeService.getCurrentCsvRecords();
             const { date, records } = roofingRecordsObj;
 
             const roofingRecordsObjJson = JSON.stringify(
@@ -490,6 +218,25 @@ export const saveRoofingZipsHttp = onRequest(
 export const createFbAdHttp = onRequest(
     { timeoutSeconds: 540, memory: '1GiB' },
     async (req, res) => {
+        const creatomateService = await CreatomateService.create(
+            process.env.CREATOMATE_API_KEY || ''
+        );
+        const bigQueryService = new BigQueryService();
+        const skypeService = new SkypeService(
+            process.env.MICROSOFT_APP_ID || '',
+            process.env.MICROSOFT_APP_PASSWORD || ''
+        );
+        const trelloService = new TrelloService(
+            process.env.TRELLO_API_KEY || '',
+            process.env.TRELLO_API_TOKEN || ''
+        );
+        const mediaBuyingService = new MediaBuyingService(
+            creatomateService,
+            bigQueryService,
+            skypeService,
+            trelloService
+        );
+
         try {
             // Validate required request body parameters
             const requiredFields = [
@@ -531,7 +278,6 @@ export const createFbAdHttp = onRequest(
             );
 
             const { campaignId, scalingCampaignId } = adAccountData;
-            const fbAdSettings = await getFbAdSettings(accountId);
             const metaAdCreatorService = new MetaAdCreatorService({
                 appId: process.env.FACEBOOK_APP_ID || '',
                 appSecret: process.env.FACEBOOK_APP_SECRET || '',
@@ -549,19 +295,15 @@ export const createFbAdHttp = onRequest(
                 hookWriter
             );
 
-            const ad = await handleCreateAd(
+            const ad = await mediaBuyingService.handleCreateAd(
                 metaAdCreatorService,
-                fbAdSettings,
+                accountId,
                 campaignId,
                 adName,
                 downloadUrl
             );
 
-            const adResponse = (await (ad.get(['name', ' id']) as unknown)) as {
-                id: string;
-            };
-
-            const fbAdId = adResponse.id;
+            const fbAdId = ad.id;
             const fbAdSetId = await metaAdCreatorService.getAdSetIdFromAdId(
                 fbAdId
             );
