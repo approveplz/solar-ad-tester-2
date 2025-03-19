@@ -224,36 +224,37 @@ ${hookAdPerformances
             }
         }
 
+        // TODO: Add scaling back in.
         // Ad above threshold to scale. Scale if not yet scaled.
-        if (
-            fbRoiLifetime >= this.LIFETIME_ROI_SCALING_THRESHOLD &&
-            !adPerformance.hasScaled &&
-            leadsLifetime >= 3
-        ) {
-            const scaledAdDailyBudgetCents = 20000;
-            const scaledAdPerformance = await this.handleScaling(
-                adPerformance,
-                metaAdCreatorService,
-                scaledAdDailyBudgetCents
-            );
+//         if (
+//             fbRoiLifetime >= this.LIFETIME_ROI_SCALING_THRESHOLD &&
+//             !adPerformance.hasScaled &&
+//             leadsLifetime >= 3
+//         ) {
+//             const scaledAdDailyBudgetCents = 20000;
+//             const scaledAdPerformance = await this.handleScaling(
+//                 adPerformance,
+//                 metaAdCreatorService,
+//                 scaledAdDailyBudgetCents
+//             );
 
-            const message = `
-I've scaled your ad for you because the ROI was over ${
-                this.LIFETIME_ROI_SCALING_THRESHOLD
-            }x
+//             const message = `
+// I've scaled your ad for you because the ROI was over ${
+//                 this.LIFETIME_ROI_SCALING_THRESHOLD
+//             }x
 
-This is the original ad that I've scaled:
-${skypeService.createMessageWithAdPerformanceInfo(adPerformance)}
+// This is the original ad that I've scaled:
+// ${skypeService.createMessageWithAdPerformanceInfo(adPerformance)}
 
-This is the scaled ad that I've created for you with a daily budget of $${(
-                scaledAdDailyBudgetCents / 100
-            ).toFixed(2)}:
-${skypeService.createMessageWithAdPerformanceInfo(scaledAdPerformance, false)}
+// This is the scaled ad that I've created for you with a daily budget of $${(
+//                 scaledAdDailyBudgetCents / 100
+//             ).toFixed(2)}:
+// ${skypeService.createMessageWithAdPerformanceInfo(scaledAdPerformance, false)}
 
-It will start running the next weekday.`;
+// It will start running the next weekday.`;
 
-            await skypeService.sendMessage(mediaBuyer, message);
-        }
+//             await skypeService.sendMessage(mediaBuyer, message);
+//         }
     }
 
     private async pauseUnderperformingAd(
