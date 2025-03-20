@@ -308,6 +308,13 @@ export const createFbAdHttp = onRequest(
                 fbAdId
             );
 
+            const googleGeminiService = new GoogleGeminiService(
+                process.env.GOOGLE_GEMINI_API_KEY || ''
+            );
+            const transcript = await googleGeminiService.getAdScript(
+                downloadUrl
+            );
+
             const isFromTrelloCard =
                 scriptWriter === 'AT' ||
                 hookWriter === 'AT' ||
@@ -334,6 +341,7 @@ export const createFbAdHttp = onRequest(
                 hasScaled: false,
                 isFromTrelloCard,
                 hasTrelloCardCreated: false,
+                script: transcript,
             };
 
             await saveAdPerformanceFirestore(fbAdId, adPerformance);

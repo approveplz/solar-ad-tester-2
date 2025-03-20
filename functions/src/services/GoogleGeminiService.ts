@@ -12,6 +12,10 @@ export interface AdAnalysis {
     description: string;
 }
 
+export interface AdScript {
+    transcript: string;
+}
+
 export class GoogleGeminiService {
     private generativeAI: GoogleGenerativeAI;
 
@@ -289,6 +293,47 @@ Do not include any formatting such as bold, italics, bullet points, or line brea
         } catch (error) {
             console.error(
                 '[GoogleGeminiService:respondToMessage] Error:',
+                error
+            );
+            throw error;
+        }
+    }
+
+    public async getAdScript(videoUrl: string): Promise<string> {
+        const schema = {
+            type: SchemaType.OBJECT,
+            properties: {
+                transcript: { type: SchemaType.STRING },
+            },
+            required: ['transcript'],
+        };
+
+        const prompt = `I want you to analyze this roofing video ad and produce a JSON-style response containing a single key: transcript. The transcript should be a word-for-word transcript of the ad. Do not include any formatting such as bold, italics, bullet points, or line breaks. Return plain text only.`;
+
+        try {
+            const model = this.generativeAI.getGenerativeModel({
+                model: 'gemini-1.5-flash',
+                generationConfig: {
+                    responseMimeType: 'application/json',
+                    responseSchema: schema,
+                },
+            });
+
+            const videoData = await this.downscaleVideo(videoUrl);
+
+            const videoPayload = {
+                inlineData: {
+                    data: videoData,
+                    mimeType: 'video/mp4',
+                },
+            };
+            const result = await model.generateContent([prompt, videoPayload]);
+            const responseJson = result.response.text();
+            const responseObj: AdScript = JSON.parse(responseJson);
+            return responseObj.transcript;
+        } catch (error) {
+            console.error(
+                `[GoogleGeminiService:getAdScript] Error getting transcript for videoUrl: ${videoUrl}`,
                 error
             );
             throw error;
