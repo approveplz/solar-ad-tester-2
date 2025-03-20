@@ -133,7 +133,7 @@ function Instructions() {
                         number to the beginning of the filename. For example, if
                         you upload a file named:
                     </p>
-                    <pre style={styles.pre}>R-AZ-AZ-AZ.mp4</pre>
+                    <pre style={styles.pre}>R-AZ-AZ-AZ</pre>
                     <p>The system will rename it to:</p>
                     <pre style={styles.pre}>101-R-AZ-AZ-AZ</pre>
                     <p>
@@ -147,9 +147,9 @@ function Instructions() {
                         anything after the standard naming format. For example,
                         you could name your files in the Google Drive folder:
                     </p>
-                    <pre style={styles.pre}>R-AZ-AZ-AZ-version1.mp4</pre>
-                    <pre style={styles.pre}>R-AZ-AZ-AZ-12.mp4</pre>
-                    <pre style={styles.pre}>R-AZ-AZ-AZ-test3.mp4</pre>
+                    <pre style={styles.pre}>R-AZ-AZ-AZ-version1</pre>
+                    <pre style={styles.pre}>R-AZ-AZ-AZ-12</pre>
+                    <pre style={styles.pre}>R-AZ-AZ-AZ-test3</pre>
                 </div>
             </div>
         </div>
