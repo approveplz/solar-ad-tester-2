@@ -226,35 +226,35 @@ ${hookAdPerformances
 
         // TODO: Add scaling back in.
         // Ad above threshold to scale. Scale if not yet scaled.
-//         if (
-//             fbRoiLifetime >= this.LIFETIME_ROI_SCALING_THRESHOLD &&
-//             !adPerformance.hasScaled &&
-//             leadsLifetime >= 3
-//         ) {
-//             const scaledAdDailyBudgetCents = 20000;
-//             const scaledAdPerformance = await this.handleScaling(
-//                 adPerformance,
-//                 metaAdCreatorService,
-//                 scaledAdDailyBudgetCents
-//             );
+        //         if (
+        //             fbRoiLifetime >= this.LIFETIME_ROI_SCALING_THRESHOLD &&
+        //             !adPerformance.hasScaled &&
+        //             leadsLifetime >= 3
+        //         ) {
+        //             const scaledAdDailyBudgetCents = 20000;
+        //             const scaledAdPerformance = await this.handleScaling(
+        //                 adPerformance,
+        //                 metaAdCreatorService,
+        //                 scaledAdDailyBudgetCents
+        //             );
 
-//             const message = `
-// I've scaled your ad for you because the ROI was over ${
-//                 this.LIFETIME_ROI_SCALING_THRESHOLD
-//             }x
+        //             const message = `
+        // I've scaled your ad for you because the ROI was over ${
+        //                 this.LIFETIME_ROI_SCALING_THRESHOLD
+        //             }x
 
-// This is the original ad that I've scaled:
-// ${skypeService.createMessageWithAdPerformanceInfo(adPerformance)}
+        // This is the original ad that I've scaled:
+        // ${skypeService.createMessageWithAdPerformanceInfo(adPerformance)}
 
-// This is the scaled ad that I've created for you with a daily budget of $${(
-//                 scaledAdDailyBudgetCents / 100
-//             ).toFixed(2)}:
-// ${skypeService.createMessageWithAdPerformanceInfo(scaledAdPerformance, false)}
+        // This is the scaled ad that I've created for you with a daily budget of $${(
+        //                 scaledAdDailyBudgetCents / 100
+        //             ).toFixed(2)}:
+        // ${skypeService.createMessageWithAdPerformanceInfo(scaledAdPerformance, false)}
 
-// It will start running the next weekday.`;
+        // It will start running the next weekday.`;
 
-//             await skypeService.sendMessage(mediaBuyer, message);
-//         }
+        //             await skypeService.sendMessage(mediaBuyer, message);
+        //         }
     }
 
     private async pauseUnderperformingAd(
@@ -481,8 +481,12 @@ ${hookAdPerformances
                 fbAdSettings.adSetParams.adSetTargeting;
 
             // Get geo locations from most recent zipcodes for roofing. These change daily
+            // const targetingGeoLocations =
+            //     await this.getAdSetTargetingGeoLocationsMostRecentZipcodes();
+
+            // Vincent zips
             const targetingGeoLocations =
-                await this.getAdSetTargetingGeoLocationsMostRecentZipcodes();
+                await this.getAdHocTargetingGeoLocations();
 
             const targeting: FbApiAdSetTargeting = {
                 ...AD_ACCOUNT_DATA[fbAccountId as keyof typeof AD_ACCOUNT_DATA]
@@ -506,6 +510,23 @@ ${hookAdPerformances
         }
 
         return fbAdSettings;
+    }
+
+    public async getAdHocTargetingGeoLocations() {
+        const folderName = 'adhoc-roofing-zips';
+        const fileName = 'network-demand-2-28-over-100.json';
+
+        const { fileBuffer, contentType } = await downloadFileFromStorage(
+            folderName,
+            fileName
+        );
+
+        const zipcodes = JSON.parse(fileBuffer.toString());
+        return {
+            geo_locations: {
+                zips: zipcodes.zips,
+            },
+        };
     }
 
     public async getAdSetTargetingGeoLocationsMostRecentZipcodes(): Promise<{
@@ -534,8 +555,6 @@ ${hookAdPerformances
         const validUniqueFbTargetingZipcodes = validUniqueZipcodes.map(
             (zipCode) => ({ key: `US:${zipCode}` })
         );
-
-        // const testingZips = zips.slice(0, 3500);
 
         return {
             geo_locations: {
