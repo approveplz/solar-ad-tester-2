@@ -457,21 +457,21 @@ export const uploadThirdPartyAdGetSignedUploadUrl = onRequest(
  * HTTP Function endpoints for testing
  ******************************************************************************/
 
-export const handleTrelloRequestHttp_TEST = onRequest(async (req, res) => {
-    const trelloService = new TrelloService(
-        process.env.TRELLO_API_KEY || '',
-        process.env.TRELLO_API_TOKEN || ''
-    );
-    // const result = await trelloService.getLists();
-    const videoAdUrl =
-        'https://drive.google.com/file/d/1LZ6JGg8M1LMSD-h00frPqjn2gWy1FLZQ/view?usp=sharing';
-    const cardName = trelloService.getRoofingCardName('R-AZ-AZ-AZ-TEST', 5);
-    const result = await trelloService.createCardFromRoofingTemplate(
-        cardName,
-        videoAdUrl
-    );
-    res.status(200).json({ success: true, result });
-});
+// export const handleTrelloRequestHttp_TEST = onRequest(async (req, res) => {
+//     const trelloService = new TrelloService(
+//         process.env.TRELLO_API_KEY || '',
+//         process.env.TRELLO_API_TOKEN || ''
+//     );
+//     // const result = await trelloService.getLists();
+//     const videoAdUrl =
+//         'https://drive.google.com/file/d/1LZ6JGg8M1LMSD-h00frPqjn2gWy1FLZQ/view?usp=sharing';
+//     const cardName = trelloService.getRoofingCardName('R-AZ-AZ-AZ-TEST', 5);
+//     const result = await trelloService.createCardFromRoofingTemplate(
+//         cardName,
+//         videoAdUrl
+//     );
+//     res.status(200).json({ success: true, result });
+// });
 
 export const handleGoogleGeminiRequestHttp_TEST = onRequest(
     { timeoutSeconds: 300 },
