@@ -60,6 +60,9 @@ Roofing Pay Per Lead Ad. We run traffic to the link above from Facebook, and we 
 
 Please create 5 variations using different formats / styles of ads based on the example ad. The example ad is already working, we just want to give it new legs and try a different style of video.
 
+# Link to Video
+[Video Ad](${videoAdUrl})
+
 # Type of Content
 
 --
