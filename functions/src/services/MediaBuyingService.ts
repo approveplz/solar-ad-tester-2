@@ -195,34 +195,35 @@ ${skypeService.createMessageWithAdPerformanceInfo(adPerformance)}`;
             await skypeService.sendMessage(mediaBuyer, message);
         }
 
-        // Ad above threshold to create hooks. Create hooks if not yet created and its not a hook.
-        if (!adPerformance.hasHooksCreated && !adPerformance.isHook) {
-            try {
-                const hookAdPerformances = await this.handleCreateHooks(
-                    adPerformance,
-                    metaAdCreatorService
-                );
-                const message = `
-I've created hooks for your ad because the ROI was over ${
-                    this.LIFETIME_ROI_HOOK_THRESHOLD
-                }x
+        // TODO: Add hooks creation back in.
+        //         // Ad above threshold to create hooks. Create hooks if not yet created and its not a hook.
+        //         if (!adPerformance.hasHooksCreated && !adPerformance.isHook) {
+        //             try {
+        //                 const hookAdPerformances = await this.handleCreateHooks(
+        //                     adPerformance,
+        //                     metaAdCreatorService
+        //                 );
+        //                 const message = `
+        // I've created hooks for your ad because the ROI was over ${
+        //                     this.LIFETIME_ROI_HOOK_THRESHOLD
+        //                 }x
 
-This is the ad that I've created hooks for:
-${skypeService.createMessageWithAdPerformanceInfo(adPerformance)}
+        // This is the ad that I've created hooks for:
+        // ${skypeService.createMessageWithAdPerformanceInfo(adPerformance)}
 
-These are the hooks that I've created:
-${hookAdPerformances
-    .map((hook) => skypeService.createMessageWithAdPerformanceInfo(hook, false))
-    .join('')} `;
+        // These are the hooks that I've created:
+        // ${hookAdPerformances
+        //     .map((hook) => skypeService.createMessageWithAdPerformanceInfo(hook, false))
+        //     .join('')} `;
 
-                await skypeService.sendMessage(mediaBuyer, message);
-            } catch (error) {
-                console.error(
-                    `Failed to create hooks for ad ${adPerformance.fbAdId}:`,
-                    error
-                );
-            }
-        }
+        //                 await skypeService.sendMessage(mediaBuyer, message);
+        //             } catch (error) {
+        //                 console.error(
+        //                     `Failed to create hooks for ad ${adPerformance.fbAdId}:`,
+        //                     error
+        //                 );
+        //             }
+        //         }
 
         // TODO: Add scaling back in.
         // Ad above threshold to scale. Scale if not yet scaled.
