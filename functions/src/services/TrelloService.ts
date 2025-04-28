@@ -8,6 +8,7 @@ export class TrelloService {
     private baseUrl: string;
     private creativeRequestsListId: string = '6713cedfa8701c3040f4db2b';
     private roofingTemplateId: string = '678e693927ac1f163fd0067c';
+    private glp1TemplateId: string = '6713cedfa8701c3040f4db6a';
 
     constructor(apiKey: string, apiToken: string) {
         if (!apiKey || typeof apiKey !== 'string') {
@@ -23,42 +24,151 @@ export class TrelloService {
         this.baseUrl = 'https://api.trello.com/1';
     }
 
-    public async createCardFromRoofingTemplate(
+    public async createCardFromRoofingTemplateWithVideoUrl(
         name: string,
-        videoAdUrl: string
+        videoAdUrl: string,
+        quantity: number
     ): Promise<any> {
         return await this.createCardFromTemplate(
             this.roofingTemplateId,
             this.creativeRequestsListId,
             name,
-            { desc: this.getRoofingCardDescription(videoAdUrl) }
+            {
+                desc: this.getRoofingCardDescriptionFromVideo(
+                    videoAdUrl,
+                    quantity
+                ),
+            }
         );
     }
 
-    public getRoofingCardName(angle: string, quantity: number = 5) {
+    public async createCardFromTemplateAuto(
+        name: string,
+        vertical: 'Roofing' | 'GLP-1',
+        quantity: number
+    ) {
+        const templateId =
+            vertical === 'Roofing'
+                ? this.roofingTemplateId
+                : this.glp1TemplateId;
+        return await this.createCardFromTemplate(
+            templateId,
+            this.creativeRequestsListId,
+            name,
+            { desc: this.getCardDescriptionAuto(vertical, quantity) }
+        );
+    }
+
+    public getCardName(
+        vertical: 'Roofing' | 'GLP-1',
+        angle: string,
+        quantity: number = 5
+    ) {
+        let verticalName = '';
+        if (vertical === 'Roofing') {
+            verticalName = 'Roofing';
+        } else if (vertical === 'GLP-1') {
+            verticalName = 'Direct-Meds $100 Off';
+        }
         const today = new Date();
         const month = today.toLocaleString('en-US', { month: 'short' });
         const day = today.getDate();
-        return `Roofing - ${angle} - Video - ${month} ${day} (X${quantity})`;
+        return `${verticalName} - ${angle} - Video - ${month} ${day} (X${quantity})`;
     }
 
-    public getRoofingCardDescription(videoAdUrl: string): string {
-        return `**Instructions for a new request**
-
-**Please put all finished videos in this folder:**
-[https://drive.google.com/drive/folders/1AwBk7bOjyuBVlfTVxZ-t4wE2IatX8O22?usp=sharing](https://drive.google.com/drive/folders/1AwBk7bOjyuBVlfTVxZ-t4wE2IatX8O22?usp=sharing "smartCard-inline")
-
-# Offer Name
+    public getRoofingCardOfferDescription() {
+        return `# Offer Name
 
 Roofing
 
 [https://www.swiftroofquotes.org/s/quote-1](https://www.swiftroofquotes.org/s/quote-1 "smartCard-inline")
 
-Roofing Pay Per Lead Ad. We run traffic to the link above from Facebook, and we get paid when someone completes the form by giving us their phone number.
+Roofing Pay Per Lead Ad. We run traffic to the link above from Facebook, and we get paid when someone completes the form by giving us their phone number.`;
+    }
+
+    public getGlp1CardOfferDescription() {
+        return `# Offer Name
+
+Direct Meds $100 Off
+
+[https://direct-meds.com/dm-wl-us-100-otd/](https://direct-meds.com/dm-wl-us-100-otd/ "smartCard-inline")`;
+    }
+
+    public getCardDescriptionAuto(
+        vertical: 'Roofing' | 'GLP-1',
+        quantity: number
+    ) {
+        return `**Instructions for a new request**
+
+**Please put all finished videos in this folder:**
+[https://drive.google.com/drive/folders/1xi9iN3pC_0CZyF1Iw8pcqwP5s3H_5y_D?usp=sharing](https://drive.google.com/drive/folders/1xi9iN3pC_0CZyF1Iw8pcqwP5s3H_5y_D?usp=sharing "smartCard-inline")
+
+${vertical === 'Roofing' && this.getRoofingCardOfferDescription()}
+${vertical === 'GLP-1' && this.getGlp1CardOfferDescription()}
 
 # Detailed Description
 
-Please create 5 variations using different formats / styles of ads based on the example ad. The example ad is already working, we just want to give it new legs and try a different style of video.
+**Please create ${quantity} variations using different formats / styles of ads. Generate one script and create multiple video variations for the script.**
+
+
+# Type of Content
+
+--
+
+
+# Dimensions
+
+4:5
+
+# Is text/copy required? Do you have any scripts?
+**Yes, please create a script and generate multiple video variations for the script.**
+
+# Date Needed
+
+ASAP
+
+
+**Creative Team Deliverables**
+
+Once anyone puts a request in with all the necessary information, can you please drag this card to the "In Progress" list so he knows that his request is being worked on.
+
+After you are done with the ads, please drag this over to the "Finished Ads" list.
+
+# ---- For Creative Team -----
+
+**Upon Completion**
+
+1. Click the linked Trello card below to get to the original request
+2. Add the link to the file(s) under "New Creative Location"
+3. Mark due date complete
+4. Tag originator of request in the comments with a "creative delivered" message
+
+**How to deliver the ads:**
+
+I have attached the folder below with all the clients accounts in them.
+Please click on the store folder and deliver the ad creative into a folder named "ad creative".
+
+If you do not see the folder there, please create one. Please make sure you name the ad asset appropriately with this format:
+
+ex. Initials_Brand_Date_TypeOfVid.Version#_DiscountOrOffer_
+
+---> jp_trajan_110221_UGC.Version1_25off`;
+    }
+
+    public getRoofingCardDescriptionFromVideo(
+        videoAdUrl: string,
+        quantity: number
+    ): string {
+        return `**Instructions for a new request**
+
+**Please put all finished videos in this folder:**
+[https://drive.google.com/drive/folders/1AwBk7bOjyuBVlfTVxZ-t4wE2IatX8O22?usp=sharing](https://drive.google.com/drive/folders/1AwBk7bOjyuBVlfTVxZ-t4wE2IatX8O22?usp=sharing "smartCard-inline")
+
+${this.getRoofingCardOfferDescription()}
+
+# Detailed Description
+
+Please create ${quantity} variations using different formats / styles of ads based on the example ad. The example ad is already working, we just want to give it new legs and try a different style of video.
 
 # Link to Video
 [Video Ad](${videoAdUrl})

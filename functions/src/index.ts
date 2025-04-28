@@ -93,6 +93,61 @@ export const updateAdPerformanceScheduled = onSchedule(
         }
     }
 );
+/**
+ * Creates daily Trello cards for Adstronaut requesting new creatives, including scripts.
+ */
+export const createDailyTrelloCards = onSchedule(
+    {
+        schedule: 'every day 08:00',
+        timeoutSeconds: 180,
+        memory: '1GiB',
+    },
+    async () => {
+        try {
+            const roofingCardQuantity = 2;
+            const glp1CardQuantity = 5;
+            const trelloService = new TrelloService(
+                process.env.TRELLO_API_KEY || '',
+                process.env.TRELLO_API_TOKEN || ''
+            );
+
+            // Create a card name with today's date
+            const roofingCardName = trelloService.getCardName(
+                'Roofing',
+                'New Script & Creatives',
+                roofingCardQuantity
+            );
+
+            const glp1CardName = trelloService.getCardName(
+                'GLP-1',
+                'New Script & Creatives',
+                glp1CardQuantity
+            );
+
+            // Create the Trello card
+            const roofingTrelloCard =
+                await trelloService.createCardFromTemplateAuto(
+                    roofingCardName,
+                    'Roofing',
+                    roofingCardQuantity
+                );
+
+            const glp1TrelloCard =
+                await trelloService.createCardFromTemplateAuto(
+                    glp1CardName,
+                    'GLP-1',
+                    glp1CardQuantity
+                );
+            console.log(
+                `Created daily Trello cards: ${roofingCardName}, ${glp1CardName}`
+            );
+            return;
+        } catch (error) {
+            console.error('Error creating daily roofing Trello card:', error);
+            throw error;
+        }
+    }
+);
 
 // This function keeps Airtable in sync with Firestore by automatically syncing any changes
 // (creates, updates, NOT deletes) from the AD_PERFORMANCE_COLLECTION in Firestore to the

@@ -274,14 +274,18 @@ ${skypeService.createMessageWithAdPerformanceInfo(adPerformance)}`;
         originalAdPerformance: AdPerformance,
         trelloService: TrelloService
     ) {
-        const cardName = trelloService.getRoofingCardName(
+        const quantity = 5;
+        const cardName = trelloService.getCardName(
+            'Roofing', // TODO: make this dynamic
             originalAdPerformance.adName,
-            5
+            quantity
         );
-        const trelloCard = await trelloService.createCardFromRoofingTemplate(
-            cardName,
-            originalAdPerformance.gDriveDownloadUrl
-        );
+        const trelloCard =
+            await trelloService.createCardFromRoofingTemplateWithVideoUrl(
+                cardName,
+                originalAdPerformance.gDriveDownloadUrl,
+                5
+            );
         originalAdPerformance.hasTrelloCardCreated = true;
         await saveAdPerformanceFirestore(
             originalAdPerformance.fbAdId,
