@@ -482,21 +482,14 @@ ${skypeService.createMessageWithAdPerformanceInfo(adPerformance)}`;
                 fbAdSettings.adSetParams.adSetTargeting,
                 'adSetTargeting must exist'
             );
-            const { age_max, age_min, genders } =
+
+            const { age_max, age_min, genders, geo_locations } =
                 fbAdSettings.adSetParams.adSetTargeting;
-
-            // Get geo locations from most recent zipcodes for roofing. These change daily
-            // const targetingGeoLocations =
-            //     await this.getAdSetTargetingGeoLocationsMostRecentZipcodes();
-
-            // Vincent zips
-            const targetingGeoLocations =
-                await this.getAdHocTargetingGeoLocations();
 
             const targeting: FbApiAdSetTargeting = {
                 ...AD_ACCOUNT_DATA[fbAccountId as keyof typeof AD_ACCOUNT_DATA]
                     .targeting,
-                ...targetingGeoLocations,
+                geo_locations,
                 age_max,
                 age_min,
                 genders,
@@ -515,23 +508,6 @@ ${skypeService.createMessageWithAdPerformanceInfo(adPerformance)}`;
         }
 
         return fbAdSettings;
-    }
-
-    public async getAdHocTargetingGeoLocations() {
-        const folderName = 'adhoc-roofing-zips';
-        const fileName = 'network-demand-2-28-over-100.json';
-
-        const { fileBuffer, contentType } = await downloadFileFromStorage(
-            folderName,
-            fileName
-        );
-
-        const zipcodes = JSON.parse(fileBuffer.toString());
-        return {
-            geo_locations: {
-                zips: zipcodes.zips,
-            },
-        };
     }
 
     public async getAdSetTargetingGeoLocationsMostRecentZipcodes(): Promise<{
