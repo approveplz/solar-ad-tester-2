@@ -128,7 +128,7 @@ function AdSettingsForm() {
 
     // UI state management
     const [isFormEditable, setIsFormEditable] = useState(false);
-    const [accountId, setAccountId] = useState('661505182923254');
+    const [accountId, setAccountId] = useState('358423827304360');
     const [isSaving, setIsSaving] = useState(false);
     // State to hold the zipcodes textarea value
     const [zipCodesText, setZipCodesText] = useState('');
@@ -198,9 +198,13 @@ function AdSettingsForm() {
             .split(',')
             .map((zip) => zip.trim())
             .filter((zip) => zip !== '')
-            .map((zip) => ({
-                key: `US:${zip}`, // Format with US prefix as per interface
-            }));
+            .map((zip) => {
+                // Remove any "US:" prefix if the user manually entered it
+                const cleanZip = zip.replace(/^US:/i, '');
+                return {
+                    key: `US:${cleanZip}`, // Format with US prefix as per interface
+                };
+            });
 
         // Get current geo_locations value
         const currentGeoLocations =
@@ -281,21 +285,16 @@ function AdSettingsForm() {
                                 onChange={(e) => setAccountId(e.target.value)}
                                 style={styles.select}
                             >
-                                <option value="">Select Account</option>
+                                <option value="358423827304360">
+                                    358423827304360 (Roofing, Vincent x
+                                    Digitsolution CC 2 New)
+                                </option>
                                 <option value="661505182923254">
                                     661505182923254 (AWL_RN_FB_ABG-342749)
-                                </option>
-                                <option value="916987259877684">
-                                    916987259877684 (Ozempic, SF- 121 (EST) -
-                                    Ronin WH 262 - TN_RN_FB_ABG-999019)
                                 </option>
                                 <option value="467161346185440">
                                     467161346185440 (Roofing, Vincent x
                                     Digitsolution CC 1)
-                                </option>
-                                <option value="8653880687969127">
-                                    8653880687969127 (Roofing, Vincent x
-                                    Digitsolution CC 2)
                                 </option>
                             </select>
                         </label>
@@ -328,12 +327,15 @@ function AdSettingsForm() {
                                 name="adSetParams.optimizationGoal"
                                 control={control}
                                 render={({ field }) => (
-                                    <input
+                                    <select
                                         {...field}
-                                        type="text"
                                         disabled={!isFormEditable}
-                                        style={styles.input}
-                                    />
+                                        style={styles.select}
+                                    >
+                                        <option value="OFFSITE_CONVERSIONS">
+                                            Offsite Conversions
+                                        </option>
+                                    </select>
                                 )}
                             />
                         </label>
@@ -345,12 +347,15 @@ function AdSettingsForm() {
                                 name="adSetParams.billingEvent"
                                 control={control}
                                 render={({ field }) => (
-                                    <input
+                                    <select
                                         {...field}
-                                        type="text"
                                         disabled={!isFormEditable}
-                                        style={styles.input}
-                                    />
+                                        style={styles.select}
+                                    >
+                                        <option value="IMPRESSIONS">
+                                            Impressions
+                                        </option>
+                                    </select>
                                 )}
                             />
                         </label>
@@ -379,12 +384,18 @@ function AdSettingsForm() {
                                 name="adSetParams.bidStrategy"
                                 control={control}
                                 render={({ field }) => (
-                                    <input
+                                    <select
                                         {...field}
-                                        type="text"
                                         disabled={!isFormEditable}
-                                        style={styles.input}
-                                    />
+                                        style={styles.select}
+                                    >
+                                        <option value="COST_CAP">
+                                            Cost Cap
+                                        </option>
+                                        <option value="LOWEST_COST_WITHOUT_CAP">
+                                            Lowest Cost Without Cap
+                                        </option>
+                                    </select>
                                 )}
                             />
                         </label>
