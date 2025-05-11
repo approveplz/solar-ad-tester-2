@@ -676,7 +676,6 @@ ${skypeService.createMessageWithAdPerformanceInfo(adPerformance)}`;
                 appSecret: process.env.FACEBOOK_APP_SECRET || '',
                 accessToken: process.env.FACEBOOK_ACCESS_TOKEN || '',
                 accountId,
-                apiVersion: '20.0',
             });
         }
         return this.metAdCreatorServices[accountId];

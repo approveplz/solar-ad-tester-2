@@ -122,14 +122,6 @@ export interface FbApiAdCreativeObjStorySpec {
     link_data?: FbApiAdCreativeLinkData;
 }
 
-export interface FbApiCreativeEnhancementsSpec {
-    creative_features_spec: {
-        standard_enhancements: {
-            enroll_status: 'OPT_OUT' | string;
-        };
-    };
-}
-
 // https://developers.facebook.com/docs/marketing-api/creative/multi-advertiser-ads/
 export interface FbApiContextualMultiAdsSpec {
     enroll_status: 'OPT_OUT' | 'OPT_IN';
@@ -138,7 +130,6 @@ export interface FbApiContextualMultiAdsSpec {
 export interface FbApiCreateAdCreativeRequest {
     name: string;
     object_story_spec: FbApiAdCreativeObjStorySpec;
-    degrees_of_freedom_spec: FbApiCreativeEnhancementsSpec;
     contextual_multi_ads: FbApiContextualMultiAdsSpec;
     url_tags: string;
 }

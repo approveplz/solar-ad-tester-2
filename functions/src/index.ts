@@ -338,7 +338,6 @@ export const createFbAdHttp = onRequest(
                 appSecret: process.env.FACEBOOK_APP_SECRET || '',
                 accessToken: process.env.FACEBOOK_ACCESS_TOKEN || '',
                 accountId: accountId || '',
-                apiVersion: '20.0',
             });
 
             const nextCounter = await getIncrementedCounterFirestore();

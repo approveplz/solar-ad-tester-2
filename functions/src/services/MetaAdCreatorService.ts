@@ -19,7 +19,6 @@ import {
     FbApiCreateAdVideoRequest,
     PromotedObject,
     FbApiCreateAdCreativeRequest,
-    FbApiCreativeEnhancementsSpec,
     FbApiContextualMultiAdsSpec,
 } from '../models/MetaApiSchema.js';
 import invariant from 'tiny-invariant';
@@ -44,23 +43,16 @@ export default class MetaAdCreatorService {
         appSecret: string;
         accessToken: string;
         accountId: string;
-        apiVersion?: string;
     }) {
         this.validateRequiredOptions(options);
 
-        const {
-            appId,
-            appSecret,
-            accessToken,
-            accountId,
-            apiVersion = '20.0',
-        } = options;
+        const { appId, appSecret, accessToken, accountId } = options;
 
         this.appId = appId;
         this.appSecret = appSecret;
         this.accessToken = accessToken;
         this.accountId = accountId;
-        this.apiVersion = apiVersion;
+        this.apiVersion = '22.0';
 
         this.api = FacebookAdsApi.init(accessToken);
         this.api.setDebug(true);
@@ -239,6 +231,7 @@ export default class MetaAdCreatorService {
             return adSet;
         } catch (error: any) {
             console.error(`Facebook API Error: ${error.message}`);
+            console.error(createAdSetRequest);
             throw error;
         }
     }
@@ -315,7 +308,6 @@ export default class MetaAdCreatorService {
 
         const objectStorySpec: FbApiAdCreativeObjStorySpec = {
             page_id: pageId,
-            // instagram_actor_id: instagramActorId,
             video_data: {
                 video_id: video.id,
                 title: videoTitle,
@@ -331,15 +323,6 @@ export default class MetaAdCreatorService {
             },
         };
 
-        // Need this to opt out of Ad Creative+
-        const degreesOfFreedomSpec: FbApiCreativeEnhancementsSpec = {
-            creative_features_spec: {
-                standard_enhancements: {
-                    enroll_status: 'OPT_OUT',
-                },
-            },
-        };
-
         // Need to opt out of Contextual Multi Ads
         const contextualMultiAdsSpec: FbApiContextualMultiAdsSpec = {
             enroll_status: 'OPT_OUT',
@@ -350,7 +333,6 @@ export default class MetaAdCreatorService {
         const createAdCreativeRequest: FbApiCreateAdCreativeRequest = {
             name,
             object_story_spec: objectStorySpec,
-            degrees_of_freedom_spec: degreesOfFreedomSpec,
             contextual_multi_ads: contextualMultiAdsSpec,
             url_tags: urlTrackingTags,
         };
@@ -404,15 +386,6 @@ export default class MetaAdCreatorService {
             },
         };
 
-        // Need this to opt out of Ad Creative+
-        const degreesOfFreedomSpec: FbApiCreativeEnhancementsSpec = {
-            creative_features_spec: {
-                standard_enhancements: {
-                    enroll_status: 'OPT_OUT',
-                },
-            },
-        };
-
         // Need to opt out of Contextual Multi Ads
         const contextualMultiAdsSpec: FbApiContextualMultiAdsSpec = {
             enroll_status: 'OPT_OUT',
@@ -425,7 +398,6 @@ export default class MetaAdCreatorService {
         const createAdCreativeRequest: FbApiCreateAdCreativeRequest = {
             name,
             object_story_spec: objectStorySpec,
-            degrees_of_freedom_spec: degreesOfFreedomSpec,
             contextual_multi_ads: contextualMultiAdsSpec,
             url_tags: urlTags,
         };
