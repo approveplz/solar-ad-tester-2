@@ -459,6 +459,132 @@ export default class MetaAdCreatorService {
         }
     }
 
+    /**
+     * Gets all ads for the current ad account with optional filter for active ads only
+     * using a hierarchical approach (campaign > ad set > ad)
+     * @param onlyActive When true, returns only active ads; when false, returns all ads
+     * @returns Array of ads with their campaign and ad set information
+     */
+    async getAllAds(onlyActive: boolean = false): Promise<
+        Array<{
+            campaignId: string;
+            campaignName: string;
+            adSetId: string;
+            adSetName: string;
+            adId: string;
+            adName: string;
+            status: string;
+        }>
+    > {
+        console.log(
+            `Getting ${onlyActive ? 'active' : 'all'} ads for account: ${
+                this.accountId
+            }`
+        );
+
+        try {
+            // Step 1: Get campaigns
+            const statusFilter = onlyActive
+                ? { effective_status: ['ACTIVE'] }
+                : {};
+            const campaigns = await this.adAccount.getCampaigns(
+                ['id', 'name', 'status', 'effective_status'],
+                statusFilter
+            );
+
+            console.log(`Retrieved ${campaigns.length} campaigns`);
+
+            // Result array to store all ads with their campaign and ad set info
+            const result = [];
+
+            // Step 2: For each campaign, get its ad sets
+            for (const campaign of campaigns) {
+                const campaignId = campaign.id;
+                const campaignName = campaign._data.name;
+
+                const adSets = await this.getAdSetsForCampaign(
+                    campaignId,
+                    onlyActive
+                );
+                console.log(
+                    `Retrieved ${adSets.length} ad sets for campaign ${campaignId}`
+                );
+
+                // Step 3: For each ad set, get its ads
+                for (const adSet of adSets) {
+                    const adSetId = adSet.id;
+                    const adSetName = adSet._data.name;
+
+                    const ads = await this.getAdsForAdSet(adSetId, onlyActive);
+
+                    // Step 4: Add each ad to results with its campaign and ad set info
+                    for (const ad of ads) {
+                        result.push({
+                            campaignId,
+                            campaignName,
+                            adSetId,
+                            adSetName,
+                            adId: ad.id,
+                            adName: ad._data.name,
+                            status: ad._data.effective_status,
+                        });
+                    }
+                }
+            }
+
+            console.log(
+                `Retrieved a total of ${result.length} ads for account: ${this.accountId}`
+            );
+            return result;
+        } catch (error) {
+            console.error(`Error getting ads: ${error}`);
+            throw error;
+        }
+    }
+
+    /**
+     * Gets all ad sets for a specific campaign
+     * @param campaignId The campaign ID
+     * @param onlyActive When true, returns only active ad sets
+     * @returns Array of AdSet objects
+     */
+    private async getAdSetsForCampaign(
+        campaignId: string,
+        onlyActive: boolean
+    ): Promise<any[]> {
+        const filters = {
+            campaign_id: campaignId,
+            ...(onlyActive ? { effective_status: ['ACTIVE'] } : {}),
+        };
+
+        const campaign = new Campaign(campaignId);
+        return campaign.getAdSets(
+            ['id', 'name', 'status', 'effective_status'],
+            filters
+        );
+    }
+
+    /**
+     * Gets all ads for a specific ad set
+     * @param adSetId The ad set ID
+     * @param onlyActive When true, returns only active ads
+     * @returns Array of Ad objects
+     */
+    private async getAdsForAdSet(
+        adSetId: string,
+        onlyActive: boolean
+    ): Promise<any[]> {
+        const filters = {
+            ...(onlyActive ? { effective_status: ['ACTIVE'] } : {}),
+        };
+
+        const adSet = new AdSet(adSetId);
+        return adSet.getAds(
+            ['id', 'name', 'status', 'effective_status'],
+            filters
+        );
+    }
+
     /* Helpers */
     private validateRequiredOptions(options: { [key: string]: any }): void {
         const { appId, appSecret, accessToken, accountId } = options;

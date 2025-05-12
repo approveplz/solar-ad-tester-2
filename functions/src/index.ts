@@ -93,61 +93,137 @@ export const updateAdPerformanceScheduled = onSchedule(
         }
     }
 );
-/**
- * Creates daily Trello cards for Adstronaut requesting new creatives, including scripts.
- */
-export const createDailyTrelloCards = onSchedule(
+
+export const fetchAdsScheduled = onSchedule(
     {
-        schedule: 'every day 08:00',
+        schedule: '0 8,12,16,20 * * *',
+        timeZone: 'America/Chicago',
         timeoutSeconds: 180,
         memory: '1GiB',
     },
     async () => {
         try {
-            const roofingCardQuantity = 2;
-            const glp1CardQuantity = 5;
+            // Define an array of account IDs to fetch ads for
+            const accountIds = [
+                '467161346185440', // Vincent, Roofing
+                '358423827304360', // Marcus, Roofing
+                // Add more account IDs here as needed
+            ];
+            const onlyActive = true;
+
+            // Create required services
+            const creatomateService = await CreatomateService.create(
+                process.env.CREATOMATE_API_KEY || ''
+            );
+            const bigQueryService = new BigQueryService();
+            const skypeService = new SkypeService(
+                process.env.MICROSOFT_APP_ID || '',
+                process.env.MICROSOFT_APP_PASSWORD || ''
+            );
             const trelloService = new TrelloService(
                 process.env.TRELLO_API_KEY || '',
                 process.env.TRELLO_API_TOKEN || ''
             );
-
-            // Create a card name with today's date
-            const roofingCardName = trelloService.getCardName(
-                'Roofing',
-                'New Script & Creatives',
-                roofingCardQuantity
+            const mediaBuyingService = new MediaBuyingService(
+                creatomateService,
+                bigQueryService,
+                skypeService,
+                trelloService
             );
 
-            const glp1CardName = trelloService.getCardName(
-                'GLP-1',
-                'New Script & Creatives',
-                glp1CardQuantity
+            // Fetch ads for each account ID
+            const results = await Promise.all(
+                accountIds.map(async (accountId) => {
+                    try {
+                        const newAdsCount =
+                            await mediaBuyingService.getAdsForAccountId(
+                                accountId,
+                                onlyActive
+                            );
+                        return { accountId, success: true, newAdsCount };
+                    } catch (error) {
+                        console.error(
+                            `Error fetching ads for account ID ${accountId}:`,
+                            error
+                        );
+                        return {
+                            accountId,
+                            success: false,
+                            error:
+                                error instanceof Error
+                                    ? error.message
+                                    : String(error),
+                        };
+                    }
+                })
             );
 
-            // Create the Trello card
-            const roofingTrelloCard =
-                await trelloService.createCardFromTemplateAuto(
-                    roofingCardName,
-                    'Roofing',
-                    roofingCardQuantity
-                );
-
-            const glp1TrelloCard =
-                await trelloService.createCardFromTemplateAuto(
-                    glp1CardName,
-                    'GLP-1',
-                    glp1CardQuantity
-                );
             console.log(
-                `Created daily Trello cards: ${roofingCardName}, ${glp1CardName}`
+                'Fetch ads scheduled task completed with results:',
+                results
             );
-            return;
         } catch (error) {
-            console.error('Error creating daily roofing Trello card:', error);
+            console.error('Error in scheduled ads fetch:', error);
             throw error;
         }
     }
 );
+
+// /**
+//  * Creates daily Trello cards for Adstronaut requesting new creatives, including scripts.
+//  */
+// export const createDailyTrelloCards = onSchedule(
+//     {
+//         schedule: 'every day 08:00',
+//         timeoutSeconds: 180,
+//         memory: '1GiB',
+//     },
+//     async () => {
+//         try {
+//             const roofingCardQuantity = 2;
+//             const glp1CardQuantity = 5;
+//             const trelloService = new TrelloService(
+//                 process.env.TRELLO_API_KEY || '',
+//                 process.env.TRELLO_API_TOKEN || ''
+//             );
+
+//             // Create a card name with today's date
+//             const roofingCardName = trelloService.getCardName(
+//                 'Roofing',
+//                 'New Script & Creatives',
+//                 roofingCardQuantity
+//             );
+
+//             const glp1CardName = trelloService.getCardName(
+//                 'GLP-1',
+//                 'New Script & Creatives',
+//                 glp1CardQuantity
+//             );
+
+//             // Create the Trello card
+//             const roofingTrelloCard =
+//                 await trelloService.createCardFromTemplateAuto(
+//                     roofingCardName,
+//                     'Roofing',
+//                     roofingCardQuantity
+//                 );
+
+//             const glp1TrelloCard =
+//                 await trelloService.createCardFromTemplateAuto(
+//                     glp1CardName,
+//                     'GLP-1',
+//                     glp1CardQuantity
+//                 );
+//             console.log(
+//                 `Created daily Trello cards: ${roofingCardName}, ${glp1CardName}`
+//             );
+//             return;
+//         } catch (error) {
+//             console.error('Error creating daily roofing Trello card:', error);
+//             throw error;
+//         }
+//     }
+// );
 
 // This function keeps Airtable in sync with Firestore by automatically syncing any changes
 // (creates, updates, NOT deletes) from the AD_PERFORMANCE_COLLECTION in Firestore to the

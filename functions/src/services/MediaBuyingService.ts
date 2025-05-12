@@ -39,6 +39,78 @@ export class MediaBuyingService {
         private readonly trelloService: TrelloService
     ) {}
 
+    async getAdsForAccountId(
+        accountId: string,
+        onlyActive: boolean = true
+    ): Promise<number> {
+        console.log(
+            `Fetching ${
+                onlyActive ? 'active' : 'all'
+            } ads for account ID: ${accountId}`
+        );
+
+        // Get all ad performances from Firestore
+        const adPerformances = await getAdPerformanceFirestoreAll();
+        const existingAdIds = new Set(adPerformances.map((ad) => ad.fbAdId));
+
+        console.log(
+            `Retrieved ${adPerformances.length} ad performances from Firestore`
+        );
+
+        // Get all active ads from Meta
+        const metaAdCreatorService = await this.getMetaAdCreatorService(
+            accountId
+        );
+
+        const ads = await metaAdCreatorService.getAllAds(onlyActive);
+        console.log(
+            `Successfully retrieved ${ads.length} active ads from Meta for account ID: ${accountId}`
+        );
+
+        // Initialize ads that exist in Meta but not in Firestore
+        const newAds = [];
+        for (const ad of ads) {
+            if (!existingAdIds.has(ad.adId)) {
+                console.log(
+                    `Initializing new ad in Firestore: ${ad.adId}, name: ${ad.adName}`
+                );
+
+                const adPerformance: AdPerformance = {
+                    counter: 0,
+                    fbAccountId: accountId,
+                    adName: ad.adName || '',
+                    gDriveDownloadUrl: '',
+                    fbAdId: ad.adId,
+                    fbAdSetId: ad.adSetId,
+                    fbCampaignId: ad.campaignId,
+                    fbScalingCampaignId: '',
+                    vertical: 'R',
+                    ideaWriter: '',
+                    scriptWriter: '',
+                    hookWriter: '',
+                    performanceMetrics: {},
+                    fbIsActive: true,
+                    isHook: false,
+                    hasHooksCreated: false,
+                    isScaled: false,
+                    hasScaled: false,
+                    isFromTrelloCard: false,
+                    hasTrelloCardCreated: false,
+                    script: '',
+                };
+
+                await saveAdPerformanceFirestore(ad.adId, adPerformance);
+                newAds.push(adPerformance);
+            }
+        }
+
+        console.log(
+            `Successfully processed ads for account ID: ${accountId}. Created ${newAds.length} new entries in Firestore.`
+        );
+
+        return newAds.length;
+    }
+
     async handleAdPerformanceUpdates() {
         const [
             bqPerformanceLast3Days,
@@ -109,12 +181,12 @@ export class MediaBuyingService {
         invariant(fbAccountId, 'fbAccountId must be defined');
 
         const metaService = await this.getMetaAdCreatorService(fbAccountId);
-        await this.handlePerformanceBasedActions(
-            adPerformance,
-            metaService,
-            this.skypeService,
-            this.trelloService
-        );
+        // await this.handlePerformanceBasedActions(
+        //     adPerformance,
+        //     metaService,
+        //     this.skypeService,
+        //     this.trelloService
+        // );
     }
 
     async handlePerformanceBasedActions(
