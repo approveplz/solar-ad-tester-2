@@ -27,6 +27,11 @@ const initialFormData = {
             },
         },
     },
+    promotedObjectParams: {
+        pixelId: '',
+        customEventType: 'LEAD',
+        pageId: '',
+    },
     adCreativeParams: {
         videoTitle: '',
         videoMessage: '',
@@ -249,6 +254,8 @@ function AdSettingsForm() {
             ) {
                 throw new Error('Please select at least one gender option');
             }
+
+            console.log('Saving form data:', updatedFbAdSettings);
 
             await saveFbAdSettings(accountId, updatedFbAdSettings);
             reset(updatedFbAdSettings);
@@ -658,6 +665,64 @@ function AdSettingsForm() {
                             Website URL:
                             <Controller
                                 name="adCreativeParams.ctaLinkValue"
+                                control={control}
+                                render={({ field }) => (
+                                    <input
+                                        {...field}
+                                        type="text"
+                                        disabled={!isFormEditable}
+                                        style={styles.input}
+                                    />
+                                )}
+                            />
+                        </label>
+                    </div>
+                </fieldset>
+
+                <fieldset style={styles.fieldset}>
+                    <legend style={styles.legend}>
+                        Promoted Object Parameters
+                    </legend>
+                    <div>
+                        <label style={styles.label}>
+                            Pixel ID:
+                            <Controller
+                                name="promotedObjectParams.pixelId"
+                                control={control}
+                                render={({ field }) => (
+                                    <input
+                                        {...field}
+                                        type="text"
+                                        disabled={!isFormEditable}
+                                        style={styles.input}
+                                    />
+                                )}
+                            />
+                        </label>
+                    </div>
+                    <div>
+                        <label style={styles.label}>
+                            Custom Event Type:
+                            <Controller
+                                name="promotedObjectParams.customEventType"
+                                control={control}
+                                render={({ field }) => (
+                                    <select
+                                        {...field}
+                                        disabled={!isFormEditable}
+                                        style={styles.select}
+                                    >
+                                        <option value="LEAD">Lead</option>
+                                    </select>
+                                )}
+                            />
+                        </label>
+                    </div>
+                    <div>
+                        <label style={styles.label}>
+                            Page ID:
+                            <Controller
+                                name="promotedObjectParams.pageId"
                                 control={control}
                                 render={({ field }) => (
                                     <input
