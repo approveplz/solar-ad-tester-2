@@ -5,7 +5,7 @@ function main() {
     const FIREBASE_FUNCTION_URL =
         'https://us-central1-solar-ad-tester-2.cloudfunctions.net/createFbAdHttp';
     const PROCESSED_FILE_IDS_KEY = 'processedFileIds';
-    const ROOFING_CC1_ACCOUNT_ID = '467161346185440';
+    const ROOFING_CC2_NEW_ACCOUNT_ID = '358423827304360'; // Roofing, Vincent x Digitsolution CC 2 New
     const OZEMPIC_ACCOUNT_ID = '916987259877684';
 
     const properties = PropertiesService.getScriptProperties();
@@ -14,7 +14,7 @@ function main() {
     );
 
     const verticalToAccountId = {
-        R: ROOFING_CC1_ACCOUNT_ID,
+        R: ROOFING_CC2_NEW_ACCOUNT_ID,
         O: OZEMPIC_ACCOUNT_ID,
     };
 
