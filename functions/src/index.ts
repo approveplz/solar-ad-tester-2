@@ -225,121 +225,121 @@ export const fetchAdsScheduled = onSchedule(
 //     }
 // );
 
-// This function keeps Airtable in sync with Firestore by automatically syncing any changes
-// (creates, updates, NOT deletes) from the AD_PERFORMANCE_COLLECTION in Firestore to the
-// corresponding records in Airtable
+// // This function keeps Airtable in sync with Firestore by automatically syncing any changes
+// // (creates, updates, NOT deletes) from the AD_PERFORMANCE_COLLECTION in Firestore to the
+// // corresponding records in Airtable
 
-export const syncAdPerformance = onDocumentWritten(
-    `${AD_PERFORMANCE_COLLECTION}/{docId}`,
-    async (event) => {
-        const airtableService = new AirtableService(
-            process.env.AIRTABLE_API_KEY || '',
-            process.env.AIRTABLE_BASE_ID || ''
-        );
+// export const syncAdPerformance = onDocumentWritten(
+//     `${AD_PERFORMANCE_COLLECTION}/{docId}`,
+//     async (event) => {
+//         const airtableService = new AirtableService(
+//             process.env.AIRTABLE_API_KEY || '',
+//             process.env.AIRTABLE_BASE_ID || ''
+//         );
 
-        const docId = event.params.docId;
+//         const docId = event.params.docId;
 
-        // If the document was deleted, event.data?.after will be undefined.
-        if (!event.data?.after.exists) {
-            console.log(`Document ${docId} was deleted. Skipping sync.`);
-            return;
-        }
+//         // If the document was deleted, event.data?.after will be undefined.
+//         if (!event.data?.after.exists) {
+//             console.log(`Document ${docId} was deleted. Skipping sync.`);
+//             return;
+//         }
 
-        // "event.data.after" is a DocumentSnapshot which contains both metadata and the actual data.
-        // We use ".data()" to extract only the plain object holding the document's fields.
-        const data = event.data.after.data() as AdPerformance;
+//         // "event.data.after" is a DocumentSnapshot which contains both metadata and the actual data.
+//         // We use ".data()" to extract only the plain object holding the document's fields.
+//         const data = event.data.after.data() as AdPerformance;
 
-        try {
-            await airtableService.createOrUpdateRecord(docId, data);
-            console.log(`Synced document ${docId} to Airtable`);
-        } catch (error) {
-            console.error(`Failed to sync document ${docId}:`, error);
-        }
-    }
-);
+//         try {
+//             await airtableService.createOrUpdateRecord(docId, data);
+//             console.log(`Synced document ${docId} to Airtable`);
+//         } catch (error) {
+//             console.error(`Failed to sync document ${docId}:`, error);
+//         }
+//     }
+// );
 
-export const saveFilteredRoofingZipsScheduled = onSchedule(
-    { schedule: 'every day 12:00', timeoutSeconds: 180, memory: '2GiB' },
-    async () => {
-        try {
-            const zipcodeService = new ZipcodeService();
-            const roofingRecordsObj =
-                await zipcodeService.getCurrentCsvRecords();
-            const { date } = roofingRecordsObj;
+// export const saveFilteredRoofingZipsScheduled = onSchedule(
+//     { schedule: 'every day 12:00', timeoutSeconds: 180, memory: '2GiB' },
+//     async () => {
+//         try {
+//             const zipcodeService = new ZipcodeService();
+//             const roofingRecordsObj =
+//                 await zipcodeService.getCurrentCsvRecords();
+//             const { date } = roofingRecordsObj;
 
-            const roofingRecordsObjJson = JSON.stringify(
-                roofingRecordsObj,
-                null,
-                2
-            );
-            const nodeStream = Readable.from([roofingRecordsObjJson]);
-            const fileName = `affiliate_demand_${date}.json`;
+//             const roofingRecordsObjJson = JSON.stringify(
+//                 roofingRecordsObj,
+//                 null,
+//                 2
+//             );
+//             const nodeStream = Readable.from([roofingRecordsObjJson]);
+//             const fileName = `affiliate_demand_${date}.json`;
 
-            const { fileCloudStorageUri } = await uploadFileToStorage(
-                nodeStream,
-                'roofing-zips-filtered',
-                fileName,
-                'application/json'
-            );
+//             const { fileCloudStorageUri } = await uploadFileToStorage(
+//                 nodeStream,
+//                 'roofing-zips-filtered',
+//                 fileName,
+//                 'application/json'
+//             );
 
-            console.log(
-                `Filtered roofing ZIPs JSON file stored at: ${fileCloudStorageUri}`
-            );
-        } catch (error: unknown) {
-            console.error(
-                'Error during scheduled filtered roofing ZIPs task:',
-                error
-            );
-            throw error;
-        }
-    }
-);
+//             console.log(
+//                 `Filtered roofing ZIPs JSON file stored at: ${fileCloudStorageUri}`
+//             );
+//         } catch (error: unknown) {
+//             console.error(
+//                 'Error during scheduled filtered roofing ZIPs task:',
+//                 error
+//             );
+//             throw error;
+//         }
+//     }
+// );
 
-export const saveRoofingZipsHttp = onRequest(
-    { timeoutSeconds: 180 },
-    async (req: Request, res: Response) => {
-        try {
-            // Instantiate the ZipcodeService to fetch, parse, and filter CSV records.
-            const zipcodeService = new ZipcodeService();
-            const roofingRecordsObj =
-                await zipcodeService.getCurrentCsvRecords();
-            const { date, records } = roofingRecordsObj;
+// export const saveRoofingZipsHttp = onRequest(
+//     { timeoutSeconds: 180 },
+//     async (req: Request, res: Response) => {
+//         try {
+//             // Instantiate the ZipcodeService to fetch, parse, and filter CSV records.
+//             const zipcodeService = new ZipcodeService();
+//             const roofingRecordsObj =
+//                 await zipcodeService.getCurrentCsvRecords();
+//             const { date, records } = roofingRecordsObj;
 
-            const roofingRecordsObjJson = JSON.stringify(
-                roofingRecordsObj,
-                null,
-                2
-            );
+//             const roofingRecordsObjJson = JSON.stringify(
+//                 roofingRecordsObj,
+//                 null,
+//                 2
+//             );
 
-            // Convert the JSON string to a Node.js stream.
-            const nodeStream = Readable.from([roofingRecordsObjJson]);
+//             // Convert the JSON string to a Node.js stream.
+//             const nodeStream = Readable.from([roofingRecordsObjJson]);
 
-            // Define the file name with a .json extension.
-            const fileName = `affiliate_demand_${date}.json`;
+//             // Define the file name with a .json extension.
+//             const fileName = `affiliate_demand_${date}.json`;
 
-            // Upload the JSON file to storage.
-            const { fileCloudStorageUri } = await uploadFileToStorage(
-                nodeStream,
-                'roofing-zips-filtered',
-                fileName,
-                'application/json'
-            );
-            console.log(`JSON file stored at: ${fileCloudStorageUri}`);
+//             // Upload the JSON file to storage.
+//             const { fileCloudStorageUri } = await uploadFileToStorage(
+//                 nodeStream,
+//                 'roofing-zips-filtered',
+//                 fileName,
+//                 'application/json'
+//             );
+//             console.log(`JSON file stored at: ${fileCloudStorageUri}`);
 
-            res.status(200).json({
-                success: true,
-                fileCloudStorageUri,
-                roofingRecordsObj,
-            });
-        } catch (error: unknown) {
-            console.error('Error during HTTP roofing ZIPs task:', error);
-            res.status(500).json({
-                success: false,
-                error: error instanceof Error ? error.message : String(error),
-            });
-        }
-    }
-);
+//             res.status(200).json({
+//                 success: true,
+//                 fileCloudStorageUri,
+//                 roofingRecordsObj,
+//             });
+//         } catch (error: unknown) {
+//             console.error('Error during HTTP roofing ZIPs task:', error);
+//             res.status(500).json({
+//                 success: false,
+//                 error: error instanceof Error ? error.message : String(error),
+//             });
+//         }
+//     }
+// );
 
 /******************************************************************************
  * HTTP Production endpoints
