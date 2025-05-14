@@ -21,8 +21,57 @@ const INCREMENT_COUNTER_COLLECTION = 'counters';
 const INCREMENT_COUNTER_DOC_NAME = 'global';
 
 export const AD_PERFORMANCE_COLLECTION = 'ad-performance';
+export const TELEGRAM_SCRIPTS_COLLECTION = 'telegram-scripts';
 
 const EVENTS_COLLECTION = 'events';
+
+// Interface for the script data
+export interface TelegramScriptData {
+    idea: string;
+    creator: string;
+    vertical: string;
+    notes: string;
+    script: string;
+    scriptIndex?: number;
+}
+
+/**
+ * Saves script data to Firestore
+ * @param scriptId The ID to use for the script
+ * @param scriptData The script data to save
+ */
+export async function saveTelegramScriptDataFirestore(
+    scriptId: string,
+    scriptData: TelegramScriptData
+): Promise<void> {
+    const db = getFirestore();
+    await db
+        .collection(TELEGRAM_SCRIPTS_COLLECTION)
+        .doc(scriptId)
+        .set(scriptData);
+}
+
+/**
+ * Gets script data by ID
+ * @param scriptId The ID of the script
+ * @returns The script data or null if not found
+ */
+export async function getTelegramScriptDataById(
+    scriptId: string
+): Promise<TelegramScriptData | null> {
+    const db = getFirestore();
+    const doc = await db
+        .collection(TELEGRAM_SCRIPTS_COLLECTION)
+        .doc(scriptId)
+        .get();
+
+    return doc.exists ? (doc.data() as TelegramScriptData) : null;
+}
+
+export async function deleteTelegramScriptDataById(scriptId: string) {
+    const db = getFirestore();
+    await db.collection(TELEGRAM_SCRIPTS_COLLECTION).doc(scriptId).delete();
+}
 
 export async function setEventFirestore(
     event: string,

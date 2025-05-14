@@ -33,3 +33,26 @@ export function getNextWeekdayUnixSeconds(now: Date = new Date()): number {
 
     return Math.floor(nextWeekday.getTime() / 1000);
 }
+
+export enum VerticalCodes {
+    R = 'R',
+    O = 'O',
+}
+
+export enum MediaBuyerCodes {
+    MA = 'MA',
+    BZ = 'BZ',
+    AZ = 'AZ',
+    FR = 'FR',
+}
+
+export function getFullVerticalName(vertical: string): string {
+    const verticalFullNameMapping: Record<VerticalCodes, string> = {
+        [VerticalCodes.R]: 'Roofing',
+        [VerticalCodes.O]: 'GLP-1',
+    };
+    return verticalFullNameMapping[vertical as VerticalCodes] || vertical;
+}
+
+export const gDriveIngestrionFolderUrl =
+    'https://drive.google.com/drive/folders/1AwBk7bOjyuBVlfTVxZ-t4wE2IatX8O22?usp=sharing';

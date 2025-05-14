@@ -21,6 +21,8 @@ import {
     getAdPerformanceFirestoreById,
     setEventFirestore,
     AD_PERFORMANCE_COLLECTION,
+    saveTelegramScriptDataFirestore,
+    TelegramScriptData,
 } from './firestoreCloud.js';
 import {
     getSignedUploadUrl,
@@ -38,7 +40,7 @@ import {
 } from './services/CreatomateService.js';
 import { MediaBuyingService } from './services/MediaBuyingService.js';
 import { SkypeService } from './services/SkypeService.js';
-import { getAdName } from './helpers.js';
+import { getAdName, getFullVerticalName } from './helpers.js';
 import { AD_ACCOUNT_DATA } from './adAccountConfig.js';
 import { AirtableService } from './services/AirtableService.js';
 import { onDocumentWritten } from 'firebase-functions/firestore';
@@ -48,6 +50,7 @@ import { OpenAiService } from './services/OpenAiService.js';
 import { TrelloService } from './services/TrelloService.js';
 import { Readable } from 'stream';
 import { ZipcodeService } from './services/ZipcodeService.js';
+import { TelegramService, TelegramUpdate } from './services/TelegramService.js';
 
 config();
 
@@ -522,66 +525,131 @@ export const handleCreatomateWebhookHttp = onRequest(async (req, res) => {
     res.status(200).json({ success: true });
 });
 
-// Called when the Azure bot recieves a message from Skype
-//https://us-central1-solar-ad-tester-2.cloudfunctions.net/handleIncomingSkypeMessageHttp
-export const handleIncomingSkypeMessageHttp = onRequest(async (req, res) => {
-    const skypeService = new SkypeService(
-        process.env.MICROSOFT_APP_ID || '',
-        process.env.MICROSOFT_APP_PASSWORD || ''
+export const generateScriptHttp = onRequest(async (req, res) => {
+    const { idea, creator = '', vertical = '', notes = '' } = req.body;
+
+    const openAiService = new OpenAiService(process.env.OPENAI_API_KEY || '');
+
+    const scripts = await Promise.all([
+        openAiService.generateScript(idea, vertical, notes),
+        openAiService.generateScript(idea, vertical, notes),
+        openAiService.generateScript(idea, vertical, notes),
+    ]);
+
+    // const { script } = await openAiService.generateScript(
+    //     idea,
+    //     vertical,
+    //     notes
+    // );
+
+    const telegramService = new TelegramService(
+        process.env.TELEGRAM_BOT_TOKEN || ''
     );
-    await skypeService.handleIncomingMessage(req, res);
+
+    for (let i = 0; i < scripts.length; i++) {
+        const { script } = scripts[i];
+        const message = `#${
+            i + 1
+        } New script generated for ${getFullVerticalName(vertical)}:
+    
+${script}
+
+Please approve or reject this script.
+`;
+
+        // Create a shorter scriptId by using a truncated timestamp in base36
+        // This creates a much shorter but still unique ID
+        // This is because Telegram callback data is limited to 64 bytes
+        const timestamp = Date.now();
+        const shortTimestamp = timestamp.toString(36); // Convert to base36 for shorter representation
+        const scriptId = `s_${shortTimestamp}`;
+
+        const scriptData: TelegramScriptData = {
+            idea,
+            creator,
+            vertical,
+            notes,
+            script,
+            scriptIndex: i,
+        };
+
+        await saveTelegramScriptDataFirestore(scriptId, scriptData);
+        console.log(`Saved script to Firestore with ID: ${scriptId}`);
+
+        const mediaBuyerChatId = telegramService.mediaBuyerChatIds[creator];
+        console.log(
+            `Sending message to media buyer chat ID: ${mediaBuyerChatId}`
+        );
+
+        await telegramService.sendMessageWithApprovalButtons(
+            mediaBuyerChatId,
+            message,
+            scriptId
+        );
+    }
+
+    res.status(200).json({
+        success: true,
+    });
 });
 
-interface GetSignedUploadUrlRequestQuery {
-    [AD_TYPE_FIELD_NAME]?: string;
-    [UUID_FIELD_NAME]?: string;
-    [ACCOUNT_ID_FIELD_NAME]?: string;
-}
-export interface GetSignedUploadUrlResponsePayload {
-    uploadUrl: string;
-    fileName: string;
-}
+/**
+ * Handles Telegram webhook requests for script approval/rejection
+ * This endpoint processes callback queries (button clicks) from Telegram users
+ * when they approve or reject generated scripts via inline keyboard buttons.
+ * The webhook is automatically called by Telegram when users interact with the bot for script approval/rejection.
+ */
+export const handleTelegramWebhookHttp = onRequest(async (req, res) => {
+    try {
+        const update: TelegramUpdate = req.body;
 
-// Called by Make.com scenario
-export const uploadThirdPartyAdGetSignedUploadUrl = onRequest(
-    { cors: false },
-    async (req: Request, res: Response) => {
-        const query: GetSignedUploadUrlRequestQuery = req.query;
-        const {
-            [AD_TYPE_FIELD_NAME]: adType,
-            [UUID_FIELD_NAME]: videoUuid,
-            [ACCOUNT_ID_FIELD_NAME]: accountId,
-        } = query;
+        const telegramService = new TelegramService(
+            process.env.TELEGRAM_BOT_TOKEN || ''
+        );
 
-        if (!videoUuid || !adType || !accountId) {
-            res.status(400).json({
-                error: `Missing required parameters. Please provide fields: ${AD_TYPE_FIELD_NAME}, ${UUID_FIELD_NAME}, ${ACCOUNT_ID_FIELD_NAME}`,
-            });
-            return;
+        // Process the update using the TelegramService
+        const result = await telegramService.handleWebhook(update);
+
+        if (!result.success) {
+            console.error('Error processing webhook:', result.error);
         }
 
-        try {
-            const fileName = `AZ-${adType}-${videoUuid}.mp4`;
-            const uploadUrl = await getSignedUploadUrl(
-                accountId,
-                fileName,
-                videoUuid
-            );
-            console.log(
-                `Created signed upload URL. fileName: ${fileName}. uploadUrl: ${uploadUrl}. adType: ${adType}. videoUuid: ${videoUuid}`
-            );
-            const payload: GetSignedUploadUrlResponsePayload = {
-                uploadUrl,
-                fileName,
-            };
-            res.status(200).json(payload);
-        } catch (error) {
-            const message = `Error generating signed upload URL. Error: ${error}`;
-            console.error(message);
-            res.status(500).json({ error: message });
-        }
+        // Always respond with 200 OK to Telegram to acknowledge the webhook
+        res.status(200).send('OK');
+    } catch (error) {
+        console.error('Error handling Telegram webhook:', error);
+        // Still return 200 to Telegram to prevent them from retrying
+        res.status(200).send('Error processed');
     }
-);
+});
+
+/**
+ * Sets up the webhook URL for Telegram bot
+ * This only needs to be called once or when you want to change the webhook URL
+ */
+export const setupTelegramWebhookHttp = onRequest(async (req, res) => {
+    try {
+        const telegramService = new TelegramService(
+            process.env.TELEGRAM_BOT_TOKEN || ''
+        );
+
+        const result = await telegramService.setWebhook(
+            telegramService.webhookUrl
+        );
+
+        res.status(200).json({
+            success: true,
+            webhookUrl: telegramService.webhookUrl,
+            result,
+        });
+    } catch (error) {
+        console.error('Error setting up Telegram webhook:', error);
+        res.status(500).json({
+            success: false,
+            error: error instanceof Error ? error.message : String(error),
+        });
+    }
+});
 
 /******************************************************************************
  * HTTP Function endpoints for testing
@@ -684,18 +752,6 @@ export const handleCreatomateRequestHttp_TEST = onRequest(async (req, res) => {
         fbAdId
     );
     res.status(200).json({ success: true, result });
-});
-
-export const handleSendSkypeMessageHttp_TEST = onRequest(async (req, res) => {
-    const skypeService = new SkypeService(
-        process.env.MICROSOFT_APP_ID || '',
-        process.env.MICROSOFT_APP_PASSWORD || ''
-    );
-    const conversationName = 'ALAN';
-    const message = 'This is a test from ad bot';
-
-    await skypeService.sendMessage(conversationName, message);
-    res.status(200).json({ success: true });
 });
 
 /*
