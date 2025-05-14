@@ -358,25 +358,24 @@ export class TelegramService {
             this.mediaBuyerChatIds[MediaBuyerCodes.FR]
         }) Can you create some ${verticalFullName} ads from this scripts modeling this style of video with b-roll, subtitles, and voiceover?
 
-        Script:
-        ${script}
+Script:
+${script}
 
-        Notes:
-        ${notes}
+Notes:
+${notes}
 
-        Video example:
-        https://drive.google.com/file/d/1PL-4gQfLf9bdIRAdd7a3kdbjuUArNrbd/view?usp=sharing
+Video example:
+https://drive.google.com/file/d/1PL-4gQfLf9bdIRAdd7a3kdbjuUArNrbd/view?usp=sharing
 
-        When the video is ready, please send to AMPLIFY AD CREATION channel for approval.
+When the video is ready, please send to AMPLIFY AD CREATION channel for approval.
 
-        Once approved, please put the mp4 file in this folder:
-        ${gDriveIngestrionFolderUrl}
+Once approved, please put the mp4 file in this folder:
+${gDriveIngestrionFolderUrl}
 
-        Can you please name the file:
-        ${vertical}-${creator}-${creator}-${creator}-{put anything you want here, its just because we need unique file names}
+Can you please name the file:
+${vertical}-${creator}-${creator}-${creator}-{put anything you want here, its just because we need unique file names}
 
-        Thanks!
-        `;
+Thanks!`;
         return this.sendMessage(this.adCreationChatId, message);
     }
 }
