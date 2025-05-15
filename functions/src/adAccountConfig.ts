@@ -1,3 +1,5 @@
+import { MediaBuyerCodes, VerticalCodes } from './helpers.js';
+
 /*
 Targeting saved here does not include age or gender
 */
@@ -24,6 +26,7 @@ export interface AdAccountConfig {
     campaignId: string;
     scalingCampaignId: string;
     targeting: AdAccountConfigTargeting;
+    mediaBuyer: MediaBuyerCodes;
 }
 
 type AdAccountConfigData = Record<string, AdAccountConfig>;
@@ -31,7 +34,7 @@ type AdAccountConfigData = Record<string, AdAccountConfig>;
 export const AD_ACCOUNT_DATA: AdAccountConfigData = {
     '467161346185440': {
         name: 'Vincent x Digitsolution CC 1',
-        type: 'R',
+        type: VerticalCodes.R,
         campaignId: '120215523703190415',
         scalingCampaignId: '120216751824410415',
         targeting: {
@@ -51,10 +54,11 @@ export const AD_ACCOUNT_DATA: AdAccountConfigData = {
                 custom_audience: 0,
             },
         },
+        mediaBuyer: MediaBuyerCodes.VB,
     },
     '358423827304360': {
         name: 'Vincent x Digitsolution CC 2 New', // Marcus, Roofing
-        type: 'R',
+        type: VerticalCodes.R,
         campaignId: '120217711802790271',
         scalingCampaignId: '',
         targeting: {
@@ -70,45 +74,11 @@ export const AD_ACCOUNT_DATA: AdAccountConfigData = {
                 custom_audience: 0,
             },
         },
-    },
-
-    '8653880687969127': {
-        name: 'Vincent x Digitsolution CC 2',
-        type: 'R',
-        campaignId: '120216226115490096',
-        scalingCampaignId: '',
-        targeting: {
-            geo_locations: {
-                location_types: ['home', 'recent'],
-                // TODO: Change this to the correct location cluster ID
-                location_cluster_ids: [{ key: '28950427651210969' }],
-            },
-            brand_safety_content_filter_levels: ['FEED_RELAXED'],
-            targeting_relaxation_types: {
-                lookalike: 0,
-                custom_audience: 0,
-            },
-        },
-    },
-    '661505182923254': {
-        name: 'AWL_RN_FB_ABG-342749',
-        type: 'O',
-        campaignId: '120215328779990104',
-        scalingCampaignId: '',
-        targeting: {
-            geo_locations: {
-                location_types: ['home', 'recent'],
-            },
-            brand_safety_content_filter_levels: ['FEED_RELAXED'],
-            targeting_relaxation_types: {
-                lookalike: 0,
-                custom_audience: 0,
-            },
-        },
+        mediaBuyer: MediaBuyerCodes.MA,
     },
     '916987259877684': {
         name: 'SF- 121 (EST) - Ronin WH 262 - TN_RN_FB_ABG-999019',
-        type: 'O',
+        type: VerticalCodes.O,
         campaignId: '120215328779990104',
         scalingCampaignId: '',
         targeting: {
@@ -140,5 +110,6 @@ export const AD_ACCOUNT_DATA: AdAccountConfigData = {
                 custom_audience: 0,
             },
         },
+        mediaBuyer: MediaBuyerCodes.VB,
     },
 };
