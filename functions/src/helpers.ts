@@ -44,6 +44,7 @@ export enum MediaBuyerCodes {
     BZ = 'BZ',
     AZ = 'AZ',
     FR = 'FR',
+    VB = 'VB',
 }
 
 export function getFullVerticalName(vertical: string): string {
