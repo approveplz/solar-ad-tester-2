@@ -169,6 +169,60 @@ export class AirtableService {
         }
     }
 
+    /**
+     * Creates a new script record in the SCRIPTS Airtable table
+     *
+     * @param scriptId - Unique identifier for the script
+     * @param writer - The writer of the script
+     * @param vertical - The vertical (category) of the script
+     * @param script - The actual script content
+     * @returns The ID of the created record
+     */
+    public async createScriptRecord(
+        scriptId: string,
+        writer: string,
+        vertical: string,
+        script: string
+    ): Promise<string> {
+        console.log(
+            `Creating new script record in SCRIPTS table with ScriptID: ${scriptId}`
+        );
+
+        try {
+            const fields = {
+                ScriptID: scriptId,
+                Writer: writer,
+                Vertical: vertical,
+                Script: script,
+            };
+
+            const sanitizedFields = this.sanitizeFields(fields);
+
+            const records = await this.airtableBase('SCRIPTS').create([
+                { fields: sanitizedFields },
+            ]);
+
+            if (!records || records.length === 0) {
+                throw new Error(
+                    'Failed to create Airtable record: No record returned'
+                );
+            }
+
+            const recordId = records[0].id;
+            console.log(
+                `Successfully created script record in SCRIPTS with ScriptID: ${scriptId}`
+            );
+
+            return recordId;
+        } catch (error) {
+            console.error(
+                `Error creating script record in Airtable SCRIPTS:`,
+                error
+            );
+            throw error;
+        }
+    }
+
     // Remove undefined values to prevent Airtable errors
     private sanitizeFields(fields: object): object {
         console.log('Sanitizing fields:', fields);
