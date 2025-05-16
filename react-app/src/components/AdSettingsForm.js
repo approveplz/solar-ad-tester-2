@@ -30,6 +30,7 @@ const initialFormData = {
     promotedObjectParams: {
         pixelId: '',
         customEventType: 'LEAD',
+        customEventStr: '',
         pageId: '',
     },
     adCreativeParams: {
@@ -133,7 +134,7 @@ function AdSettingsForm() {
 
     // UI state management
     const [isFormEditable, setIsFormEditable] = useState(false);
-    const [accountId, setAccountId] = useState('358423827304360');
+    const [accountId, setAccountId] = useState('822357702553382');
     const [isSaving, setIsSaving] = useState(false);
     // State to hold the zipcodes textarea value
     const [zipCodesText, setZipCodesText] = useState('');
@@ -296,8 +297,8 @@ function AdSettingsForm() {
                                     358423827304360 (Roofing, Vincent x
                                     Digitsolution CC 2 New)
                                 </option>
-                                <option value="661505182923254">
-                                    661505182923254 (AWL_RN_FB_ABG-342749)
+                                <option value="822357702553382">
+                                    822357702553382 (AWL_RN_FB_ABG-999490)
                                 </option>
                                 <option value="467161346185440">
                                     467161346185440 (Roofing, Vincent x
@@ -713,7 +714,26 @@ function AdSettingsForm() {
                                         style={styles.select}
                                     >
                                         <option value="LEAD">Lead</option>
+                                        <option value="OTHER">Other</option>
                                     </select>
+                                )}
+                            />
+                        </label>
+                    </div>
+                    <div>
+                        <label style={styles.label}>
+                            Custom Event String:
+                            <Controller
+                                name="promotedObjectParams.customEventStr"
+                                control={control}
+                                render={({ field }) => (
+                                    <input
+                                        {...field}
+                                        type="text"
+                                        disabled={!isFormEditable}
+                                        style={styles.input}
+                                        placeholder="e.g. evt_101"
+                                    />
                                 )}
                             />
                         </label>

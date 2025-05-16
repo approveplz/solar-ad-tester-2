@@ -8,6 +8,7 @@ export interface CampaignParams {
 export interface PromotedObjectParams {
     pixelId: string;
     customEventType: string;
+    customEventStr?: string;
     pageId: string;
 }
 
