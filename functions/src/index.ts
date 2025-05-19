@@ -1,7 +1,12 @@
 import { onRequest } from 'firebase-functions/v2/https';
 import { Request, Response } from 'express';
 import { initializeApp, cert } from 'firebase-admin/app';
-import invariant from 'tiny-invariant';
+import {
+    getAccountIdFromVertical,
+    invariant,
+    VerticalCodes,
+    MediaBuyerCodes,
+} from './helpers.js';
 import serviceAccount from './solar-ad-tester-2-firebase-adminsdk-3iokc-bd8ce8732d.json' assert { type: 'json' };
 import { config } from 'dotenv';
 import MetaAdCreatorService from './services/MetaAdCreatorService.js';
@@ -39,7 +44,7 @@ import {
     CreatomateService,
 } from './services/CreatomateService.js';
 import { MediaBuyingService } from './services/MediaBuyingService.js';
-import { SkypeService } from './services/SkypeService.js';
+import { TelegramService, TelegramUpdate } from './services/TelegramService.js';
 import { getAdName, getFullVerticalName } from './helpers.js';
 import { AD_ACCOUNT_DATA } from './adAccountConfig.js';
 import { AirtableService } from './services/AirtableService.js';
@@ -50,7 +55,6 @@ import { OpenAiService } from './services/OpenAiService.js';
 import { TrelloService } from './services/TrelloService.js';
 import { Readable } from 'stream';
 import { ZipcodeService } from './services/ZipcodeService.js';
-import { TelegramService, TelegramUpdate } from './services/TelegramService.js';
 
 config();
 
@@ -75,9 +79,8 @@ export const updateAdPerformanceScheduled = onSchedule(
                 process.env.CREATOMATE_API_KEY || ''
             );
             const bigQueryService = new BigQueryService();
-            const skypeService = new SkypeService(
-                process.env.MICROSOFT_APP_ID || '',
-                process.env.MICROSOFT_APP_PASSWORD || ''
+            const telegramService = new TelegramService(
+                process.env.TELEGRAM_BOT_TOKEN || ''
             );
             const trelloService = new TrelloService(
                 process.env.TRELLO_API_KEY || '',
@@ -86,7 +89,7 @@ export const updateAdPerformanceScheduled = onSchedule(
             const mediaBuyingService = new MediaBuyingService(
                 creatomateService,
                 bigQueryService,
-                skypeService,
+                telegramService,
                 trelloService
             );
             await mediaBuyingService.handleAdPerformanceUpdates();
@@ -108,8 +111,9 @@ export const fetchAdsScheduled = onSchedule(
         try {
             // Define an array of account IDs to fetch ads for
             const accountIds = [
-                '467161346185440', // Vincent, Roofing
+                // '467161346185440', // Vincent, Roofing
                 '358423827304360', // Marcus, Roofing
+                '822357702553382', // GLP-1
                 // Add more account IDs here as needed
             ];
             const onlyActive = true;
@@ -119,9 +123,8 @@ export const fetchAdsScheduled = onSchedule(
                 process.env.CREATOMATE_API_KEY || ''
             );
             const bigQueryService = new BigQueryService();
-            const skypeService = new SkypeService(
-                process.env.MICROSOFT_APP_ID || '',
-                process.env.MICROSOFT_APP_PASSWORD || ''
+            const telegramService = new TelegramService(
+                process.env.TELEGRAM_BOT_TOKEN || ''
             );
             const trelloService = new TrelloService(
                 process.env.TRELLO_API_KEY || '',
@@ -130,7 +133,7 @@ export const fetchAdsScheduled = onSchedule(
             const mediaBuyingService = new MediaBuyingService(
                 creatomateService,
                 bigQueryService,
-                skypeService,
+                telegramService,
                 trelloService
             );
 
@@ -349,6 +352,43 @@ export const fetchAdsScheduled = onSchedule(
  ******************************************************************************/
 
 // Called from Google Apps Script
+export const createRecordAirtableAdAutomationHttp = onRequest(
+    { timeoutSeconds: 540, memory: '1GiB' },
+    async (req, res) => {
+        const airtableService = new AirtableService(
+            process.env.AIRTABLE_API_KEY || '',
+            process.env.AIRTABLE_BASE_ID || ''
+        );
+
+        let { downloadUrl, vertical, scriptWriter, ideaWriter, hookWriter } =
+            req.body;
+
+        if (!Object.values(VerticalCodes).includes(vertical)) {
+            vertical = null;
+        }
+
+        if (!Object.values(MediaBuyerCodes).includes(scriptWriter)) {
+            scriptWriter = null;
+        }
+        if (!Object.values(MediaBuyerCodes).includes(ideaWriter)) {
+            ideaWriter = null;
+        }
+        if (!Object.values(MediaBuyerCodes).includes(hookWriter)) {
+            hookWriter = null;
+        }
+
+        const recordId = await airtableService.updateAdAutomationRecord(
+            downloadUrl,
+            vertical,
+            scriptWriter,
+            ideaWriter,
+            hookWriter
+        );
+
+        res.status(200).json({ success: true, recordId });
+    }
+);
+
 export const createFbAdHttp = onRequest(
     { timeoutSeconds: 540, memory: '1GiB' },
     async (req, res) => {
@@ -356,9 +396,8 @@ export const createFbAdHttp = onRequest(
             process.env.CREATOMATE_API_KEY || ''
         );
         const bigQueryService = new BigQueryService();
-        const skypeService = new SkypeService(
-            process.env.MICROSOFT_APP_ID || '',
-            process.env.MICROSOFT_APP_PASSWORD || ''
+        const telegramService = new TelegramService(
+            process.env.TELEGRAM_BOT_TOKEN || ''
         );
         const trelloService = new TrelloService(
             process.env.TRELLO_API_KEY || '',
@@ -367,25 +406,31 @@ export const createFbAdHttp = onRequest(
         const mediaBuyingService = new MediaBuyingService(
             creatomateService,
             bigQueryService,
-            skypeService,
+            telegramService,
             trelloService
         );
+
+        console.log(`Request body: ${JSON.stringify(req.body, null, 2)}`);
 
         try {
             // Validate required request body parameters
             const requiredFields = [
-                'accountId',
                 'downloadUrl',
                 'vertical',
                 'scriptWriter',
                 'ideaWriter',
                 'hookWriter',
+                'mediaBuyer',
+                'adName',
             ];
             const missingFields = requiredFields.filter(
                 (field) => !req.body[field]
             );
 
             if (missingFields.length > 0) {
+                console.error(
+                    `Missing required fields: ${missingFields.join(', ')}`
+                );
                 res.status(400).json({
                     success: false,
                     error: `Missing required fields: ${missingFields.join(
@@ -396,13 +441,20 @@ export const createFbAdHttp = onRequest(
             }
 
             const {
-                accountId,
                 downloadUrl,
                 vertical,
                 scriptWriter,
                 ideaWriter,
                 hookWriter,
+                mediaBuyer,
+                adName,
+                scriptId,
+                isTest = false,
             } = req.body;
+
+            console.log(`Automation running for ${adName}`);
+
+            const accountId = getAccountIdFromVertical(vertical);
 
             const adAccountData =
                 AD_ACCOUNT_DATA[accountId as keyof typeof AD_ACCOUNT_DATA];
@@ -410,23 +462,21 @@ export const createFbAdHttp = onRequest(
                 adAccountData,
                 `ad account data not found in constants for account id: ${accountId}`
             );
+            const { campaignIds } = adAccountData;
+            const campaignId =
+                campaignIds[mediaBuyer as keyof typeof campaignIds];
 
-            const { campaignId, scalingCampaignId } = adAccountData;
+            invariant(
+                campaignId,
+                `campaign id not found in constants for account id: ${accountId} and media buyer: ${mediaBuyer}`
+            );
+
             const metaAdCreatorService = new MetaAdCreatorService({
                 appId: process.env.FACEBOOK_APP_ID || '',
                 appSecret: process.env.FACEBOOK_APP_SECRET || '',
                 accessToken: process.env.FACEBOOK_ACCESS_TOKEN || '',
                 accountId: accountId || '',
             });
-
-            const nextCounter = await getIncrementedCounterFirestore();
-            const adName = getAdName(
-                nextCounter,
-                vertical,
-                scriptWriter,
-                ideaWriter,
-                hookWriter
-            );
 
             const ad = await mediaBuyingService.handleCreateAd(
                 metaAdCreatorService,
@@ -436,45 +486,32 @@ export const createFbAdHttp = onRequest(
                 downloadUrl
             );
 
+            if (isTest) {
+                res.status(200).json({
+                    success: true,
+                });
+            }
+
             const fbAdId = ad.id;
             const fbAdSetId = await metaAdCreatorService.getAdSetIdFromAdId(
                 fbAdId
             );
 
-            const googleGeminiService = new GoogleGeminiService(
-                process.env.GOOGLE_GEMINI_API_KEY || ''
-            );
-            const transcript = await googleGeminiService.getAdScript(
-                downloadUrl
-            );
-
-            const isFromTrelloCard =
-                scriptWriter === 'AT' ||
-                hookWriter === 'AT' ||
-                ideaWriter === 'AT';
-
             const adPerformance: AdPerformance = {
-                counter: nextCounter,
+                scriptId,
                 fbAccountId: accountId,
                 adName,
                 gDriveDownloadUrl: downloadUrl,
                 fbAdId,
                 fbAdSetId,
                 fbCampaignId: campaignId,
-                fbScalingCampaignId: scalingCampaignId,
                 vertical,
                 ideaWriter,
                 scriptWriter,
                 hookWriter,
                 performanceMetrics: {},
                 fbIsActive: true,
-                isHook: false,
-                hasHooksCreated: false,
-                isScaled: false,
-                hasScaled: false,
-                isFromTrelloCard,
-                hasTrelloCardCreated: false,
-                script: transcript,
+                mediaBuyer,
             };
 
             await saveAdPerformanceFirestore(fbAdId, adPerformance);
@@ -535,12 +572,6 @@ export const generateScriptHttp = onRequest(async (req, res) => {
         openAiService.generateScript(idea, vertical, notes),
         openAiService.generateScript(idea, vertical, notes),
     ]);
-
-    // const { script } = await openAiService.generateScript(
-    //     idea,
-    //     vertical,
-    //     notes
-    // );
 
     const telegramService = new TelegramService(
         process.env.TELEGRAM_BOT_TOKEN || ''
@@ -651,26 +682,6 @@ export const setupTelegramWebhookHttp = onRequest(async (req, res) => {
     }
 });
 
-/******************************************************************************
- * HTTP Function endpoints for testing
- ******************************************************************************/
-
-// export const handleTrelloRequestHttp_TEST = onRequest(async (req, res) => {
-//     const trelloService = new TrelloService(
-//         process.env.TRELLO_API_KEY || '',
-//         process.env.TRELLO_API_TOKEN || ''
-//     );
-//     // const result = await trelloService.getLists();
-//     const videoAdUrl =
-//         'https://drive.google.com/file/d/1LZ6JGg8M1LMSD-h00frPqjn2gWy1FLZQ/view?usp=sharing';
-//     const cardName = trelloService.getRoofingCardName('R-AZ-AZ-AZ-TEST', 5);
-//     const result = await trelloService.createCardFromRoofingTemplate(
-//         cardName,
-//         videoAdUrl
-//     );
-//     res.status(200).json({ success: true, result });
-// });
-
 export const handleGoogleGeminiRequestHttp_TEST = onRequest(
     { timeoutSeconds: 300 },
     async (req, res) => {
@@ -697,9 +708,8 @@ export const handleApifyRequestHttp_TEST = onRequest(
         const openAiService = new OpenAiService(
             process.env.OPENAI_API_KEY || ''
         );
-        const skypeService = new SkypeService(
-            process.env.MICROSOFT_APP_ID || '',
-            process.env.MICROSOFT_APP_PASSWORD || ''
+        const telegramService = new TelegramService(
+            process.env.TELEGRAM_BOT_TOKEN || ''
         );
         const apifyService = new ApifyService(
             process.env.APIFY_API_TOKEN || '',
@@ -719,8 +729,8 @@ export const handleApifyRequestHttp_TEST = onRequest(
         );
 
         if (hasNewAds) {
-            await skypeService.sendMessage(
-                'AZ',
+            await telegramService.sendMessage(
+                telegramService.mediaBuyerChatIds['AZ'],
                 'There are new scraped ads ready for review at https://solar-ad-tester-2.web.app/'
             );
         }
@@ -753,6 +763,61 @@ export const handleCreatomateRequestHttp_TEST = onRequest(async (req, res) => {
     );
     res.status(200).json({ success: true, result });
 });
+
+// /**
+//  * Test endpoint to create a script record in Airtable
+//  * This endpoint allows testing the createScriptRecord functionality
+//  */
+// export const testCreateScriptRecordHttp = onRequest(
+//     { timeoutSeconds: 60 },
+//     async (req, res) => {
+//         try {
+//             // Validate required request body parameters
+//             const requiredFields = ['scriptId', 'writer', 'vertical', 'script'];
+//             const missingFields = requiredFields.filter(
+//                 (field) => !req.body[field]
+//             );
+
+//             if (missingFields.length > 0) {
+//                 res.status(400).json({
+//                     success: false,
+//                     error: `Missing required fields: ${missingFields.join(
+//                         ', '
+//                     )}`,
+//                 });
+//                 return;
+//             }
+
+//             const { scriptId, writer, vertical, script } = req.body;
+
+//             // Initialize AirtableService
+//             const airtableService = new AirtableService(
+//                 process.env.AIRTABLE_API_KEY || '',
+//                 process.env.AIRTABLE_BASE_ID || ''
+//             );
+
+//             // Create the script record
+//             const recordId = await airtableService.createScriptRecord(
+//                 scriptId,
+//                 writer,
+//                 vertical,
+//                 script
+//             );
+
+//             res.status(200).json({
+//                 success: true,
+//                 recordId,
+//                 message: `Successfully created script record with ScriptID: ${scriptId}`,
+//             });
+//         } catch (error) {
+//             console.error('Error creating script record:', error);
+//             res.status(500).json({
+//                 success: false,
+//                 error: error instanceof Error ? error.message : String(error),
+//             });
+//         }
+//     }
+// );
 
 /*
 TODO: Fix this after refactor to read params by ad account ID instead of ad type

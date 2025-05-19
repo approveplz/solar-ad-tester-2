@@ -47,6 +47,14 @@ export enum MediaBuyerCodes {
     VB = 'VB',
 }
 
+export function getAccountIdFromVertical(vertical: string): string {
+    const verticalToAccountId = {
+        [VerticalCodes.R]: '358423827304360',
+        [VerticalCodes.O]: '822357702553382',
+    };
+    return verticalToAccountId[vertical as VerticalCodes] || '';
+}
+
 export function getFullVerticalName(vertical: string): string {
     const verticalFullNameMapping: Record<VerticalCodes, string> = {
         [VerticalCodes.R]: 'Roofing',
@@ -57,3 +65,14 @@ export function getFullVerticalName(vertical: string): string {
 
 export const gDriveIngestrionFolderUrl =
     'https://drive.google.com/drive/folders/1AwBk7bOjyuBVlfTVxZ-t4wE2IatX8O22?usp=sharing';
+
+/**
+ * Custom invariant function that preserves error messages in production
+ * @param condition The condition to check
+ * @param message The error message to show if condition is false
+ */
+export function invariant(condition: any, message: string): asserts condition {
+    if (!condition) {
+        throw new Error(`Invariant failed: ${message}`);
+    }
+}

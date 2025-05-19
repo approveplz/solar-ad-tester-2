@@ -85,11 +85,8 @@ export class AirtableService {
             GA_SPEND_LIFETIME: gaLifetime.spend,
 
             GDRIVE_LINK: adPerformance.gDriveDownloadUrl,
-            HAS_HOOK: adPerformance.hasHooksCreated,
             HOOK_WRITER: adPerformance.hookWriter,
             IDEA_CREATOR: adPerformance.ideaWriter,
-            // If the script property exists on AdPerformance, we map it; otherwise, set to null.
-            SCRIPT: adPerformance.script || null,
             SCRIPT_WRITER: adPerformance.scriptWriter,
 
             TOTAL_PROFIT_LAST_3: totalProfitLast3,
@@ -223,11 +220,70 @@ export class AirtableService {
         }
     }
 
+    /**
+     * Creates a new record in the AD_AUTOMATION Airtable table
+     *
+     * @param downloadUrl - The Google Drive download URL
+     * @param vertical - The vertical (category) of the ad
+     * @param scriptWriter - The writer of the script
+     * @param ideaWriter - The creator of the idea
+     * @param hookWriter - The writer of the hook
+     * @returns The ID of the created record
+     */
+    public async updateAdAutomationRecord(
+        downloadUrl: string,
+        vertical: string,
+        scriptWriter: string,
+        ideaWriter: string,
+        hookWriter: string
+    ): Promise<string> {
+        console.log(
+            `Creating new AD_AUTOMATION record with downloadUrl: ${downloadUrl}`
+        );
+
+        try {
+            const fields = {
+                DOWNLOAD_URL: downloadUrl,
+                VERTICAL: vertical,
+                SCRIPT_WRITER: scriptWriter,
+                IDEA_WRITER: ideaWriter,
+                HOOK_WRITER: hookWriter,
+            };
+
+            const sanitizedFields = this.sanitizeFields(fields);
+
+            const records = await this.airtableBase('AD_AUTOMATION').create([
+                { fields: sanitizedFields },
+            ]);
+
+            if (!records || records.length === 0) {
+                throw new Error(
+                    'Failed to create Airtable record: No record returned'
+                );
+            }
+
+            const recordId = records[0].id;
+            console.log(
+                `Successfully created new AD_AUTOMATION record with ID: ${recordId}`
+            );
+
+            return recordId;
+        } catch (error) {
+            console.error(
+                `Error creating AD_AUTOMATION record in Airtable:`,
+                error
+            );
+            throw error;
+        }
+    }
+
     // Remove undefined values to prevent Airtable errors
     private sanitizeFields(fields: object): object {
         console.log('Sanitizing fields:', fields);
         return Object.fromEntries(
-            Object.entries(fields).filter(([_, v]) => v !== undefined)
+            Object.entries(fields).filter(
+                ([_, v]) => v !== undefined && v !== null
+            )
         );
     }
 }

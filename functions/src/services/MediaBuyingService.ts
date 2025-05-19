@@ -14,8 +14,8 @@ import {
     setEventFirestore,
     getFbAdSettingFirestore,
 } from '../firestoreCloud.js';
-import invariant from 'tiny-invariant';
-import { SkypeService } from './SkypeService.js';
+import { invariant } from '../helpers.js';
+import { TelegramService } from './TelegramService.js';
 import { TrelloService } from './TrelloService.js';
 import { getAdName, getNextWeekdayUnixSeconds } from '../helpers.js';
 import { ZipcodeObj } from './ZipcodeService.js';
@@ -35,7 +35,7 @@ export class MediaBuyingService {
     constructor(
         private readonly creatomateService: CreatomateService,
         private readonly bigQueryService: BigQueryService,
-        private readonly skypeService: SkypeService,
+        private readonly telegramService: TelegramService,
         private readonly trelloService: TrelloService
     ) {}
 
@@ -62,7 +62,7 @@ export class MediaBuyingService {
             accountId
         );
 
-        const ads = await metaAdCreatorService.getAllAds(onlyActive);
+        const ads = await metaAdCreatorService.getAllAdsByCampaign(onlyActive);
         console.log(
             `Successfully retrieved ${ads.length} active ads from Meta for account ID: ${accountId}`
         );
@@ -76,27 +76,19 @@ export class MediaBuyingService {
                 );
 
                 const adPerformance: AdPerformance = {
-                    counter: 0,
                     fbAccountId: accountId,
                     adName: ad.adName || '',
                     gDriveDownloadUrl: '',
                     fbAdId: ad.adId,
                     fbAdSetId: ad.adSetId,
                     fbCampaignId: ad.campaignId,
-                    fbScalingCampaignId: '',
-                    vertical: 'R',
+                    vertical: AD_ACCOUNT_DATA[accountId].type,
                     ideaWriter: '',
                     scriptWriter: '',
                     hookWriter: '',
                     performanceMetrics: {},
                     fbIsActive: true,
-                    isHook: false,
-                    hasHooksCreated: false,
-                    isScaled: false,
-                    hasScaled: false,
-                    isFromTrelloCard: false,
-                    hasTrelloCardCreated: false,
-                    script: '',
+                    mediaBuyer: ad.mediaBuyer,
                 };
 
                 await saveAdPerformanceFirestore(ad.adId, adPerformance);
@@ -181,26 +173,22 @@ export class MediaBuyingService {
         invariant(fbAccountId, 'fbAccountId must be defined');
 
         const metaService = await this.getMetaAdCreatorService(fbAccountId);
-        // await this.handlePerformanceBasedActions(
-        //     adPerformance,
-        //     metaService,
-        //     this.skypeService,
-        //     this.trelloService
-        // );
+        await this.handlePerformanceBasedActions(
+            adPerformance,
+            metaService,
+            this.telegramService,
+            this.trelloService
+        );
     }
 
     async handlePerformanceBasedActions(
         adPerformance: AdPerformance,
         metaAdCreatorService: MetaAdCreatorService,
-        skypeService: SkypeService,
+        telegramService: TelegramService,
         trelloService: TrelloService
     ) {
-        let mediaBuyer: string;
-        if (adPerformance.fbAccountId === '8653880687969127') {
-            mediaBuyer = 'MA';
-        } else {
-            mediaBuyer = 'AZ';
-        }
+        const mediaBuyer = adPerformance.mediaBuyer;
+        invariant(mediaBuyer, 'mediaBuyer must be defined');
 
         const fbRoiLifetime =
             adPerformance.performanceMetrics.fb?.lifetime?.roi ?? 0;
@@ -210,31 +198,28 @@ export class MediaBuyingService {
         const leadsLifetime =
             adPerformance.performanceMetrics.fb?.lifetime?.leads ?? 0;
 
-        if (adPerformance.hasScaled) {
-            console.log(
-                `Ad ${adPerformance.fbAdId} has already been scaled, skipping processing`
-            );
-            return;
-        }
-
-        // Pause underperforming ad.
+        // Underperforming ad
         if (fbRoiLifetime < 1 || fbRoiLast3Days < 1) {
-            await this.pauseUnderperformingAd(
-                adPerformance,
-                metaAdCreatorService
-            );
             const message = `
-I've paused your ad because the ROI was under 1.00X
-            
-This is the ad that I've paused:
-${skypeService.createMessageWithAdPerformanceInfo(adPerformance)}`;
-            await skypeService.sendMessage(mediaBuyer, message);
+Consider pausing this ad because the ROI was under 1.00X
+
+${this.createMessageWithAdPerformanceInfo(adPerformance)}`;
+
+            await telegramService.sendMessage(
+                telegramService.mediaBuyerChatIds[mediaBuyer],
+                message
+            );
+            // TODO: Remove this after testing
+            await telegramService.sendMessage(
+                telegramService.mediaBuyerChatIds['AZ'],
+                message
+            );
             return;
         }
 
         // Let ad run because its profitable, but dont create hooks, tello card, or scale.
         if (
-            fbRoiLifetime < this.LIFETIME_ROI_HOOK_THRESHOLD &&
+            fbRoiLifetime < this.LIFETIME_ROI_SCALING_THRESHOLD &&
             leadsLifetime > 1
         ) {
             console.log(
@@ -246,88 +231,29 @@ ${skypeService.createMessageWithAdPerformanceInfo(adPerformance)}`;
             );
             return;
         }
+    }
 
-        // Ad above threshold to create a Trello card. Create one if one has not been created yet and its not a hook.
-        if (
-            fbRoiLifetime >= this.LIFETIME_TRELLO_CARD_CREATION_THRESHOLD &&
-            !adPerformance.isHook &&
-            !adPerformance.hasTrelloCardCreated
-        ) {
-            const trelloCard = await this.handleCreateTrelloCard(
-                adPerformance,
-                trelloService
-            );
-            const message = `
-I've created a new Trello card on the Adstonaut board for your ad because the ROI was over ${
-                this.LIFETIME_TRELLO_CARD_CREATION_THRESHOLD
-            }x
+    private createMessageWithAdPerformanceInfo(
+        adPerformance: AdPerformance
+    ): string {
+        const lifetimeMetrics = adPerformance.performanceMetrics.fb?.lifetime;
+        const last3DaysMetrics = adPerformance.performanceMetrics.fb?.last3Days;
+        return `
+Ad Name: ${adPerformance.adName}
+Ad ID: ${adPerformance.fbAdId}
+Ad Set ID: ${adPerformance.fbAdSetId}
+Campaign ID: ${adPerformance.fbCampaignId}
 
-This is the ad that I've created the card for:
-${skypeService.createMessageWithAdPerformanceInfo(adPerformance)}`;
-            await skypeService.sendMessage(mediaBuyer, message);
-        }
+Last 3 Days:
+ROI: ${last3DaysMetrics?.roi.toFixed(2) ?? 'N/A'}
+Spend: $${(last3DaysMetrics?.spend ?? 0).toFixed(2)}
+Revenue: $${(last3DaysMetrics?.revenue ?? 0).toFixed(2)}
 
-        // TODO: Add hooks creation back in.
-        //         // Ad above threshold to create hooks. Create hooks if not yet created and its not a hook.
-        //         if (!adPerformance.hasHooksCreated && !adPerformance.isHook) {
-        //             try {
-        //                 const hookAdPerformances = await this.handleCreateHooks(
-        //                     adPerformance,
-        //                     metaAdCreatorService
-        //                 );
-        //                 const message = `
-        // I've created hooks for your ad because the ROI was over ${
-        //                     this.LIFETIME_ROI_HOOK_THRESHOLD
-        //                 }x
-
-        // This is the ad that I've created hooks for:
-        // ${skypeService.createMessageWithAdPerformanceInfo(adPerformance)}
-
-        // These are the hooks that I've created:
-        // ${hookAdPerformances
-        //     .map((hook) => skypeService.createMessageWithAdPerformanceInfo(hook, false))
-        //     .join('')} `;
-
-        //                 await skypeService.sendMessage(mediaBuyer, message);
-        //             } catch (error) {
-        //                 console.error(
-        //                     `Failed to create hooks for ad ${adPerformance.fbAdId}:`,
-        //                     error
-        //                 );
-        //             }
-        //         }
-
-        // TODO: Add scaling back in.
-        // Ad above threshold to scale. Scale if not yet scaled.
-        //         if (
-        //             fbRoiLifetime >= this.LIFETIME_ROI_SCALING_THRESHOLD &&
-        //             !adPerformance.hasScaled &&
-        //             leadsLifetime >= 3
-        //         ) {
-        //             const scaledAdDailyBudgetCents = 20000;
-        //             const scaledAdPerformance = await this.handleScaling(
-        //                 adPerformance,
-        //                 metaAdCreatorService,
-        //                 scaledAdDailyBudgetCents
-        //             );
-
-        //             const message = `
-        // I've scaled your ad for you because the ROI was over ${
-        //                 this.LIFETIME_ROI_SCALING_THRESHOLD
-        //             }x
-
-        // This is the original ad that I've scaled:
-        // ${skypeService.createMessageWithAdPerformanceInfo(adPerformance)}
-
-        // This is the scaled ad that I've created for you with a daily budget of $${(
-        //                 scaledAdDailyBudgetCents / 100
-        //             ).toFixed(2)}:
-        // ${skypeService.createMessageWithAdPerformanceInfo(scaledAdPerformance, false)}
-
-        // It will start running the next weekday.`;
-
-        //             await skypeService.sendMessage(mediaBuyer, message);
-        //         }
+Lifetime:
+ROI: ${lifetimeMetrics?.roi.toFixed(2) ?? 'N/A'}
+Spend: $${(lifetimeMetrics?.spend ?? 0).toFixed(2)}
+Revenue: $${(lifetimeMetrics?.revenue ?? 0).toFixed(2)}
+`;
     }
 
     private async pauseUnderperformingAd(
@@ -340,208 +266,6 @@ ${skypeService.createMessageWithAdPerformanceInfo(adPerformance)}`;
         );
         adPerformance.fbIsActive = false;
         await saveAdPerformanceFirestore(adPerformance.fbAdId, adPerformance);
-    }
-
-    async handleCreateTrelloCard(
-        originalAdPerformance: AdPerformance,
-        trelloService: TrelloService
-    ) {
-        const quantity = 5;
-        const cardName = trelloService.getCardName(
-            'Roofing', // TODO: make this dynamic
-            originalAdPerformance.adName,
-            quantity
-        );
-        const trelloCard =
-            await trelloService.createCardFromRoofingTemplateWithVideoUrl(
-                cardName,
-                originalAdPerformance.gDriveDownloadUrl,
-                5
-            );
-        originalAdPerformance.hasTrelloCardCreated = true;
-        await saveAdPerformanceFirestore(
-            originalAdPerformance.fbAdId,
-            originalAdPerformance
-        );
-        return trelloCard;
-    }
-
-    async handleCreateHooks(
-        originalAdPerformance: AdPerformance,
-        metaAdCreatorService: MetaAdCreatorService
-    ): Promise<AdPerformance[]> {
-        const creatomateRenderResponses =
-            await this.creatomateService.uploadToCreatomateWithHooksAll(
-                originalAdPerformance.gDriveDownloadUrl,
-                originalAdPerformance.adName,
-                originalAdPerformance.fbAdId
-            );
-
-        const renderCompleteData = await Promise.all(
-            creatomateRenderResponses.map(async (renderResponse) => {
-                const { creatomateRenderResponse } = renderResponse;
-
-                const eventKey = `creatomate_render:${creatomateRenderResponse.id}`;
-
-                try {
-                    await setEventFirestore(eventKey, 'PENDING', {});
-                    console.log(
-                        `Event ${eventKey} created with status: PENDING`
-                    );
-                } catch (err) {
-                    console.error(`Failed to create event ${eventKey}:`, err);
-                    throw err;
-                }
-
-                // Now obtain the document reference.
-                const eventDocRef = await getEventFirestoreDocRef(eventKey);
-                console.log(
-                    `Got document reference for event key: ${eventKey}`
-                );
-
-                // Return a promise that just attaches the snapshot listener.
-                return new Promise<{
-                    creatomateMetadata: CreatomateMetadata;
-                    creatomateUrl: string;
-                }>((resolve, reject) => {
-                    const unsubscribe = eventDocRef.onSnapshot(
-                        (snapshot) => {
-                            console.log('onSnapshot triggered', {
-                                exists: snapshot.exists,
-                                data: snapshot.data(),
-                            });
-
-                            if (snapshot.exists) {
-                                const data = snapshot.data();
-                                if (data && data.status === 'SUCCESS') {
-                                    console.log(
-                                        'Received SUCCESS status with data:',
-                                        data
-                                    );
-                                    clearTimeout(timeout);
-                                    unsubscribe();
-                                    resolve({
-                                        creatomateMetadata:
-                                            data.payload.creatomateMetadata,
-                                        creatomateUrl:
-                                            data.payload.creatomateUrl,
-                                    });
-                                }
-                            }
-                        },
-                        (err) => {
-                            console.error('Error in onSnapshot:', err);
-                            clearTimeout(timeout);
-                            unsubscribe();
-                            reject(err);
-                        }
-                    );
-
-                    // Set a timeout to reject after 5 minutes if the event is not updated.
-                    const timeout = setTimeout(() => {
-                        console.error(
-                            `Timeout waiting for Creatomate render event: ${creatomateRenderResponse.id}`
-                        );
-                        unsubscribe();
-                        reject(
-                            new Error(
-                                `Timeout waiting for Creatomate render event: ${creatomateRenderResponse.id}`
-                            )
-                        );
-                    }, 5 * 60 * 1000);
-                });
-            })
-        );
-
-        const createHookPromises = renderCompleteData.map(
-            async ({ creatomateMetadata, creatomateUrl }) => {
-                console.log({ creatomateMetadata });
-                const { hookName } = creatomateMetadata;
-                const {
-                    vertical: originalVertical,
-                    fbAccountId: originalFbAccountId,
-                    fbCampaignId: originalFbCampaignId,
-                    fbScalingCampaignId: originalFbScalingCampaignId,
-                    ideaWriter: originalIdeaWriter,
-                    scriptWriter: originalScriptWriter,
-                    counter: originalCounter,
-                } = originalAdPerformance;
-
-                const hookAdName = `${getAdName(
-                    originalCounter,
-                    originalVertical,
-                    originalScriptWriter,
-                    originalIdeaWriter,
-                    'AZ'
-                )}-HOOK:${hookName}`;
-
-                const hookAd = await this.handleCreateAd(
-                    metaAdCreatorService,
-                    originalFbAccountId,
-                    originalFbCampaignId,
-                    hookAdName,
-                    creatomateUrl
-                );
-                const hookAdId = hookAd.id;
-                const hookAdSetId =
-                    await metaAdCreatorService.getAdSetIdFromAdId(hookAdId);
-
-                const hookAdPerformance: AdPerformance = {
-                    ...originalAdPerformance,
-                    adName: hookAdName,
-                    gDriveDownloadUrl: creatomateUrl,
-                    fbAdId: hookAdId,
-                    fbAdSetId: hookAdSetId,
-                    hookWriter: 'AZ',
-                    performanceMetrics: {},
-                    fbIsActive: true,
-                    isHook: true,
-                    hasHooksCreated: false,
-                    isScaled: false,
-                    hasScaled: false,
-                };
-
-                await saveAdPerformanceFirestore(hookAdId, hookAdPerformance);
-                return hookAdPerformance;
-            }
-        );
-        const hookAdPerformances = await Promise.all(createHookPromises);
-        originalAdPerformance.hasHooksCreated = true;
-        await saveAdPerformanceFirestore(
-            originalAdPerformance.fbAdId,
-            originalAdPerformance
-        );
-        return hookAdPerformances;
-    }
-
-    async handleScaling(
-        adPerformance: AdPerformance,
-        metaService: MetaAdCreatorService,
-        scaledDailyBudgetCents: number
-    ): Promise<AdPerformance> {
-        adPerformance.hasScaled = true;
-        await saveAdPerformanceFirestore(adPerformance.fbAdId, adPerformance);
-        const scaledAdSet = await this.duplicateAdSetAndAdToCampaignWithUpdates(
-            adPerformance.fbAdId,
-            adPerformance.fbScalingCampaignId,
-            scaledDailyBudgetCents,
-            metaService
-        );
-
-        const scaledAdSetAds = await scaledAdSet.getAds(['id']);
-        const scaledAdId = scaledAdSetAds[0].id;
-
-        const scaledAdPerformance = {
-            ...adPerformance,
-            fbAdId: scaledAdId,
-            fbAdSetId: scaledAdSet.id,
-            performanceMetrics: {},
-            hasHooksCreated: false,
-            isScaled: true,
-            hasScaled: false,
-        };
-        await saveAdPerformanceFirestore(scaledAdId, scaledAdPerformance);
-        return scaledAdPerformance;
     }
 
     public async getFbAdSettings(fbAccountId: string) {
@@ -558,10 +282,24 @@ ${skypeService.createMessageWithAdPerformanceInfo(adPerformance)}`;
             const { age_max, age_min, genders, geo_locations } =
                 fbAdSettings.adSetParams.adSetTargeting;
 
+            // Get the base targeting from AD_ACCOUNT_DATA
+            const baseTargeting =
+                AD_ACCOUNT_DATA[fbAccountId as keyof typeof AD_ACCOUNT_DATA]
+                    .targeting;
+
+            // Create merged geo_locations and conditionally adding zips
+            const mergedGeoLocations = {
+                ...baseTargeting.geo_locations,
+                ...(geo_locations && {
+                    ...geo_locations,
+                    // Only add zips if they exist in the Firestore settings
+                    ...(geo_locations.zips && { zips: geo_locations.zips }),
+                }),
+            };
+
             const targeting: FbApiAdSetTargeting = {
-                ...AD_ACCOUNT_DATA[fbAccountId as keyof typeof AD_ACCOUNT_DATA]
-                    .targeting,
-                geo_locations,
+                ...baseTargeting,
+                geo_locations: mergedGeoLocations,
                 age_max,
                 age_min,
                 genders,
@@ -579,41 +317,12 @@ ${skypeService.createMessageWithAdPerformanceInfo(adPerformance)}`;
             );
         }
 
+        console.log(
+            `fbAdSettings for ${fbAccountId}`,
+            JSON.stringify(fbAdSettings, null, 2)
+        );
+
         return fbAdSettings;
-    }
-
-    public async getAdSetTargetingGeoLocationsMostRecentZipcodes(): Promise<{
-        geo_locations: FbApiGeoLocations;
-    }> {
-        const folderName = 'roofing-zips-filtered';
-        const todayDateStr = ZipcodeService.getTodayZipcodeFileDate();
-        const fileName = `affiliate_demand_${todayDateStr}.json`;
-
-        const { fileBuffer, contentType } = await downloadFileFromStorage(
-            folderName,
-            fileName
-        );
-
-        if (contentType !== 'application/json') {
-            throw new Error(`Invalid content type: ${contentType}`);
-        }
-
-        const zipCodesObj: ZipcodeObj = JSON.parse(fileBuffer.toString());
-        const { records } = zipCodesObj;
-
-        const zipcodes = records.map((record) => record.zipCode);
-        const validUniqueZipcodes =
-            await ZipcodeService.filterUniqueValidZipcodes(zipcodes);
-
-        const validUniqueFbTargetingZipcodes = validUniqueZipcodes.map(
-            (zipCode) => ({ key: `US:${zipCode}` })
-        );
-
-        return {
-            geo_locations: {
-                zips: validUniqueFbTargetingZipcodes,
-            },
-        };
     }
 
     public async handleCreateAd(
@@ -635,7 +344,7 @@ ${skypeService.createMessageWithAdPerformanceInfo(adPerformance)}`;
 
         // Create Ad Video
         const adVideo: AdVideo = await metaAdCreatorService.uploadAdVideo({
-            scrapedAdArchiveId: videoUuid,
+            adName: videoUuid,
             videoFileUrl,
         });
 

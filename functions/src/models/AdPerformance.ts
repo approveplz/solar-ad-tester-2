@@ -1,3 +1,5 @@
+import { MediaBuyerCodes } from '../helpers.js';
+
 export interface TimeBasedMetrics {
     spend: number;
     revenue: number;
@@ -19,25 +21,18 @@ export interface PerformanceMetrics {
 }
 
 export interface AdPerformance {
-    counter: number;
+    scriptId?: string;
     vertical: string;
     gDriveDownloadUrl: string;
     adName: string;
     fbAdId: string;
     fbAdSetId: string;
     fbCampaignId: string;
-    fbScalingCampaignId: string;
     fbAccountId: string;
     ideaWriter: string;
     scriptWriter: string;
     hookWriter: string;
     performanceMetrics: PerformanceMetrics;
     fbIsActive: boolean;
-    isHook: boolean;
-    isScaled: boolean;
-    hasHooksCreated: boolean;
-    hasScaled: boolean;
-    hasTrelloCardCreated: boolean;
-    isFromTrelloCard: boolean;
-    script: string;
+    mediaBuyer: MediaBuyerCodes;
 }

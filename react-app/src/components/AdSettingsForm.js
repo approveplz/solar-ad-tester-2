@@ -24,6 +24,7 @@ const initialFormData = {
             geo_locations: {
                 zips: [],
                 location_types: ['home', 'recent'],
+                countries: ['US'],
             },
         },
     },
@@ -256,7 +257,10 @@ function AdSettingsForm() {
                 throw new Error('Please select at least one gender option');
             }
 
-            console.log('Saving form data:', updatedFbAdSettings);
+            console.log(
+                'Saving form data:',
+                JSON.stringify(updatedFbAdSettings, null, 2)
+            );
 
             await saveFbAdSettings(accountId, updatedFbAdSettings);
             reset(updatedFbAdSettings);
@@ -340,6 +344,9 @@ function AdSettingsForm() {
                                         disabled={!isFormEditable}
                                         style={styles.select}
                                     >
+                                        <option value="">
+                                            Please select an optimization goal
+                                        </option>
                                         <option value="OFFSITE_CONVERSIONS">
                                             Offsite Conversions
                                         </option>
@@ -360,6 +367,9 @@ function AdSettingsForm() {
                                         disabled={!isFormEditable}
                                         style={styles.select}
                                     >
+                                        <option value="">
+                                            Please select a billing event
+                                        </option>
                                         <option value="IMPRESSIONS">
                                             Impressions
                                         </option>
@@ -397,6 +407,9 @@ function AdSettingsForm() {
                                         disabled={!isFormEditable}
                                         style={styles.select}
                                     >
+                                        <option value="">
+                                            Please select a bid strategy
+                                        </option>
                                         <option value="COST_CAP">
                                             Cost Cap
                                         </option>
@@ -420,6 +433,9 @@ function AdSettingsForm() {
                                         disabled={!isFormEditable}
                                         style={styles.select}
                                     >
+                                        <option value="">
+                                            Please select a status
+                                        </option>
                                         <option value="ACTIVE">Active</option>
                                         <option value="PAUSED">Paused</option>
                                     </select>
@@ -541,6 +557,26 @@ function AdSettingsForm() {
                         </div>
                         <div>
                             <label style={styles.label}>
+                                Country:
+                                <Controller
+                                    name="adSetParams.adSetTargeting.geo_locations.countries"
+                                    control={control}
+                                    render={({ field }) => (
+                                        <select
+                                            {...field}
+                                            disabled={!isFormEditable}
+                                            style={styles.select}
+                                        >
+                                            <option value="US">
+                                                United States
+                                            </option>
+                                        </select>
+                                    )}
+                                />
+                            </label>
+                        </div>
+                        <div>
+                            <label style={styles.label}>
                                 Zip Codes (CSV format):
                                 <textarea
                                     value={zipCodesText}
@@ -649,6 +685,9 @@ function AdSettingsForm() {
                                         disabled={!isFormEditable}
                                         style={styles.select}
                                     >
+                                        <option value="">
+                                            Please select a call to action type
+                                        </option>
                                         <option value="LEARN_MORE">
                                             Learn More
                                         </option>
@@ -713,6 +752,9 @@ function AdSettingsForm() {
                                         disabled={!isFormEditable}
                                         style={styles.select}
                                     >
+                                        <option value="">
+                                            Please select a custom event type
+                                        </option>
                                         <option value="LEAD">Lead</option>
                                         <option value="OTHER">Other</option>
                                     </select>

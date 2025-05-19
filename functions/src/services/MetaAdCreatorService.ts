@@ -21,9 +21,11 @@ import {
     FbApiCreateAdCreativeRequest,
     FbApiContextualMultiAdsSpec,
 } from '../models/MetaApiSchema.js';
-import invariant from 'tiny-invariant';
+import { invariant } from '../helpers.js';
 import { FbAdSettings } from '../models/FbAdSettings.js';
 import { getNextWeekdayUnixSeconds } from '../helpers.js';
+import { AD_ACCOUNT_DATA } from '../adAccountConfig.js';
+import { MediaBuyerCodes } from '../helpers.js';
 
 export default class MetaAdCreatorService {
     // @ts-ignore
@@ -93,18 +95,18 @@ export default class MetaAdCreatorService {
     Facebook API calls
     */
     async uploadAdVideo(params: {
-        scrapedAdArchiveId: string;
+        adName: string;
         videoFileUrl: string;
     }): Promise<AdVideo> {
-        const { scrapedAdArchiveId, videoFileUrl } = params;
+        const { adName, videoFileUrl } = params;
 
         console.log(`
         Uploading video to Facebook. Url: ${videoFileUrl}
-        Scraped Ad Archive ID: ${scrapedAdArchiveId}
+        Ad Name: ${adName}
         `);
 
         const createAdVideoRequest: FbApiCreateAdVideoRequest = {
-            name: scrapedAdArchiveId,
+            name: adName,
             file_url: videoFileUrl,
         };
 
@@ -140,11 +142,11 @@ export default class MetaAdCreatorService {
         campaignId: string;
         fbAdSettings: FbAdSettings;
     }): Promise<AdSet> {
-        console.log('Creating Ad Set');
         const { name, campaignId, fbAdSettings } = params;
+        console.log(`Creating Ad Set. Name: ${name}`);
 
         const {
-            promotedObjectParams: { pixelId, customEventType },
+            promotedObjectParams: { pixelId, customEventType, customEventStr },
             adSetParams: {
                 bidAmountCents,
                 optimizationGoal,
@@ -168,6 +170,7 @@ export default class MetaAdCreatorService {
         const promotedObject: PromotedObject = {
             pixel_id: pixelId,
             custom_event_type: customEventType,
+            custom_event_str: customEventStr,
         };
 
         /* Get start and end time */
@@ -220,6 +223,11 @@ export default class MetaAdCreatorService {
             }),
         };
 
+        console.log(
+            `createAdSetRequest for ${name}`,
+            JSON.stringify(createAdSetRequest, null, 2)
+        );
+
         try {
             const adSet: AdSet = await this.adAccount.createAdSet(
                 [],
@@ -231,7 +239,6 @@ export default class MetaAdCreatorService {
             return adSet;
         } catch (error: any) {
             console.error(`Facebook API Error: ${error.message}`);
-            console.error(createAdSetRequest);
             throw error;
         }
     }
@@ -465,15 +472,15 @@ export default class MetaAdCreatorService {
      * @param onlyActive When true, returns only active ads; when false, returns all ads
      * @returns Array of ads with their campaign and ad set information
      */
-    async getAllAds(onlyActive: boolean = false): Promise<
+    async getAllAdsByCampaign(onlyActive: boolean = false): Promise<
         Array<{
             campaignId: string;
-            campaignName: string;
             adSetId: string;
             adSetName: string;
             adId: string;
             adName: string;
             status: string;
+            mediaBuyer: MediaBuyerCodes;
         }>
     > {
         console.log(
@@ -483,25 +490,26 @@ export default class MetaAdCreatorService {
         );
 
         try {
-            // Step 1: Get campaigns
-            const statusFilter = onlyActive
-                ? { effective_status: ['ACTIVE'] }
-                : {};
-            const campaigns = await this.adAccount.getCampaigns(
-                ['id', 'name', 'status', 'effective_status'],
-                statusFilter
-            );
+            // // Step 1: Get campaigns
+            // const statusFilter = onlyActive
+            //     ? { effective_status: ['ACTIVE'] }
+            //     : {};
+            // const campaigns = await this.adAccount.getCampaigns(
+            //     ['id', 'name', 'status', 'effective_status'],
+            //     statusFilter
+            // );
 
-            console.log(`Retrieved ${campaigns.length} campaigns`);
+            // console.log(`Retrieved ${campaigns.length} campaigns`);
+            const mediaBuyerAndCampaignIds: [MediaBuyerCodes, string][] =
+                Object.entries(AD_ACCOUNT_DATA[this.accountId].campaignIds).map(
+                    ([key, value]) => [key as MediaBuyerCodes, value]
+                );
 
             // Result array to store all ads with their campaign and ad set info
             const result = [];
 
             // Step 2: For each campaign, get its ad sets
-            for (const campaign of campaigns) {
-                const campaignId = campaign.id;
-                const campaignName = campaign._data.name;
-
+            for (const [mediaBuyer, campaignId] of mediaBuyerAndCampaignIds) {
                 const adSets = await this.getAdSetsForCampaign(
                     campaignId,
                     onlyActive
@@ -521,12 +529,12 @@ export default class MetaAdCreatorService {
                     for (const ad of ads) {
                         result.push({
                             campaignId,
-                            campaignName,
                             adSetId,
                             adSetName,
                             adId: ad.id,
                             adName: ad._data.name,
                             status: ad._data.effective_status,
+                            mediaBuyer,
                         });
                     }
                 }

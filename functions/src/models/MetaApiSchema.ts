@@ -137,5 +137,6 @@ export interface FbApiCreateAdCreativeRequest {
 export interface PromotedObject {
     pixel_id: string;
     custom_event_type: string;
+    custom_event_str?: string;
     page_id?: string;
 }
