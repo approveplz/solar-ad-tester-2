@@ -19,10 +19,8 @@ function main() {
         const fileName = file.getName();
         const mimeType = file.getMimeType();
 
-        if (mimeType !== 'video/mp4') {
-            console.log(
-                `Skipping non-video fileName: ${fileName} (${mimeType})`
-            );
+        if (mimeType !== 'video/mp4' && mimeType !== 'image/jpeg') {
+            console.log(`File is not .mp4 or .jpeg: ${fileName} (${mimeType})`);
             continue;
         }
 
@@ -45,6 +43,7 @@ function main() {
                 scriptWriter,
                 ideaWriter,
                 hookWriter,
+                mediaType: mimeType === 'video/mp4' ? 'VIDEO' : 'IMAGE',
             }),
         });
 
