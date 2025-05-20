@@ -235,7 +235,8 @@ export class AirtableService {
         vertical: string,
         scriptWriter: string,
         ideaWriter: string,
-        hookWriter: string
+        hookWriter: string,
+        mediaType: string
     ): Promise<string> {
         console.log(
             `Creating new AD_AUTOMATION record with downloadUrl: ${downloadUrl}`
@@ -248,6 +249,7 @@ export class AirtableService {
                 SCRIPT_WRITER: scriptWriter,
                 IDEA_WRITER: ideaWriter,
                 HOOK_WRITER: hookWriter,
+                MEDIA_TYPE: mediaType,
             };
 
             const sanitizedFields = this.sanitizeFields(fields);

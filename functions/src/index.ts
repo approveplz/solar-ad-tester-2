@@ -360,8 +360,14 @@ export const createRecordAirtableAdAutomationHttp = onRequest(
             process.env.AIRTABLE_BASE_ID || ''
         );
 
-        let { downloadUrl, vertical, scriptWriter, ideaWriter, hookWriter } =
-            req.body;
+        let {
+            downloadUrl,
+            vertical,
+            scriptWriter,
+            ideaWriter,
+            hookWriter,
+            mediaType,
+        } = req.body;
 
         if (!Object.values(VerticalCodes).includes(vertical)) {
             vertical = null;
@@ -382,7 +388,8 @@ export const createRecordAirtableAdAutomationHttp = onRequest(
             vertical,
             scriptWriter,
             ideaWriter,
-            hookWriter
+            hookWriter,
+            mediaType
         );
 
         res.status(200).json({ success: true, recordId });
@@ -422,6 +429,7 @@ export const createFbAdHttp = onRequest(
                 'hookWriter',
                 'mediaBuyer',
                 'adName',
+                'mediaType',
             ];
             const missingFields = requiredFields.filter(
                 (field) => !req.body[field]
@@ -449,6 +457,7 @@ export const createFbAdHttp = onRequest(
                 mediaBuyer,
                 adName,
                 scriptId,
+                mediaType,
                 isTest = false,
             } = req.body;
 
@@ -478,13 +487,25 @@ export const createFbAdHttp = onRequest(
                 accountId: accountId || '',
             });
 
-            const ad = await mediaBuyingService.handleCreateAd(
-                metaAdCreatorService,
-                accountId,
-                campaignId,
-                adName,
-                downloadUrl
-            );
+            let ad;
+
+            if (mediaType === 'VIDEO') {
+                ad = await mediaBuyingService.handleCreateVideoAd(
+                    metaAdCreatorService,
+                    accountId,
+                    campaignId,
+                    adName,
+                    downloadUrl
+                );
+            } else {
+                ad = await mediaBuyingService.handleCreateImageAd(
+                    metaAdCreatorService,
+                    accountId,
+                    campaignId,
+                    adName,
+                    downloadUrl
+                );
+            }
 
             if (isTest) {
                 res.status(200).json({

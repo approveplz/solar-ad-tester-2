@@ -124,16 +124,29 @@ export default class MetaAdCreatorService {
     }
 
     // https://developers.facebook.com/docs/marketing-api/reference/ad-account/adimages/#Creating
-    async uploadAdImage(imageBytes: string): Promise<AdImage> {
-        console.log(`Uploading image...`);
+    async uploadAdImage(imageFileUrl: string): Promise<AdImage> {
+        console.log(`Uploading image from URL: ${imageFileUrl}`);
+
+        // Fetch the image
+        const response = await fetch(imageFileUrl);
+        if (!response.ok) {
+            throw new Error(`Failed to fetch image: ${response.statusText}`);
+        }
+
+        // Get the image buffer
+        const imageBuffer = Buffer.from(await response.arrayBuffer());
+
+        // Convert to base64
+        const imageBytes = imageBuffer.toString('base64');
 
         const adImage: AdImage = await this.adAccount.createAdImage(
             [AdImage.Fields.hash, AdImage.Fields.name, AdImage.Fields.id],
             {
-                // Base64 UTF-8 string
                 bytes: imageBytes,
             }
         );
+
+        console.log(`Successfully uploaded image. Image ID: ${adImage.id}`);
         return adImage;
     }
 
@@ -361,8 +374,7 @@ export default class MetaAdCreatorService {
     async createAdCreativeImage(
         name: string,
         adImage: AdImage,
-        fbAdSettings: FbAdSettings,
-        adType?: string
+        fbAdSettings: FbAdSettings
     ): Promise<AdCreative> {
         console.log(`Creating Ad Creative for Image. Name: ${name}`);
 

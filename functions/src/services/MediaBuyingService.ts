@@ -1,5 +1,11 @@
 import { FbAdSettings } from '../models/FbAdSettings.js';
-import { Ad, AdCreative, AdSet, AdVideo } from 'facebook-nodejs-business-sdk';
+import {
+    Ad,
+    AdCreative,
+    AdSet,
+    AdVideo,
+    AdImage,
+} from 'facebook-nodejs-business-sdk';
 import MetaAdCreatorService from './MetaAdCreatorService.js';
 import {
     BigQueryService,
@@ -325,7 +331,7 @@ Revenue: $${(lifetimeMetrics?.revenue ?? 0).toFixed(2)}
         return fbAdSettings;
     }
 
-    public async handleCreateAd(
+    public async handleCreateVideoAd(
         metaAdCreatorService: MetaAdCreatorService,
         fbAccountId: string,
         campaignId: string,
@@ -357,6 +363,43 @@ Revenue: $${(lifetimeMetrics?.revenue ?? 0).toFixed(2)}
                 `Creative-${adSetNameAndAdName}`,
                 adVideo,
                 thumbnailFilePath || fbGeneratedThumbnailUrl,
+                fbAdSettings
+            );
+
+        const ad: Ad = await metaAdCreatorService.createAd({
+            name: adSetNameAndAdName,
+            adSet,
+            adCreative,
+        });
+
+        return new Ad(ad.id);
+    }
+
+    public async handleCreateImageAd(
+        metaAdCreatorService: MetaAdCreatorService,
+        fbAccountId: string,
+        campaignId: string,
+        imageUuid: string,
+        imageFileUrl: string
+    ): Promise<Ad> {
+        const adSetNameAndAdName = `${imageUuid}`;
+        const fbAdSettings = await this.getFbAdSettings(fbAccountId);
+
+        const adSet: AdSet = await metaAdCreatorService.createAdSet({
+            name: adSetNameAndAdName,
+            campaignId,
+            fbAdSettings,
+        });
+
+        // Create Ad Image
+        const adImage: AdImage = await metaAdCreatorService.uploadAdImage(
+            imageFileUrl
+        );
+
+        const adCreative: AdCreative =
+            await metaAdCreatorService.createAdCreativeImage(
+                `Creative-${adSetNameAndAdName}`,
+                adImage,
                 fbAdSettings
             );
 

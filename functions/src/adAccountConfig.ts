@@ -87,7 +87,7 @@ export const AD_ACCOUNT_DATA: AdAccountConfigData = {
         name: 'AWL_RN_FB_ABG-999490',
         type: VerticalCodes.O,
         campaignIds: {
-            [MediaBuyerCodes.MA]: '120225757076490364',
+            [MediaBuyerCodes.MA]: '120225994645600364',
             [MediaBuyerCodes.VB]: '120225757076490364',
         },
         scalingCampaignId: '',
