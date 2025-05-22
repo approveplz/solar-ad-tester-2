@@ -23,7 +23,11 @@ import {
 import { invariant } from '../helpers.js';
 import { TelegramService } from './TelegramService.js';
 import { TrelloService } from './TrelloService.js';
-import { getAdName, getNextWeekdayUnixSeconds } from '../helpers.js';
+import {
+    getAdName,
+    getNextWeekdayUnixSeconds,
+    MediaBuyerCodes,
+} from '../helpers.js';
 import { ZipcodeObj } from './ZipcodeService.js';
 import { ZipcodeService } from './ZipcodeService.js';
 import { FbApiAdSetTargeting } from '../models/MetaApiSchema.js';
@@ -274,8 +278,10 @@ Revenue: $${(lifetimeMetrics?.revenue ?? 0).toFixed(2)}
         await saveAdPerformanceFirestore(adPerformance.fbAdId, adPerformance);
     }
 
-    public async getFbAdSettings(fbAccountId: string) {
-        // Account ID determines if ad type is O or R
+    public async getFbAdSettings(
+        fbAccountId: string,
+        mediaBuyer: MediaBuyerCodes
+    ) {
         const fbAdSettings: FbAdSettings | null = await getFbAdSettingFirestore(
             fbAccountId
         );
@@ -317,6 +323,12 @@ Revenue: $${(lifetimeMetrics?.revenue ?? 0).toFixed(2)}
             );
 
             fbAdSettings.adSetParams.adSetTargeting = targeting;
+            // Page ID is dependent on the media buyer
+            fbAdSettings.promotedObjectParams.pageId =
+                AD_ACCOUNT_DATA[fbAccountId as keyof typeof AD_ACCOUNT_DATA]
+                    .pageIds?.[mediaBuyer] ||
+                AD_ACCOUNT_DATA[fbAccountId as keyof typeof AD_ACCOUNT_DATA]
+                    .pageIds?.MA;
         } else {
             throw new Error(
                 `No ad settings found for accountId: ${fbAccountId}`
@@ -333,14 +345,13 @@ Revenue: $${(lifetimeMetrics?.revenue ?? 0).toFixed(2)}
 
     public async handleCreateVideoAd(
         metaAdCreatorService: MetaAdCreatorService,
-        fbAccountId: string,
         campaignId: string,
         videoUuid: string,
         videoFileUrl: string,
+        fbAdSettings: FbAdSettings,
         thumbnailFilePath: string = ''
     ): Promise<Ad> {
         const adSetNameAndAdName = `${videoUuid}`;
-        const fbAdSettings = await this.getFbAdSettings(fbAccountId);
 
         const adSet: AdSet = await metaAdCreatorService.createAdSet({
             name: adSetNameAndAdName,
@@ -377,13 +388,12 @@ Revenue: $${(lifetimeMetrics?.revenue ?? 0).toFixed(2)}
 
     public async handleCreateImageAd(
         metaAdCreatorService: MetaAdCreatorService,
-        fbAccountId: string,
         campaignId: string,
         imageUuid: string,
-        imageFileUrl: string
+        imageFileUrl: string,
+        fbAdSettings: FbAdSettings
     ): Promise<Ad> {
         const adSetNameAndAdName = `${imageUuid}`;
-        const fbAdSettings = await this.getFbAdSettings(fbAccountId);
 
         const adSet: AdSet = await metaAdCreatorService.createAdSet({
             name: adSetNameAndAdName,

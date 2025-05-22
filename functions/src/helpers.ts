@@ -45,6 +45,8 @@ export enum MediaBuyerCodes {
     AZ = 'AZ',
     FR = 'FR',
     VB = 'VB',
+    MT = 'MT',
+    RD = 'RD',
 }
 
 export function getAccountIdFromVertical(vertical: string): string {
@@ -65,6 +67,15 @@ export function getFullVerticalName(vertical: string): string {
 
 export const gDriveIngestrionFolderUrl =
     'https://drive.google.com/drive/folders/1AwBk7bOjyuBVlfTVxZ-t4wE2IatX8O22?usp=sharing';
+
+export const getViewUrlFromGdriveDownloadUrl = (url: string): string => {
+    const idMatch = url.match(/(?:id=|\/d\/)([a-zA-Z0-9_-]{25,})/);
+    if (!idMatch) {
+        throw new Error('Invalid Google Drive URL format');
+    }
+    const fileId = idMatch[1];
+    return `https://drive.google.com/file/d/${fileId}/view?usp=sharing`;
+};
 
 /**
  * Custom invariant function that preserves error messages in production

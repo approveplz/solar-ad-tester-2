@@ -9,7 +9,7 @@ export interface PromotedObjectParams {
     pixelId: string;
     customEventType: string;
     customEventStr?: string;
-    pageId: string;
+    pageId?: string;
 }
 
 export interface AdSetParams {

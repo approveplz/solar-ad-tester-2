@@ -45,7 +45,7 @@ import {
 } from './services/CreatomateService.js';
 import { MediaBuyingService } from './services/MediaBuyingService.js';
 import { TelegramService, TelegramUpdate } from './services/TelegramService.js';
-import { getAdName, getFullVerticalName } from './helpers.js';
+import { getAdName, getFullVerticalName, getViewUrlFromGdriveDownloadUrl } from './helpers.js';
 import { AD_ACCOUNT_DATA } from './adAccountConfig.js';
 import { AirtableService } from './services/AirtableService.js';
 import { onDocumentWritten } from 'firebase-functions/firestore';
@@ -111,10 +111,8 @@ export const fetchAdsScheduled = onSchedule(
         try {
             // Define an array of account IDs to fetch ads for
             const accountIds = [
-                // '467161346185440', // Vincent, Roofing
-                '358423827304360', // Marcus, Roofing
+                '358423827304360', // Roofing
                 '822357702553382', // GLP-1
-                // Add more account IDs here as needed
             ];
             const onlyActive = true;
 
@@ -367,6 +365,7 @@ export const createRecordAirtableAdAutomationHttp = onRequest(
             ideaWriter,
             hookWriter,
             mediaType,
+            originalFileName,
         } = req.body;
 
         if (!Object.values(VerticalCodes).includes(vertical)) {
@@ -383,13 +382,17 @@ export const createRecordAirtableAdAutomationHttp = onRequest(
             hookWriter = null;
         }
 
+        const viewUrl = getViewUrlFromGdriveDownloadUrl(downloadUrl);
+
         const recordId = await airtableService.updateAdAutomationRecord(
             downloadUrl,
             vertical,
             scriptWriter,
             ideaWriter,
             hookWriter,
-            mediaType
+            mediaType,
+            viewUrl,
+            originalFileName
         );
 
         res.status(200).json({ success: true, recordId });
@@ -487,23 +490,32 @@ export const createFbAdHttp = onRequest(
                 accountId: accountId || '',
             });
 
+            const fbAdSettings = await mediaBuyingService.getFbAdSettings(
+                accountId,
+                mediaBuyer
+            );
+            invariant(
+                fbAdSettings,
+                `No ad settings found for accountId: ${accountId}`
+            );
+
             let ad;
 
             if (mediaType === 'VIDEO') {
                 ad = await mediaBuyingService.handleCreateVideoAd(
                     metaAdCreatorService,
-                    accountId,
                     campaignId,
                     adName,
-                    downloadUrl
+                    downloadUrl,
+                    fbAdSettings
                 );
             } else {
                 ad = await mediaBuyingService.handleCreateImageAd(
                     metaAdCreatorService,
-                    accountId,
                     campaignId,
                     adName,
-                    downloadUrl
+                    downloadUrl,
+                    fbAdSettings
                 );
             }
 

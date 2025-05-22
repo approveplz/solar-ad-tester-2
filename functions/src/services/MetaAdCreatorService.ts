@@ -326,6 +326,8 @@ export default class MetaAdCreatorService {
             promotedObjectParams: { pageId },
         } = fbAdSettings;
 
+        invariant(pageId, 'pageId is required');
+
         const objectStorySpec: FbApiAdCreativeObjStorySpec = {
             page_id: pageId,
             video_data: {
@@ -389,6 +391,8 @@ export default class MetaAdCreatorService {
             },
             promotedObjectParams: { pageId },
         } = fbAdSettings;
+
+        invariant(pageId, 'pageId is required');
 
         // We are reusing video ad params for images
         const objectStorySpec: FbApiAdCreativeObjStorySpec = {

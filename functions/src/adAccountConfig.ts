@@ -32,6 +32,9 @@ export interface AdAccountConfig {
     }>;
     scalingCampaignId: string;
     targeting: AdAccountConfigTargeting;
+    pageIds?: Partial<{
+        [key in MediaBuyerCodes]: string;
+    }>;
 }
 
 type AdAccountConfigData = Record<string, AdAccountConfig>;
@@ -89,6 +92,8 @@ export const AD_ACCOUNT_DATA: AdAccountConfigData = {
         campaignIds: {
             [MediaBuyerCodes.MA]: '120225994645600364',
             [MediaBuyerCodes.VB]: '120225757076490364',
+            [MediaBuyerCodes.MT]: '120226260729990364',
+            [MediaBuyerCodes.RD]: '120226260729990364',
         },
         scalingCampaignId: '',
         targeting: {
@@ -124,6 +129,10 @@ export const AD_ACCOUNT_DATA: AdAccountConfigData = {
             // targeting_automation: {
             //     advantage_audience: 1,
             // },
+        },
+        pageIds: {
+            [MediaBuyerCodes.MA]: '586354434572150',
+            [MediaBuyerCodes.VB]: '617365471459541',
         },
     },
 };
