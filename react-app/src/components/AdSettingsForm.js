@@ -32,7 +32,6 @@ const initialFormData = {
         pixelId: '',
         customEventType: 'LEAD',
         customEventStr: '',
-        pageId: '',
     },
     adCreativeParams: {
         videoTitle: '',
@@ -775,23 +774,6 @@ function AdSettingsForm() {
                                         disabled={!isFormEditable}
                                         style={styles.input}
                                         placeholder="e.g. evt_101"
-                                    />
-                                )}
-                            />
-                        </label>
-                    </div>
-                    <div>
-                        <label style={styles.label}>
-                            Page ID:
-                            <Controller
-                                name="promotedObjectParams.pageId"
-                                control={control}
-                                render={({ field }) => (
-                                    <input
-                                        {...field}
-                                        type="text"
-                                        disabled={!isFormEditable}
-                                        style={styles.input}
                                     />
                                 )}
                             />
