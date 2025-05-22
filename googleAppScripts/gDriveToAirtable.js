@@ -44,6 +44,7 @@ function main() {
                 ideaWriter,
                 hookWriter,
                 mediaType: mimeType === 'video/mp4' ? 'VIDEO' : 'IMAGE',
+                originalFileName: fileName,
             }),
         });
 
