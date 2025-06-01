@@ -94,6 +94,7 @@ export const AD_ACCOUNT_DATA: AdAccountConfigData = {
             [MediaBuyerCodes.VB]: '120225757076490364',
             [MediaBuyerCodes.MT]: '120226260729990364',
             [MediaBuyerCodes.RD]: '120226260729990364',
+            [MediaBuyerCodes.AZ]: '120225994645600364',
         },
         scalingCampaignId: '',
         targeting: {

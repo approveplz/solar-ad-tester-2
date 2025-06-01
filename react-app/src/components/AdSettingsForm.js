@@ -4,9 +4,28 @@ import { produce } from 'immer';
 import { saveFbAdSettings, getFbAdSettings } from '../firebase.js';
 import { commonSelectArrowStyles } from '../styles/selectStyles';
 
+const FormErrorMessage = ({ message }) => {
+    if (!message) return null;
+
+    const styles = {
+        error: {
+            color: 'red',
+            fontSize: '14px',
+            marginBottom: '15px',
+            padding: '10px',
+            backgroundColor: '#ffebee',
+            borderRadius: '4px',
+            border: '1px solid #ffcdd2',
+        },
+    };
+
+    return <div style={styles.error}>{message}</div>;
+};
+
 function handleError(error, customMessage = 'An error occurred') {
     console.error(customMessage, error);
-    alert(`${customMessage}: ${error.message}`);
+    const errorMessage = error?.message || error?.toString() || 'Unknown error';
+    alert(`${customMessage}: ${errorMessage}`);
 }
 
 const initialFormData = {
@@ -136,8 +155,8 @@ function AdSettingsForm() {
     const [isFormEditable, setIsFormEditable] = useState(false);
     const [accountId, setAccountId] = useState('822357702553382');
     const [isSaving, setIsSaving] = useState(false);
-    // State to hold the zipcodes textarea value
     const [zipCodesText, setZipCodesText] = useState('');
+    const [formError, setFormError] = useState('');
 
     // Form state management with React Hook Form
     const {
@@ -151,12 +170,72 @@ function AdSettingsForm() {
         defaultValues: initialFormData,
     });
 
-    // Watch the genders field to validate selection
-    const genders = watch('adSetParams.adSetTargeting.genders', []);
+    // Watch the entire form data object
+    const formData = watch();
+
+    const validateFormData = (data, isEditable) => {
+        if (!isEditable) return '';
+
+        const bidStrategy = data?.adSetParams?.bidStrategy;
+        const bidAmount = data?.adSetParams?.bidAmountCents;
+        const genders = data?.adSetParams?.adSetTargeting?.genders || [];
+
+        // Validate bid strategy and amount combination
+        if (bidStrategy === 'LOWEST_COST_WITHOUT_CAP' && bidAmount) {
+            return "Bid Amount can't be set for LOWEST_COST_WITHOUT_CAP Bid Strategy";
+        }
+        // Validate gender selection
+        if (genders.length === 0) {
+            return 'Please select at least one gender';
+        }
+
+        return '';
+    };
+
+    // Validate form fields and update error state
+    useEffect(() => {
+        const errorMessage = validateFormData(formData, isFormEditable);
+        setFormError(errorMessage);
+    }, [formData, isFormEditable]);
+
+    // Check if form has any validation errors
+    const hasValidationErrors = formError !== '';
+
+    // Parse CSV or line break-separated values to array and update form values
+    const handleZipCodesChange = (value) => {
+        setZipCodesText(value);
+
+        // Normalize input by replacing line breaks with commas
+        const normalizedInput = value.replace(/[\n,]+/g, ',');
+
+        // Parse into an array of zip code objects matching the interface
+        const zipsArray = normalizedInput
+            .split(',')
+            .map((zip) => zip.trim())
+            .filter((zip) => zip !== '')
+            .map((zip) => {
+                // Remove any "US:" prefix if the user manually entered it
+                const cleanZip = zip.replace(/^US:/i, '');
+                return {
+                    key: `US:${cleanZip}`, // Format with US prefix as per interface
+                };
+            });
+
+        // Get current geo_locations value
+        const currentGeoLocations =
+            watch('adSetParams.adSetTargeting.geo_locations') || {};
+
+        // Only update the zips property, preserving all other properties
+        setValue('adSetParams.adSetTargeting.geo_locations', {
+            ...currentGeoLocations,
+            zips: zipsArray,
+        });
+    };
 
     // Load ad settings when account changes
     useEffect(() => {
         setIsFormEditable(false);
+        setFormError(''); // Reset error state
         reset(initialFormData);
         setZipCodesText('');
 
@@ -192,39 +271,14 @@ function AdSettingsForm() {
         }
     }, [accountId, reset]);
 
-    // Parse CSV or line break-separated values to array and update form values
-    const handleZipCodesChange = (value) => {
-        setZipCodesText(value);
-
-        // Normalize input by replacing line breaks with commas
-        const normalizedInput = value.replace(/[\n,]+/g, ',');
-
-        // Parse into an array of zip code objects matching the interface
-        const zipsArray = normalizedInput
-            .split(',')
-            .map((zip) => zip.trim())
-            .filter((zip) => zip !== '')
-            .map((zip) => {
-                // Remove any "US:" prefix if the user manually entered it
-                const cleanZip = zip.replace(/^US:/i, '');
-                return {
-                    key: `US:${cleanZip}`, // Format with US prefix as per interface
-                };
-            });
-
-        // Get current geo_locations value
-        const currentGeoLocations =
-            watch('adSetParams.adSetTargeting.geo_locations') || {};
-
-        // Only update the zips property, preserving all other properties
-        setValue('adSetParams.adSetTargeting.geo_locations', {
-            ...currentGeoLocations,
-            zips: zipsArray,
-        });
-    };
-
     // Form submission handler
     const onSubmit = async (data) => {
+        // Validate before submission
+        if (hasValidationErrors) {
+            handleError({ message: formError }, 'Form validation error');
+            return;
+        }
+
         setIsSaving(true);
         try {
             // Use Immer to safely update the campaign params
@@ -249,13 +303,6 @@ function AdSettingsForm() {
                 }
             });
 
-            if (
-                !updatedFbAdSettings.adSetParams?.adSetTargeting?.genders
-                    ?.length
-            ) {
-                throw new Error('Please select at least one gender option');
-            }
-
             console.log(
                 'Saving form data:',
                 JSON.stringify(updatedFbAdSettings, null, 2)
@@ -264,6 +311,7 @@ function AdSettingsForm() {
             await saveFbAdSettings(accountId, updatedFbAdSettings);
             reset(updatedFbAdSettings);
             setIsFormEditable(false);
+            setFormError(''); // Reset error state on successful save
             alert('Changes saved successfully!');
         } catch (error) {
             handleError(error, 'Error saving ad settings');
@@ -280,6 +328,7 @@ function AdSettingsForm() {
     const handleCancel = (event) => {
         event.preventDefault();
         setIsFormEditable(false);
+        setFormError(''); // Reset error state on cancel
     };
 
     return (
@@ -314,6 +363,9 @@ function AdSettingsForm() {
 
                 <fieldset style={styles.fieldset}>
                     <legend style={styles.legend}>Ad Set Parameters</legend>
+
+                    <FormErrorMessage message={formError} />
+
                     <div>
                         <label style={styles.label}>
                             Bid Amount/Cost Per Result Goal (Cents):
@@ -548,11 +600,6 @@ function AdSettingsForm() {
                                 />
                                 Female
                             </label>
-                            {genders.length === 0 && isFormEditable && (
-                                <div style={styles.error}>
-                                    Please select at least one gender
-                                </div>
-                            )}
                         </div>
                         <div>
                             <label style={styles.label}>
@@ -787,7 +834,7 @@ function AdSettingsForm() {
                             <button
                                 type="submit"
                                 style={styles.button}
-                                disabled={isSaving}
+                                disabled={isSaving || hasValidationErrors}
                             >
                                 {isSaving ? 'Saving...' : 'Save Changes'}
                             </button>

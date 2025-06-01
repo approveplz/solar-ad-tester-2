@@ -45,7 +45,11 @@ import {
 } from './services/CreatomateService.js';
 import { MediaBuyingService } from './services/MediaBuyingService.js';
 import { TelegramService, TelegramUpdate } from './services/TelegramService.js';
-import { getAdName, getFullVerticalName, getViewUrlFromGdriveDownloadUrl } from './helpers.js';
+import {
+    getAdName,
+    getFullVerticalName,
+    getViewUrlFromGdriveDownloadUrl,
+} from './helpers.js';
 import { AD_ACCOUNT_DATA } from './adAccountConfig.js';
 import { AirtableService } from './services/AirtableService.js';
 import { onDocumentWritten } from 'firebase-functions/firestore';
@@ -79,8 +83,12 @@ export const updateAdPerformanceScheduled = onSchedule(
                 process.env.CREATOMATE_API_KEY || ''
             );
             const bigQueryService = new BigQueryService();
+            const openAiService = new OpenAiService(
+                process.env.OPENAI_API_KEY || ''
+            );
             const telegramService = new TelegramService(
-                process.env.TELEGRAM_BOT_TOKEN || ''
+                process.env.TELEGRAM_BOT_TOKEN || '',
+                openAiService
             );
             const trelloService = new TrelloService(
                 process.env.TRELLO_API_KEY || '',
@@ -121,8 +129,12 @@ export const fetchAdsScheduled = onSchedule(
                 process.env.CREATOMATE_API_KEY || ''
             );
             const bigQueryService = new BigQueryService();
+            const openAiService = new OpenAiService(
+                process.env.OPENAI_API_KEY || ''
+            );
             const telegramService = new TelegramService(
-                process.env.TELEGRAM_BOT_TOKEN || ''
+                process.env.TELEGRAM_BOT_TOKEN || '',
+                openAiService
             );
             const trelloService = new TrelloService(
                 process.env.TRELLO_API_KEY || '',
@@ -406,8 +418,12 @@ export const createFbAdHttp = onRequest(
             process.env.CREATOMATE_API_KEY || ''
         );
         const bigQueryService = new BigQueryService();
+        const openAiService = new OpenAiService(
+            process.env.OPENAI_API_KEY || ''
+        );
         const telegramService = new TelegramService(
-            process.env.TELEGRAM_BOT_TOKEN || ''
+            process.env.TELEGRAM_BOT_TOKEN || '',
+            openAiService
         );
         const trelloService = new TrelloService(
             process.env.TRELLO_API_KEY || '',
@@ -600,57 +616,50 @@ export const generateScriptHttp = onRequest(async (req, res) => {
 
     const openAiService = new OpenAiService(process.env.OPENAI_API_KEY || '');
 
-    const scripts = await Promise.all([
-        openAiService.generateScript(idea, vertical, notes),
-        openAiService.generateScript(idea, vertical, notes),
-        openAiService.generateScript(idea, vertical, notes),
-    ]);
-
-    const telegramService = new TelegramService(
-        process.env.TELEGRAM_BOT_TOKEN || ''
+    // Generate a single script instead of three
+    const { script } = await openAiService.generateScript(
+        idea,
+        vertical,
+        notes
     );
 
-    for (let i = 0; i < scripts.length; i++) {
-        const { script } = scripts[i];
-        const message = `#${
-            i + 1
-        } New script generated for ${getFullVerticalName(vertical)}:
+    const telegramService = new TelegramService(
+        process.env.TELEGRAM_BOT_TOKEN || '',
+        openAiService
+    );
+
+    const message = `New script generated for ${getFullVerticalName(vertical)}:
     
 ${script}
 
-Please approve or reject this script.
-`;
+Please approve or reject this script.`;
 
-        // Create a shorter scriptId by using a truncated timestamp in base36
-        // This creates a much shorter but still unique ID
-        // This is because Telegram callback data is limited to 64 bytes
-        const timestamp = Date.now();
-        const shortTimestamp = timestamp.toString(36); // Convert to base36 for shorter representation
-        const scriptId = `s_${shortTimestamp}`;
+    // Create a shorter scriptId by using a truncated timestamp in base36
+    // This creates a much shorter but still unique ID
+    // This is because Telegram callback data is limited to 64 bytes
+    const timestamp = Date.now();
+    const shortTimestamp = timestamp.toString(36); // Convert to base36 for shorter representation
+    const scriptId = shortTimestamp;
 
-        const scriptData: TelegramScriptData = {
-            idea,
-            creator,
-            vertical,
-            notes,
-            script,
-            scriptIndex: i,
-        };
+    const scriptData: TelegramScriptData = {
+        idea,
+        creator,
+        vertical,
+        notes,
+        script,
+    };
 
-        await saveTelegramScriptDataFirestore(scriptId, scriptData);
-        console.log(`Saved script to Firestore with ID: ${scriptId}`);
+    await saveTelegramScriptDataFirestore(scriptId, scriptData);
+    console.log(`Saved script to Firestore with ID: ${scriptId}`);
 
-        const mediaBuyerChatId = telegramService.mediaBuyerChatIds[creator];
-        console.log(
-            `Sending message to media buyer chat ID: ${mediaBuyerChatId}`
-        );
+    const mediaBuyerChatId = telegramService.mediaBuyerChatIds[creator];
+    console.log(`Sending message to media buyer chat ID: ${mediaBuyerChatId}`);
 
-        await telegramService.sendMessageWithApprovalButtons(
-            mediaBuyerChatId,
-            message,
-            scriptId
-        );
-    }
+    await telegramService.sendMessageWithApprovalButtons(
+        mediaBuyerChatId,
+        message,
+        scriptId
+    );
 
     res.status(200).json({
         success: true,
@@ -667,8 +676,12 @@ export const handleTelegramWebhookHttp = onRequest(async (req, res) => {
     try {
         const update: TelegramUpdate = req.body;
 
+        const openAiService = new OpenAiService(
+            process.env.OPENAI_API_KEY || ''
+        );
         const telegramService = new TelegramService(
-            process.env.TELEGRAM_BOT_TOKEN || ''
+            process.env.TELEGRAM_BOT_TOKEN || '',
+            openAiService
         );
 
         // Process the update using the TelegramService
@@ -693,8 +706,12 @@ export const handleTelegramWebhookHttp = onRequest(async (req, res) => {
  */
 export const setupTelegramWebhookHttp = onRequest(async (req, res) => {
     try {
+        const openAiService = new OpenAiService(
+            process.env.OPENAI_API_KEY || ''
+        );
         const telegramService = new TelegramService(
-            process.env.TELEGRAM_BOT_TOKEN || ''
+            process.env.TELEGRAM_BOT_TOKEN || '',
+            openAiService
         );
 
         const result = await telegramService.setWebhook(
@@ -742,7 +759,8 @@ export const handleApifyRequestHttp_TEST = onRequest(
             process.env.OPENAI_API_KEY || ''
         );
         const telegramService = new TelegramService(
-            process.env.TELEGRAM_BOT_TOKEN || ''
+            process.env.TELEGRAM_BOT_TOKEN || '',
+            openAiService
         );
         const apifyService = new ApifyService(
             process.env.APIFY_API_TOKEN || '',
@@ -1258,3 +1276,99 @@ TODO: Fix this after refactor to read params by ad account ID instead of ad type
 //         });
 //     }
 // });
+
+export const redirectToGoogleAppscriptMoveCreativeToArchiveFolder = onRequest(
+    { timeoutSeconds: 60 },
+    async (req: Request, res: Response) => {
+        console.log('Request received:', {
+            query: req.query,
+            body: req.body,
+            method: req.method,
+        });
+
+        try {
+            // Extract parameters from query string or request body
+            const fileUrl = (req.query.fileUrl as string) || req.body.fileUrl;
+            const adName = (req.query.adName as string) || req.body.adName;
+
+            console.log('Extracted parameters:', { fileUrl, adName });
+
+            // Validate required parameters
+            if (!fileUrl || !adName) {
+                console.error('Missing parameters:', { fileUrl, adName });
+                res.status(400).json({
+                    success: false,
+                    error: 'Missing required parameters: fileUrl and adName',
+                });
+                return;
+            }
+
+            // Google Apps Script URL (from your Airtable automation)
+            const appsScriptUrl =
+                'https://script.google.com/macros/s/AKfycbxcnLWBkRRxrnWNMyO9Si2EhWW2HFQQTrLuBmYtOMCLApCUJH0qVLf5Huj4kY8_xxF4/exec';
+
+            // Construct the full URL with parameters
+            const fullUrl = `${appsScriptUrl}?fileUrl=${encodeURIComponent(
+                fileUrl
+            )}&adName=${encodeURIComponent(adName)}`;
+
+            console.log(`Making request to Google Apps Script URL: ${fullUrl}`);
+
+            // Make the request to Google Apps Script
+            const response = await fetch(fullUrl, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0',
+                },
+                redirect: 'follow',
+            });
+
+            console.log(
+                `Google Apps Script response status: ${response.status}`
+            );
+            console.log(
+                `Google Apps Script response headers:`,
+                Object.fromEntries(response.headers.entries())
+            );
+
+            // Get the response text first to see what we're actually getting
+            const responseText = await response.text();
+            console.log(
+                `Google Apps Script response text (first 500 chars):`,
+                responseText.substring(0, 500)
+            );
+
+            // Check if the response is ok
+            if (!response.ok) {
+                throw new Error(
+                    `Google Apps Script responded with status: ${response.status}`
+                );
+            }
+
+            // Try to parse as JSON
+            let result;
+            try {
+                result = JSON.parse(responseText);
+            } catch (parseError) {
+                console.error('Failed to parse response as JSON:', parseError);
+                console.error('Response text:', responseText);
+                throw new Error(
+                    `Google Apps Script returned invalid JSON. Response: ${responseText.substring(
+                        0,
+                        200
+                    )}`
+                );
+            }
+
+            console.log(`Google Apps Script parsed result:`, result);
+
+            // Return the same response structure as the original
+            res.status(200).json(result);
+        } catch (error) {
+            console.error('Error in Google Apps Script proxy:', error);
+            res.status(500).json({
+                status: 'error',
+                message: error instanceof Error ? error.message : String(error),
+            });
+        }
+    }
+);

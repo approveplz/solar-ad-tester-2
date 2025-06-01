@@ -19,8 +19,14 @@ function main() {
         const fileName = file.getName();
         const mimeType = file.getMimeType();
 
-        if (mimeType !== 'video/mp4' && mimeType !== 'image/jpeg') {
-            console.log(`File is not .mp4 or .jpeg: ${fileName} (${mimeType})`);
+        if (
+            mimeType !== 'video/mp4' &&
+            mimeType !== 'image/jpeg' &&
+            mimeType !== 'image/png'
+        ) {
+            console.log(
+                `File is not .mp4, .jpeg, or .png: ${fileName} (${mimeType})`
+            );
             continue;
         }
 

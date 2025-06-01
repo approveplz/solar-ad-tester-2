@@ -1,6 +1,5 @@
 // Web App URL
 // https://script.google.com/macros/s/AKfycbxcnLWBkRRxrnWNMyO9Si2EhWW2HFQQTrLuBmYtOMCLApCUJH0qVLf5Huj4kY8_xxF4/exec
-
 const ARCHIVE_FOLDER_ID = '1cwlvPlszQK62kT4b2EfZaIFkfryC4SSR';
 
 // This must be called doGet to handle GET requests
@@ -21,7 +20,7 @@ function doGet(e) {
 
         const result = {
             status: 'success',
-            archivedUrl: file.getUrl(),
+            archiveUrl: file.getUrl(),
         };
 
         return ContentService.createTextOutput(

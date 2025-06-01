@@ -208,24 +208,24 @@ export class MediaBuyingService {
         const leadsLifetime =
             adPerformance.performanceMetrics.fb?.lifetime?.leads ?? 0;
 
-        // Underperforming ad
-        if (fbRoiLifetime < 1 || fbRoiLast3Days < 1) {
-            const message = `
-Consider pausing this ad because the ROI was under 1.00X
+        //         // Underperforming ad
+        //         if (fbRoiLifetime < 1 || fbRoiLast3Days < 1) {
+        //             const message = `
+        // Consider pausing this ad because the ROI was under 1.00X
 
-${this.createMessageWithAdPerformanceInfo(adPerformance)}`;
+        // ${this.createMessageWithAdPerformanceInfo(adPerformance)}`;
 
-            await telegramService.sendMessage(
-                telegramService.mediaBuyerChatIds[mediaBuyer],
-                message
-            );
-            // TODO: Remove this after testing
-            await telegramService.sendMessage(
-                telegramService.mediaBuyerChatIds['AZ'],
-                message
-            );
-            return;
-        }
+        //             await telegramService.sendMessage(
+        //                 telegramService.mediaBuyerChatIds[mediaBuyer],
+        //                 message
+        //             );
+        //             // TODO: Remove this after testing
+        //             await telegramService.sendMessage(
+        //                 telegramService.mediaBuyerChatIds['AZ'],
+        //                 message
+        //             );
+        //             return;
+        //         }
 
         // Let ad run because its profitable, but dont create hooks, tello card, or scale.
         if (
@@ -235,9 +235,7 @@ ${this.createMessageWithAdPerformanceInfo(adPerformance)}`;
             console.log(
                 `Ad ${
                     adPerformance.fbAdId
-                } in profitable range (ROI: ${fbRoiLifetime.toFixed(
-                    2
-                )}). But do not create hooks, tello card, or scale`
+                } in profitable range (ROI: ${fbRoiLifetime.toFixed(2)}).`
             );
             return;
         }

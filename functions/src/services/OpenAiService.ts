@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 export class OpenAiService {
     private openai: OpenAI;
@@ -35,35 +36,62 @@ export class OpenAiService {
         Please turn this idea into a medium length facebook ad video script:
 
         Idea: ${idea}
+
+        Here are some additional notes:
+        ${notes}
         `;
 
-        const messages = [
-            {
-                role: 'system',
-                content:
-                    'You are a helpful assistant that generates voiceover scripts for ads.',
-            },
-            { role: 'user', content: userPrompt },
-        ];
-        return this.getChatCompletionAsJson(messages, jsonSchema);
+        return this.getChatCompletionAsJson<{ script: string }>(
+            userPrompt,
+            'You are a helpful assistant that generates voiceover scripts for ads.',
+            jsonSchema
+        );
+    }
+
+    public async generateScriptUpdate(
+        originalScript: string,
+        updateRequest: string
+    ): Promise<{ script: string }> {
+        const jsonSchema = {
+            script: 'The updated voiceover script',
+        };
+
+        const userPrompt = `
+        Here is the original script:
+        ${originalScript}
+
+        Here is the update request:
+        ${updateRequest}
+
+        Please generate an updated script that incorporates the update request.
+        `;
+
+        return this.getChatCompletionAsJson<{ script: string }>(
+            userPrompt,
+            'You are a helpful assistant that generates voiceover scripts for ads.',
+            jsonSchema
+        );
     }
 
     private async getChatCompletionAsJson<T>(
-        messages: any[],
+        userPrompt: string,
+        systemPrompt: string,
         schema?: Record<string, string>
     ): Promise<T> {
+        const messages: ChatCompletionMessageParam[] = [
+            {
+                role: 'system',
+                content: systemPrompt,
+            },
+            { role: 'user', content: userPrompt },
+        ];
+
         // If schema is provided, add it to the system message
         if (schema) {
             const schemaStr = JSON.stringify(schema, null, 2);
             const systemMsg = messages.find((msg) => msg.role === 'system');
-
             if (systemMsg) {
                 systemMsg.content += `\n\nRespond with a JSON object using the following schema:\n${schemaStr}`;
-            } else {
-                messages.unshift({
-                    role: 'system',
-                    content: `Respond with a JSON object using the following schema:\n${schemaStr}`,
-                });
             }
         }
 

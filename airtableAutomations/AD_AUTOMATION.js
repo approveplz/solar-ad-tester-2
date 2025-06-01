@@ -8,12 +8,28 @@ let recordId = inputConfig.recordId;
 let table = base.getTable('AD_AUTOMATION');
 let record = await table.selectRecordAsync(recordId);
 
+if (!record) {
+    throw new Error(`Record ${recordId} not found`);
+}
+
 const airtableStatus = record.getCellValueAsString('STATUS');
 
 const STATUS = {
     AUTOUPLOAD: 'AUTOUPLOAD',
     MANUAL: 'MANUAL',
 };
+
+// Define required fields
+const REQUIRED_FIELDS = [
+    'MEDIA_BUYER',
+    'IDEA_WRITER',
+    'VERTICAL',
+    'SCRIPT_WRITER',
+    'HOOK_WRITER',
+    'AD_NAME',
+    'DOWNLOAD_URL',
+    'MEDIA_TYPE',
+];
 
 let data;
 if (!record) {
@@ -30,6 +46,23 @@ if (!record) {
         downloadUrl: record.getCellValueAsString('DOWNLOAD_URL'),
         mediaType: record.getCellValueAsString('MEDIA_TYPE'),
     };
+
+    // Validate required fields
+    const missingFields = [];
+    for (const fieldName of REQUIRED_FIELDS) {
+        const value = record.getCellValueAsString(fieldName);
+        if (!value || value.trim() === '') {
+            missingFields.push(fieldName);
+        }
+    }
+
+    if (missingFields.length > 0) {
+        throw new Error(
+            `Missing required data in record ${recordId}. Empty fields: ${missingFields.join(
+                ', '
+            )}`
+        );
+    }
 }
 
 if (airtableStatus === STATUS.AUTOUPLOAD) {
@@ -55,13 +88,13 @@ if (airtableStatus === STATUS.AUTOUPLOAD) {
 
 // Function to move file to archive
 async function moveFileToArchive(record, recordId, table) {
-    let appsScriptUrl =
-        'https://script.google.com/macros/s/AKfycbxcnLWBkRRxrnWNMyO9Si2EhWW2HFQQTrLuBmYtOMCLApCUJH0qVLf5Huj4kY8_xxF4/exec';
+    let firebaseProxyUrl =
+        'https://redirecttogoogleappscriptmovecreativetoarchivefol-txyabkufvq-uc.a.run.app';
 
     let fileUrl = record.getCellValueAsString('DOWNLOAD_URL');
     let adName = record.getCellValueAsString('AD_NAME');
 
-    let moveFileUrl = `${appsScriptUrl}?fileUrl=${encodeURIComponent(
+    let moveFileUrl = `${firebaseProxyUrl}?fileUrl=${encodeURIComponent(
         fileUrl
     )}&adName=${encodeURIComponent(adName)}`;
 

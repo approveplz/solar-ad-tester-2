@@ -4,6 +4,7 @@ import { CreatedFbAdInfo } from './models/CreatedFbAdInfo.js';
 import { ParsedFbAdInfo } from './models/ParsedFbAdInfo.js';
 import { AdPerformance } from './models/AdPerformance.js';
 import { ScrapedAdDataFirestore } from './models/ScrapedAdDataFirestore.js';
+import { VerticalCodes } from './helpers.js';
 
 const FB_AD_SETTINGS_COLLECTION = 'fb-ad-settings';
 const CREATED_ADS_COLLECTION_SOLAR = 'created-ads-collection-solar';
@@ -29,10 +30,9 @@ const EVENTS_COLLECTION = 'events';
 export interface TelegramScriptData {
     idea: string;
     creator: string;
-    vertical: string;
+    vertical: VerticalCodes;
     notes: string;
     script: string;
-    scriptIndex?: number;
 }
 
 /**
