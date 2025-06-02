@@ -732,6 +732,102 @@ export const setupTelegramWebhookHttp = onRequest(async (req, res) => {
     }
 });
 
+export const redirectToGoogleAppscriptMoveCreativeToArchiveFolder = onRequest(
+    { timeoutSeconds: 60 },
+    async (req: Request, res: Response) => {
+        console.log('Request received:', {
+            query: req.query,
+            body: req.body,
+            method: req.method,
+        });
+
+        try {
+            // Extract parameters from query string or request body
+            const fileUrl = (req.query.fileUrl as string) || req.body.fileUrl;
+            const adName = (req.query.adName as string) || req.body.adName;
+
+            console.log('Extracted parameters:', { fileUrl, adName });
+
+            // Validate required parameters
+            if (!fileUrl || !adName) {
+                console.error('Missing parameters:', { fileUrl, adName });
+                res.status(400).json({
+                    success: false,
+                    error: 'Missing required parameters: fileUrl and adName',
+                });
+                return;
+            }
+
+            // Google Apps Script URL (from your Airtable automation)
+            const appsScriptUrl =
+                'https://script.google.com/macros/s/AKfycbxcnLWBkRRxrnWNMyO9Si2EhWW2HFQQTrLuBmYtOMCLApCUJH0qVLf5Huj4kY8_xxF4/exec';
+
+            // Construct the full URL with parameters
+            const fullUrl = `${appsScriptUrl}?fileUrl=${encodeURIComponent(
+                fileUrl
+            )}&adName=${encodeURIComponent(adName)}`;
+
+            console.log(`Making request to Google Apps Script URL: ${fullUrl}`);
+
+            // Make the request to Google Apps Script
+            const response = await fetch(fullUrl, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0',
+                },
+                redirect: 'follow',
+            });
+
+            console.log(
+                `Google Apps Script response status: ${response.status}`
+            );
+            console.log(
+                `Google Apps Script response headers:`,
+                Object.fromEntries(response.headers.entries())
+            );
+
+            // Get the response text first to see what we're actually getting
+            const responseText = await response.text();
+            console.log(
+                `Google Apps Script response text (first 500 chars):`,
+                responseText.substring(0, 500)
+            );
+
+            // Check if the response is ok
+            if (!response.ok) {
+                throw new Error(
+                    `Google Apps Script responded with status: ${response.status}`
+                );
+            }
+
+            // Try to parse as JSON
+            let result;
+            try {
+                result = JSON.parse(responseText);
+            } catch (parseError) {
+                console.error('Failed to parse response as JSON:', parseError);
+                console.error('Response text:', responseText);
+                throw new Error(
+                    `Google Apps Script returned invalid JSON. Response: ${responseText.substring(
+                        0,
+                        200
+                    )}`
+                );
+            }
+
+            console.log(`Google Apps Script parsed result:`, result);
+
+            // Return the same response structure as the original
+            res.status(200).json(result);
+        } catch (error) {
+            console.error('Error in Google Apps Script proxy:', error);
+            res.status(500).json({
+                status: 'error',
+                message: error instanceof Error ? error.message : String(error),
+            });
+        }
+    }
+);
+
 export const handleGoogleGeminiRequestHttp_TEST = onRequest(
     { timeoutSeconds: 300 },
     async (req, res) => {
@@ -1276,99 +1372,3 @@ TODO: Fix this after refactor to read params by ad account ID instead of ad type
 //         });
 //     }
 // });
-
-export const redirectToGoogleAppscriptMoveCreativeToArchiveFolder = onRequest(
-    { timeoutSeconds: 60 },
-    async (req: Request, res: Response) => {
-        console.log('Request received:', {
-            query: req.query,
-            body: req.body,
-            method: req.method,
-        });
-
-        try {
-            // Extract parameters from query string or request body
-            const fileUrl = (req.query.fileUrl as string) || req.body.fileUrl;
-            const adName = (req.query.adName as string) || req.body.adName;
-
-            console.log('Extracted parameters:', { fileUrl, adName });
-
-            // Validate required parameters
-            if (!fileUrl || !adName) {
-                console.error('Missing parameters:', { fileUrl, adName });
-                res.status(400).json({
-                    success: false,
-                    error: 'Missing required parameters: fileUrl and adName',
-                });
-                return;
-            }
-
-            // Google Apps Script URL (from your Airtable automation)
-            const appsScriptUrl =
-                'https://script.google.com/macros/s/AKfycbxcnLWBkRRxrnWNMyO9Si2EhWW2HFQQTrLuBmYtOMCLApCUJH0qVLf5Huj4kY8_xxF4/exec';
-
-            // Construct the full URL with parameters
-            const fullUrl = `${appsScriptUrl}?fileUrl=${encodeURIComponent(
-                fileUrl
-            )}&adName=${encodeURIComponent(adName)}`;
-
-            console.log(`Making request to Google Apps Script URL: ${fullUrl}`);
-
-            // Make the request to Google Apps Script
-            const response = await fetch(fullUrl, {
-                headers: {
-                    'User-Agent': 'Mozilla/5.0',
-                },
-                redirect: 'follow',
-            });
-
-            console.log(
-                `Google Apps Script response status: ${response.status}`
-            );
-            console.log(
-                `Google Apps Script response headers:`,
-                Object.fromEntries(response.headers.entries())
-            );
-
-            // Get the response text first to see what we're actually getting
-            const responseText = await response.text();
-            console.log(
-                `Google Apps Script response text (first 500 chars):`,
-                responseText.substring(0, 500)
-            );
-
-            // Check if the response is ok
-            if (!response.ok) {
-                throw new Error(
-                    `Google Apps Script responded with status: ${response.status}`
-                );
-            }
-
-            // Try to parse as JSON
-            let result;
-            try {
-                result = JSON.parse(responseText);
-            } catch (parseError) {
-                console.error('Failed to parse response as JSON:', parseError);
-                console.error('Response text:', responseText);
-                throw new Error(
-                    `Google Apps Script returned invalid JSON. Response: ${responseText.substring(
-                        0,
-                        200
-                    )}`
-                );
-            }
-
-            console.log(`Google Apps Script parsed result:`, result);
-
-            // Return the same response structure as the original
-            res.status(200).json(result);
-        } catch (error) {
-            console.error('Error in Google Apps Script proxy:', error);
-            res.status(500).json({
-                status: 'error',
-                message: error instanceof Error ? error.message : String(error),
-            });
-        }
-    }
-);
