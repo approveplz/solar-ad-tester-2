@@ -478,6 +478,7 @@ export const createFbAdHttp = onRequest(
                 scriptId,
                 mediaType,
                 isTest = false,
+                airtableRecordId = '',
             } = req.body;
 
             console.log(`Automation running for ${adName}`);
@@ -564,6 +565,82 @@ export const createFbAdHttp = onRequest(
             };
 
             await saveAdPerformanceFirestore(fbAdId, adPerformance);
+
+            // If airtableRecordId is provided, the function was triggered by an Airtable automation
+            if (airtableRecordId) {
+                try {
+                    // Call Google Apps Script to move to archive folder
+                    const appsScriptUrl =
+                        'https://script.google.com/macros/s/AKfycbxcnLWBkRRxrnWNMyO9Si2EhWW2HFQQTrLuBmYtOMCLApCUJH0qVLf5Huj4kY8_xxF4/exec';
+
+                    const fullAppScriptUrl = `${appsScriptUrl}?fileUrl=${encodeURIComponent(
+                        downloadUrl
+                    )}&adName=${encodeURIComponent(adName)}`;
+
+                    console.log(
+                        `Making request to Google Apps Script URL: ${fullAppScriptUrl}`
+                    );
+
+                    const response = await fetch(fullAppScriptUrl, {
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0',
+                        },
+                        redirect: 'follow',
+                    });
+
+                    if (response.ok) {
+                        console.log(
+                            `Successfully called Google Apps Script URL: ${fullAppScriptUrl} for record ID: ${airtableRecordId} to move ${adName} to archive folder`
+                        );
+                    } else {
+                        console.error(
+                            `Google Apps Script URL failed with status: ${response.status} for record ID: ${airtableRecordId} to move ${adName} to archive folder`,
+                            await response.text()
+                        );
+                        throw new Error(
+                            `Google Apps Script URL failed with status: ${response.status} for record ID: ${airtableRecordId} to move ${adName} to archive folder`
+                        );
+                    }
+
+                    // Call Airtable webhook to update status
+                    const webhookUrl =
+                        'https://hooks.airtable.com/workflows/v1/genericWebhook/appLGOqZqpYEgSKum/wflJtj5Qs9eGOAVPD/wtrXvnti0FpmICZC6';
+
+                    const webhookPayload = {
+                        airtableRecordId,
+                        status: 'SUCCESS',
+                    };
+
+                    console.log(
+                        `Calling Airtable webhook for record ID: ${airtableRecordId}`
+                    );
+
+                    const webhookResponse = await fetch(webhookUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(webhookPayload),
+                    });
+
+                    if (webhookResponse.ok) {
+                        console.log(
+                            `Successfully called Airtable webhook for record ID: ${airtableRecordId} to update status to SUCCESS`
+                        );
+                    } else {
+                        console.error(
+                            `Airtable webhook failed with status: ${webhookResponse.status} for record ID: ${airtableRecordId} to update status to SUCCESS`,
+                            await webhookResponse.text()
+                        );
+                    }
+                } catch (webhookError) {
+                    console.error(
+                        'Error calling Airtable webhook:',
+                        webhookError
+                    );
+                    // Don't throw the error - we don't want webhook failures to break the main flow
+                }
+            }
 
             res.status(200).json({
                 success: true,
