@@ -94,7 +94,8 @@ export const AD_ACCOUNT_DATA: AdAccountConfigData = {
             [MediaBuyerCodes.VB]: '120225757076490364',
             [MediaBuyerCodes.MT]: '120226260729990364',
             [MediaBuyerCodes.RD]: '120226260729990364',
-            [MediaBuyerCodes.AZ]: '120225994645600364',
+            [MediaBuyerCodes.AZ]: '120227247011270364',
+            [MediaBuyerCodes.BZ]: '120225994645600364',
         },
         scalingCampaignId: '',
         targeting: {
@@ -133,7 +134,84 @@ export const AD_ACCOUNT_DATA: AdAccountConfigData = {
         },
         pageIds: {
             [MediaBuyerCodes.MA]: '586354434572150',
+            [MediaBuyerCodes.AZ]: '586354434572150',
             [MediaBuyerCodes.VB]: '617365471459541',
+        },
+    },
+    '605772842474773': {
+        name: 'MN_RN_FB_ABG-999388',
+        type: VerticalCodes.O,
+        campaignIds: {
+            // TODO: Add actual campaign IDs for this account
+            [MediaBuyerCodes.MA]: '',
+            [MediaBuyerCodes.VB]: '',
+            [MediaBuyerCodes.MT]: '',
+            [MediaBuyerCodes.RD]: '',
+            [MediaBuyerCodes.AZ]: '',
+        },
+        scalingCampaignId: '',
+        targeting: {
+            geo_locations: {
+                countries: ['US'],
+                location_types: ['home', 'recent'],
+            },
+            excluded_geo_locations: {
+                regions: [
+                    {
+                        key: '3861',
+                        name: 'Louisiana',
+                        country: 'US',
+                    },
+                    {
+                        key: '3867',
+                        name: 'Mississippi',
+                        country: 'US',
+                    },
+                ],
+                location_types: ['home', 'recent'],
+            },
+            targeting_relaxation_types: {
+                lookalike: 0,
+                custom_audience: 0,
+            },
+        },
+    },
+    '544026081801735': {
+        name: 'MN_RN_FB_ABG-999389',
+        type: VerticalCodes.O,
+        campaignIds: {
+            // TODO: Add actual campaign IDs for this account
+            [MediaBuyerCodes.MA]: '',
+            [MediaBuyerCodes.VB]: '',
+            [MediaBuyerCodes.MT]: '',
+            [MediaBuyerCodes.RD]: '',
+            [MediaBuyerCodes.AZ]: '',
+        },
+        scalingCampaignId: '',
+        targeting: {
+            geo_locations: {
+                countries: ['US'],
+                location_types: ['home', 'recent'],
+            },
+            excluded_geo_locations: {
+                regions: [
+                    {
+                        key: '3861',
+                        name: 'Louisiana',
+                        country: 'US',
+                    },
+                    {
+                        key: '3867',
+                        name: 'Mississippi',
+                        country: 'US',
+                    },
+                ],
+                location_types: ['home', 'recent'],
+            },
+            targeting_relaxation_types: {
+                lookalike: 0,
+                custom_audience: 0,
+            },
         },
     },
 };
