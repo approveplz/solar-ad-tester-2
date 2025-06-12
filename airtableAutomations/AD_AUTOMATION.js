@@ -12,8 +12,6 @@ if (!record) {
     throw new Error(`Record ${recordId} not found`);
 }
 
-const airtableStatus = record.getCellValueAsString('STATUS');
-
 const STATUS = {
     AUTOUPLOAD: 'AUTOUPLOAD',
     MANUAL: 'MANUAL',
@@ -29,6 +27,7 @@ const REQUIRED_FIELDS = [
     'AD_NAME',
     'DOWNLOAD_URL',
     'MEDIA_TYPE',
+    'STATUS',
 ];
 
 let data;
@@ -46,6 +45,7 @@ if (!record) {
         downloadUrl: record.getCellValueAsString('DOWNLOAD_URL'),
         mediaType: record.getCellValueAsString('MEDIA_TYPE'),
         airtableRecordId: recordId,
+        automationType: record.getCellValueAsString('STATUS'),
     };
 
     // Validate required fields
@@ -66,43 +66,10 @@ if (!record) {
     }
 }
 
-if (airtableStatus === STATUS.AUTOUPLOAD) {
-    // Create FB ad. Firebase function will move file to archive folder.
-    fetch(firebaseUrl, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-    });
-} else if (airtableStatus === STATUS.MANUAL) {
-    // For manual status, always move the file
-    await moveFileToArchive(record);
-}
-
-// Function to move file to archive
-async function moveFileToArchive(record) {
-    let firebaseProxyUrl =
-        'https://redirecttogoogleappscriptmovecreativetoarchivefol-txyabkufvq-uc.a.run.app';
-
-    let fileUrl = record.getCellValueAsString('DOWNLOAD_URL');
-    let adName = record.getCellValueAsString('AD_NAME');
-
-    console.log('Moving file to archive:', fileUrl, adName);
-
-    let moveFileUrl = `${firebaseProxyUrl}?fileUrl=${encodeURIComponent(
-        fileUrl
-    )}&adName=${encodeURIComponent(adName)}`;
-
-    let archiveResponse = await fetch(moveFileUrl, {
-        headers: {
-            'User-Agent': 'Mozilla/5.0',
-        },
-    });
-
-    if (archiveResponse.ok) {
-        console.log('File moved to archive successfully');
-    } else {
-        console.error('Archiving failed:', archiveResponse.statusText);
-    }
-}
+fetch(firebaseUrl, {
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+});
