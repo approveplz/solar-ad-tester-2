@@ -140,6 +140,12 @@ export async function saveAdPerformanceFirestore(
         .set(adPerformance, { merge: true });
 }
 
+export async function deleteAdPerformanceFirestore(docId: string) {
+    console.log(`Deleting ad performance document with ID: ${docId}`);
+    const db = getFirestore();
+    return await db.collection(AD_PERFORMANCE_COLLECTION).doc(docId).delete();
+}
+
 const FbAdSettingsDocConverter = {
     toFirestore: (data: FbAdSettings) => data,
     fromFirestore: (snap: FirebaseFirestore.QueryDocumentSnapshot) =>

@@ -20,93 +20,50 @@ export class AirtableService {
         }).base(this.baseId);
     }
 
-    public mapAdPerformanceToAirtableFields(
+    public mapAdPerformanceToAirtableFieldsAdPerformance(
         adPerformance: AdPerformance
     ): object {
         console.log(
             `Mapping AdPerformance fields for ad with FB_AD_ID: ${adPerformance.fbAdId}`
         );
 
-        // Extract FB and GA metrics
+        // Extract FB metrics
         const fbMetrics: PlatformMetrics | undefined =
             adPerformance.performanceMetrics.fb;
-        const gaMetrics: PlatformMetrics | undefined =
-            adPerformance.performanceMetrics.ga;
 
-        const defaultMetrics = { revenue: 0, spend: 0 };
+        const defaultMetrics = {
+            revenue: 0,
+            spend: 0,
+            clicks: 0,
+            engagements: 0,
+            partials: 0,
+            leads: 0,
+        };
 
-        const fbLast3 = fbMetrics?.last3Days || defaultMetrics;
-        const gaLast3 = gaMetrics?.last3Days || defaultMetrics;
-        const fbLast7 = fbMetrics?.last7Days || defaultMetrics;
-        const gaLast7 = gaMetrics?.last7Days || defaultMetrics;
         const fbLifetime = fbMetrics?.lifetime || defaultMetrics;
-        const gaLifetime = gaMetrics?.lifetime || defaultMetrics;
 
-        // Compute totals for Last 3 Days
-        const totalRevenueLast3 = fbLast3.revenue + gaLast3.revenue;
-        const totalSpendLast3 = fbLast3.spend + gaLast3.spend;
-        const totalProfitLast3 = totalRevenueLast3 - totalSpendLast3;
-        const totalRoiLast3 =
-            totalSpendLast3 !== 0 ? totalRevenueLast3 / totalSpendLast3 : 0;
-
-        // Compute totals for Last 7 Days
-        const totalRevenueLast7 = fbLast7.revenue + gaLast7.revenue;
-        const totalSpendLast7 = fbLast7.spend + gaLast7.spend;
-        const totalProfitLast7 = totalRevenueLast7 - totalSpendLast7;
-        const totalRoiLast7 =
-            totalSpendLast7 !== 0 ? totalRevenueLast7 / totalSpendLast7 : 0;
-
-        // Compute totals for Lifetime
-        const totalRevenueLifetime = fbLifetime.revenue + gaLifetime.revenue;
-        const totalSpendLifetime = fbLifetime.spend + gaLifetime.spend;
-        const totalProfitLifetime = totalRevenueLifetime - totalSpendLifetime;
-        const totalRoiLifetime =
-            totalSpendLifetime !== 0
-                ? totalRevenueLifetime / totalSpendLifetime
-                : 0;
+        // Compute totals for Lifetime (FB only)
+        const totalRevenueLifetime = fbLifetime.revenue;
+        const totalSpendLifetime = fbLifetime.spend;
 
         return {
-            FB_AD_ID: adPerformance.fbAdId,
             AD_NAME: adPerformance.adName,
-            FB_ACCOUNT_ID: adPerformance.fbAccountId,
-            FB_ACTIVE_STATUS: adPerformance.fbIsActive,
-            FB_REVENUE_LAST_3: fbLast3.revenue,
-            FB_REVENUE_LAST_7: fbLast7.revenue,
-            FB_REVENUE_LIFETIME: fbLifetime.revenue,
-            FB_SPEND_LAST_3: fbLast3.spend,
-            FB_SPEND_LAST_7: fbLast7.spend,
-            FB_SPEND_LIFETIME: fbLifetime.spend,
-
-            GA_REVENUE_LAST_3: gaLast3.revenue,
-            GA_REVENUE_LAST_7: gaLast7.revenue,
-            GA_REVENUE_LIFETIME: gaLifetime.revenue,
-            GA_SPEND_LAST_3: gaLast3.spend,
-            GA_SPEND_LAST_7: gaLast7.spend,
-            GA_SPEND_LIFETIME: gaLifetime.spend,
-
-            GDRIVE_LINK: adPerformance.gDriveDownloadUrl,
-            HOOK_WRITER: adPerformance.hookWriter,
-            IDEA_CREATOR: adPerformance.ideaWriter,
-            SCRIPT_WRITER: adPerformance.scriptWriter,
-
-            TOTAL_PROFIT_LAST_3: totalProfitLast3,
-            TOTAL_PROFIT_LAST_7: totalProfitLast7,
-            TOTAL_PROFIT_LIFETIME: totalProfitLifetime,
-            TOTAL_REVENUE_LAST_3: totalRevenueLast3,
-            TOTAL_REVENUE_LAST_7: totalRevenueLast7,
-            TOTAL_REVENUE_LIFETIME: totalRevenueLifetime,
-            TOTAL_ROI_LAST_3: totalRoiLast3,
-            TOTAL_ROI_LAST_7: totalRoiLast7,
-            TOTAL_ROI_LIFETIME: totalRoiLifetime,
-            TOTAL_SPEND_LAST_3: totalSpendLast3,
-            TOTAL_SPEND_LAST_7: totalSpendLast7,
-            TOTAL_SPEND_LIFETIME: totalSpendLifetime,
-
+            FB_IS_ACTIVE: adPerformance.fbIsActive,
+            CLICKS: fbLifetime.clicks,
+            ENGAGEMENTS: fbLifetime.engagements,
+            PARTIALS: fbLifetime.partials,
+            AQUISITIONS: fbLifetime.leads,
+            VIEW_URL: adPerformance.gDriveDownloadUrl,
+            REVENUE: totalRevenueLifetime,
+            SPEND: totalSpendLifetime,
             VERTICAL: adPerformance.vertical,
         };
     }
 
-    public async updateRecord(recordId: string, fields: object): Promise<void> {
+    public async updateRecordAdPerformance(
+        recordId: string,
+        fields: object
+    ): Promise<void> {
         console.log(
             `Attempting to update Airtable record with ID: ${recordId}`
         );
@@ -124,41 +81,35 @@ export class AirtableService {
         }
     }
 
-    public async createOrUpdateRecord(
-        firestoreId: string, // The Firestore Document ID is AdPerformance.fbAdId
+    public async createOrUpdateRecordAdPerformance(
         adPerformance: AdPerformance
     ): Promise<void> {
-        console.log(
-            `Attempting to sync record for Firestore ID: ${firestoreId}`
-        );
-        const fields = this.mapAdPerformanceToAirtableFields(adPerformance);
+        const fields =
+            this.mapAdPerformanceToAirtableFieldsAdPerformance(adPerformance);
 
         try {
             // Check if record exists
             const existingRecords = await this.airtableBase('AD_PERFORMANCE')
                 .select({
-                    filterByFormula: `{FB_AD_ID} = '${firestoreId}'`,
+                    filterByFormula: `{AD_NAME} = '${adPerformance.adName}'`,
                 })
                 .firstPage();
 
             if (existingRecords.length > 0) {
                 console.log(
-                    `Record found (${existingRecords.length} records). Updating Airtable record with ID: ${existingRecords[0].id}`
+                    `Record found (${existingRecords.length} records). Updating Airtable record for ad name: ${adPerformance.adName}`
                 );
-                await this.updateRecord(existingRecords[0].id, fields);
-                console.log(
-                    `Successfully updated record for Firestore ID: ${firestoreId}`
+                await this.updateRecordAdPerformance(
+                    existingRecords[0].id,
+                    fields
                 );
             } else {
                 console.log(
-                    'No existing Airtable record found. Creating a new record.'
+                    `No existing Airtable record found. Creating a new record for ad name: ${adPerformance.adName}`
                 );
                 await this.airtableBase('AD_PERFORMANCE').create([
                     { fields: this.sanitizeFields(fields) },
                 ]);
-                console.log(
-                    `Successfully created new Airtable record for Firestore ID: ${firestoreId}`
-                );
             }
         } catch (error) {
             console.error('Error syncing to Airtable:', error);

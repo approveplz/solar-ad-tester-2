@@ -3,10 +3,10 @@ import { MediaBuyerCodes } from '../helpers.js';
 export interface TimeBasedMetrics {
     spend: number;
     revenue: number;
-    roi: number;
     leads: number;
     clicks: number;
-    costPerLead: number;
+    partials: number;
+    engagements: number;
 }
 
 export interface PlatformMetrics {
@@ -25,14 +25,14 @@ export interface AdPerformance {
     vertical: string;
     gDriveDownloadUrl: string;
     adName: string;
-    fbAdId: string;
-    fbAdSetId: string;
-    fbCampaignId: string;
-    fbAccountId: string;
+    fbAdId?: string;
+    fbAdSetId?: string;
+    fbCampaignId?: string;
+    fbAccountId?: string;
     ideaWriter: string;
     scriptWriter: string;
     hookWriter: string;
     performanceMetrics: PerformanceMetrics;
     fbIsActive: boolean;
-    mediaBuyer: MediaBuyerCodes;
+    mediaBuyer?: MediaBuyerCodes | string;
 }
