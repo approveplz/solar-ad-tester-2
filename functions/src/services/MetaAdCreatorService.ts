@@ -186,16 +186,15 @@ export default class MetaAdCreatorService {
             custom_event_str: customEventStr,
         };
 
-        /* Get start and end time */
+        // const startTimeUnixSeconds = getNextWeekdayUnixSeconds(now).toString();
+        // Calculate tomorrow at 5am Pacific time (UTC-7)
         const now = new Date();
+        const tomorrow = new Date(now);
+        tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+        tomorrow.setUTCHours(12, 0, 0, 0); // 5am Pacific = 12pm UTC (5 + 7 = 12)
 
-        const startTimeUnixSeconds = getNextWeekdayUnixSeconds(now).toString();
-
-        const oneWeekLater = new Date(parseInt(startTimeUnixSeconds) * 1000);
-        oneWeekLater.setDate(oneWeekLater.getDate() + 7);
-
-        const endTimeUnixSeconds = Math.floor(
-            oneWeekLater.getTime() / 1000
+        const startTimeUnixSeconds = Math.floor(
+            tomorrow.getTime() / 1000
         ).toString();
 
         const createAdSetRequest: FbApiCreateAdSetRequest = {
@@ -205,7 +204,6 @@ export default class MetaAdCreatorService {
             bid_amount: bidAmountCents,
             bid_strategy: bidStrategy,
             start_time: startTimeUnixSeconds,
-            // end_time: endTimeUnixSeconds,
             optimization_goal: optimizationGoal,
             targeting,
             billing_event: billingEvent,
@@ -225,15 +223,7 @@ export default class MetaAdCreatorService {
                 //     window_days: 1,
                 // },
             ],
-            /* Can only have either lifetime or daily budget */
-            ...(lifetimeBudgetCents && {
-                // Need end time if using lifetime budget
-                end_time: endTimeUnixSeconds,
-                lifetime_budget: lifetimeBudgetCents,
-            }),
-            ...(dailyBudgetCents && {
-                daily_budget: dailyBudgetCents,
-            }),
+            daily_budget: dailyBudgetCents,
         };
 
         console.log(
@@ -484,11 +474,11 @@ export default class MetaAdCreatorService {
 
     /**
      * Gets all ads for the current ad account with optional filter for active ads only
-     * using a hierarchical approach (campaign > ad set > ad)
+     * using direct account-level API call (much more efficient - 1 API call vs dozens)
      * @param onlyActive When true, returns only active ads; when false, returns all ads
      * @returns Array of ads with their campaign and ad set information
      */
-    async getAllAdsByCampaign(onlyActive: boolean = false): Promise<
+    async getAllAdsForCurrentAccount(onlyActive: boolean = false): Promise<
         Array<{
             campaignId: string;
             adSetId: string;
@@ -496,7 +486,7 @@ export default class MetaAdCreatorService {
             adId: string;
             adName: string;
             status: string;
-            mediaBuyer: MediaBuyerCodes;
+            mediaBuyer: MediaBuyerCodes | string;
         }>
     > {
         console.log(
@@ -506,58 +496,40 @@ export default class MetaAdCreatorService {
         );
 
         try {
-            // // Step 1: Get campaigns
-            // const statusFilter = onlyActive
-            //     ? { effective_status: ['ACTIVE'] }
-            //     : {};
-            // const campaigns = await this.adAccount.getCampaigns(
-            //     ['id', 'name', 'status', 'effective_status'],
-            //     statusFilter
-            // );
+            // Use direct account-level API call to get all ads in 1 request
+            const statusFilter = onlyActive
+                ? { effective_status: ['ACTIVE'] }
+                : {};
 
-            // console.log(`Retrieved ${campaigns.length} campaigns`);
-            const mediaBuyerAndCampaignIds: [MediaBuyerCodes, string][] =
-                Object.entries(AD_ACCOUNT_DATA[this.accountId].campaignIds).map(
-                    ([key, value]) => [key as MediaBuyerCodes, value]
-                );
-
-            // Result array to store all ads with their campaign and ad set info
-            const result = [];
-
-            // Step 2: For each campaign, get its ad sets
-            for (const [mediaBuyer, campaignId] of mediaBuyerAndCampaignIds) {
-                const adSets = await this.getAdSetsForCampaign(
-                    campaignId,
-                    onlyActive
-                );
-                console.log(
-                    `Retrieved ${adSets.length} ad sets for campaign ${campaignId}`
-                );
-
-                // Step 3: For each ad set, get its ads
-                for (const adSet of adSets) {
-                    const adSetId = adSet.id;
-                    const adSetName = adSet._data.name;
-
-                    const ads = await this.getAdsForAdSet(adSetId, onlyActive);
-
-                    // Step 4: Add each ad to results with its campaign and ad set info
-                    for (const ad of ads) {
-                        result.push({
-                            campaignId,
-                            adSetId,
-                            adSetName,
-                            adId: ad.id,
-                            adName: ad._data.name,
-                            status: ad._data.effective_status,
-                            mediaBuyer,
-                        });
-                    }
-                }
-            }
+            const ads = await this.adAccount.getAds(
+                [
+                    'id',
+                    'name',
+                    'status',
+                    'effective_status',
+                    'adset_id',
+                    'campaign_id',
+                ],
+                statusFilter
+            );
 
             console.log(
-                `Retrieved a total of ${result.length} ads for account: ${this.accountId}`
+                `Retrieved ${ads.length} ads directly from account: ${this.accountId}`
+            );
+
+            // Transform to expected format
+            const result = ads.map((ad) => ({
+                campaignId: ad._data.campaign_id,
+                adSetId: ad._data.adset_id,
+                adSetName: ad._data.adset_name,
+                adId: ad.id,
+                adName: ad._data.name,
+                status: ad._data.effective_status,
+                mediaBuyer: '',
+            }));
+
+            console.log(
+                `Processed ${result.length} ads for account: ${this.accountId}`
             );
             return result;
         } catch (error) {
@@ -662,15 +634,4 @@ export default class MetaAdCreatorService {
         };
         return data.status['video_status'];
     }
-
-    /*
-    Use this call to search states to get key
-
-    curl -G \
-        -d 'location_types=["region"]' \
-        -d 'type=adgeolocation' \
-        -d 'q=california' \
-        -d 'access_token=<ACCESS_TOKEN>' \
-        https://graph.facebook.com/v<API_VERSION>/search
-    */
 }
