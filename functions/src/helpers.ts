@@ -24,7 +24,7 @@ export function getNextWeekdayUnixSeconds(now: Date = new Date()): number {
             now.getUTCFullYear(),
             now.getUTCMonth(),
             now.getUTCDate() + daysToAdd,
-            14, // 7 AM PDT (14:00 UTC)
+            12, // 5 AM PDT (12:00 UTC)
             0,
             0,
             0
