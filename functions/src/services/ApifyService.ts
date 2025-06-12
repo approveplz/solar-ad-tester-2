@@ -7,7 +7,6 @@ import {
 import { ScrapedAdDataFirestore } from '../models/ScrapedAdDataFirestore.js';
 import { GoogleGeminiService } from './GoogleGeminiService.js';
 import { OpenAiService } from './OpenAiService.js';
-import { SkypeService } from './SkypeService.js';
 export interface ScrapedAdItemSnapshotCard {
     title: string;
     video_hd_url: string;
