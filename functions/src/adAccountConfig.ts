@@ -128,9 +128,9 @@ export const AD_ACCOUNT_DATA: AdAccountConfigData = {
                 lookalike: 0,
                 custom_audience: 0,
             },
-            // targeting_automation: {
-            //     advantage_audience: 1,
-            // },
+            targeting_automation: {
+                advantage_audience: 1,
+            },
         },
         pageIds: {
             [MediaBuyerCodes.MA]: '586354434572150',
@@ -174,6 +174,9 @@ export const AD_ACCOUNT_DATA: AdAccountConfigData = {
                 lookalike: 0,
                 custom_audience: 0,
             },
+            targeting_automation: {
+                advantage_audience: 1,
+            },
         },
     },
     '544026081801735': {
@@ -211,6 +214,9 @@ export const AD_ACCOUNT_DATA: AdAccountConfigData = {
             targeting_relaxation_types: {
                 lookalike: 0,
                 custom_audience: 0,
+            },
+            targeting_automation: {
+                advantage_audience: 1,
             },
         },
     },
