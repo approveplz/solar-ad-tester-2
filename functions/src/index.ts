@@ -423,7 +423,7 @@ export const createFbAdHttp = onRequest(
             let fbIsActive: boolean = false;
 
             // Only proceed with Facebook upload if automationType is AUTO_UPLOAD
-            if (automationType === 'AUTO_UPLOAD') {
+            if (automationType === 'AUTOUPLOAD') {
                 accountId = getAccountIdFromVertical(vertical) || '';
 
                 const adAccountData =
@@ -488,10 +488,9 @@ export const createFbAdHttp = onRequest(
                     fbAdId
                 );
                 fbIsActive = true;
-            } else {
-                // For non-AUTO_UPLOAD automation types, log that Facebook upload is being skipped
-                console.log(
-                    `Skipping Facebook upload for automation type: ${automationType}`
+            } else if (automationType !== 'MANUAL') {
+                throw new Error(
+                    `Invalid automation type: ${automationType}. Only AUTOUPLOAD and MANUAL are supported.`
                 );
             }
 
