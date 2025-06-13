@@ -462,7 +462,7 @@ export class MediaBuyingService {
                 bqPerformanceLast3Days,
                 bqPerformanceLast7Days,
                 bqPerformanceLifetime,
-                allAdPerformances,
+                firestoreAdPerformances,
             ] = await Promise.all([
                 this.bigQueryService.getAdPerformance('AD_PERFORMANCE_3D'),
                 this.bigQueryService.getAdPerformance('AD_PERFORMANCE_7D'),
@@ -520,56 +520,61 @@ export class MediaBuyingService {
             }
 
             // Process each Firestore ad
-            for (const ad of allAdPerformances) {
+            for (const firestoreAdPerformance of firestoreAdPerformances) {
                 try {
                     let needsUpdate = false;
                     let needsDocumentMigration = false;
 
                     // Search for Facebook ad by adName across all accounts
-                    const fbAd = fbAdsByName[ad.adName];
+                    const fbAd = fbAdsByName[firestoreAdPerformance.adName];
 
                     if (fbAd) {
                         // Update or populate Facebook details
                         const currentFbStatus = fbAd.status === 'ACTIVE';
 
-                        if (!ad.fbAdId) {
+                        if (!firestoreAdPerformance.fbAdId) {
                             // Populate missing Facebook details
                             console.log(
-                                `Found Facebook ad for ${ad.adName}, populating details: Account: ${fbAd.accountId}, FB Ad ID: ${fbAd.adId}, FB Ad Set ID: ${fbAd.adSetId}, FB Campaign ID: ${fbAd.campaignId}`
+                                `Found Facebook ad for ${firestoreAdPerformance.adName}, populating details: Account: ${fbAd.accountId}, FB Ad ID: ${fbAd.adId}, FB Ad Set ID: ${fbAd.adSetId}, FB Campaign ID: ${fbAd.campaignId}`
                             );
 
-                            ad.fbAccountId = fbAd.accountId;
-                            ad.fbAdId = fbAd.adId;
-                            ad.fbAdSetId = fbAd.adSetId;
-                            ad.fbCampaignId = fbAd.campaignId;
-                            ad.fbIsActive = currentFbStatus;
+                            firestoreAdPerformance.fbAccountId = fbAd.accountId;
+                            firestoreAdPerformance.fbAdId = fbAd.adId;
+                            firestoreAdPerformance.fbAdSetId = fbAd.adSetId;
+                            firestoreAdPerformance.fbCampaignId =
+                                fbAd.campaignId;
+                            firestoreAdPerformance.fbIsActive = currentFbStatus;
                             needsUpdate = true;
                             needsDocumentMigration = true;
                         } else {
                             // Update status if changed (for ads that already have fbAdId)
-                            if (ad.fbIsActive !== currentFbStatus) {
+                            if (
+                                firestoreAdPerformance.fbIsActive !==
+                                currentFbStatus
+                            ) {
                                 console.log(
-                                    `Updating status for ad ${ad.adName} (${ad.fbAdId}): ${ad.fbIsActive} -> ${currentFbStatus}`
+                                    `Updating status for ad ${firestoreAdPerformance.adName} (${firestoreAdPerformance.fbAdId}): ${firestoreAdPerformance.fbIsActive} -> ${currentFbStatus}`
                                 );
-                                ad.fbIsActive = currentFbStatus;
+                                firestoreAdPerformance.fbIsActive =
+                                    currentFbStatus;
                                 needsUpdate = true;
                             }
                         }
-                    } else if (ad.fbAdId) {
+                    } else if (firestoreAdPerformance.fbAdId) {
                         // Ad exists in Firestore but not found in Facebook - mark as inactive
-                        if (ad.fbIsActive) {
+                        if (firestoreAdPerformance.fbIsActive) {
                             console.log(
-                                `Ad ${ad.adName} (${ad.fbAdId}) not found in Facebook, marking as inactive`
+                                `Ad ${firestoreAdPerformance.adName} (${firestoreAdPerformance.fbAdId}) not found in Facebook, marking as inactive`
                             );
-                            ad.fbIsActive = false;
+                            firestoreAdPerformance.fbIsActive = false;
                             needsUpdate = true;
                         }
                     }
 
                     // Update performance metrics from BigQuery (only if we have fbAdId)
-                    if (ad.fbAdId) {
+                    if (firestoreAdPerformance.fbAdId) {
                         const updatedMetrics = this.buildPerformanceMetrics(
-                            ad.fbAdId,
+                            firestoreAdPerformance.fbAdId,
                             bqPerformanceLast3Days,
                             bqPerformanceLast7Days,
                             bqPerformanceLifetime
@@ -577,36 +582,53 @@ export class MediaBuyingService {
 
                         // Check if performance metrics have changed
                         const existingMetrics = JSON.stringify(
-                            ad.performanceMetrics
+                            firestoreAdPerformance.performanceMetrics
                         );
                         const newMetrics = JSON.stringify(updatedMetrics);
 
                         if (existingMetrics !== newMetrics) {
                             console.log(
-                                `Updating performance metrics for ad ${ad.adName} (${ad.fbAdId})`
+                                `Updating performance metrics for ad ${firestoreAdPerformance.adName} (${firestoreAdPerformance.fbAdId})`
                             );
-                            ad.performanceMetrics = updatedMetrics;
+                            firestoreAdPerformance.performanceMetrics =
+                                updatedMetrics;
                             needsUpdate = true;
                         }
                     }
 
                     // Save to Firestore if any updates were made
                     if (needsUpdate) {
-                        if (needsDocumentMigration && ad.fbAdId) {
+                        if (
+                            needsDocumentMigration &&
+                            firestoreAdPerformance.fbAdId
+                        ) {
                             // Migrate document: delete old document with adName ID, create new with fbAdId
                             console.log(
-                                `Migrating document from ${ad.adName} to ${ad.fbAdId}`
+                                `Migrating document from ${firestoreAdPerformance.adName} to ${firestoreAdPerformance.fbAdId}`
                             );
-                            await saveAdPerformanceFirestore(ad.fbAdId, ad);
-                            await deleteAdPerformanceFirestore(ad.adName);
+                            await saveAdPerformanceFirestore(
+                                firestoreAdPerformance.fbAdId,
+                                firestoreAdPerformance
+                            );
+                            await deleteAdPerformanceFirestore(
+                                firestoreAdPerformance.adName
+                            );
                         } else {
                             // Regular update using existing document ID
-                            const docId = ad.fbAdId || ad.adName;
-                            await saveAdPerformanceFirestore(docId, ad);
+                            const docId =
+                                firestoreAdPerformance.fbAdId ||
+                                firestoreAdPerformance.adName;
+                            await saveAdPerformanceFirestore(
+                                docId,
+                                firestoreAdPerformance
+                            );
                         }
                     }
                 } catch (adError) {
-                    console.error(`Error processing ad ${ad.adName}:`, adError);
+                    console.error(
+                        `Error processing ad ${firestoreAdPerformance.adName}:`,
+                        adError
+                    );
                     // Continue with other ads even if one fails
                 }
             }
