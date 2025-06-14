@@ -30,13 +30,7 @@ import {
     saveTelegramScriptDataFirestore,
     TelegramScriptData,
 } from './firestoreCloud.js';
-import {
-    getSignedUploadUrl,
-    getSignedDownloadUrl,
-    uploadCsvToStorage,
-    uploadFileToStorage,
-    downloadFileFromStorage,
-} from './firebaseStorageCloud.js';
+
 import { AdPerformance } from './models/AdPerformance.js';
 import { BigQueryService } from './services/BigQueryService.js';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
@@ -196,6 +190,185 @@ export const syncAdPerformance = onDocumentWritten(
         } catch (error) {
             console.error(
                 `Failed to sync document ${docId} (${data.adName}):`,
+                error
+            );
+            throw error;
+        }
+    }
+);
+
+/**
+ * Handles Creatomate render completion events from Firestore
+ *
+ * FLOW OVERVIEW:
+ * 1. Creatomate finishes rendering a video with hooks
+ * 2. Creatomate calls our webhook endpoint (handleCreatomateWebhookHttp)
+ * 3. The webhook handler processes the payload and calls CreatomateService.handleWebhookCompletion()
+ * 4. CreatomateService.handleWebhookCompletion() calls setEventFirestore() to create an event document
+ *    in the 'events' collection with the pattern: creatomate_render:{renderId}
+ * 5. This function (handleCreatomateRenderCompletion) is automatically triggered by the Firestore
+ *    document write and processes the completed render
+ *
+ * PURPOSE:
+ * This function allows us to react to completed Creatomate renders asynchronously and perform
+ * additional processing like updating ad performance data, sending notifications, or triggering
+ * further workflow steps.
+ *
+ * TRIGGER: onDocumentWritten for 'events/{eventId}' collection
+ * FILTERS: Only processes events that start with 'creatomate_render:'
+ */
+export const handleCreatomateRenderCompletion = onDocumentWritten(
+    'events/{eventId}',
+    async (event) => {
+        const eventId = event.params.eventId;
+        console.log(
+            `handleCreatomateRenderCompletion triggered for eventId: ${eventId}`
+        );
+
+        // Only process events that match the creatomate_render pattern
+        if (!eventId.startsWith('creatomate_render:')) {
+            console.log(
+                `Event ${eventId} is not a creatomate_render event. Skipping.`
+            );
+            return;
+        }
+
+        // If the document was deleted, skip processing
+        if (!event.data?.after.exists) {
+            console.log(`Event document ${eventId} was deleted. Skipping.`);
+            return;
+        }
+
+        const eventData = event.data.after.data();
+        console.log(
+            `Processing Creatomate render completion event: ${eventId}`,
+            eventData
+        );
+
+        if (!eventData) {
+            throw new Error(`No data found for event: ${eventId}`);
+        }
+
+        try {
+            // Only process successful renders
+            if (eventData.status !== 'SUCCESS') {
+                console.log(
+                    `Skipping event ${eventId} with status: ${eventData.status}`
+                );
+                return;
+            }
+
+            // Extract data from the event payload
+            const { creatomateMetadata, creatomateUrl } = eventData.payload;
+            const { baseAdName, hookName, fbAdId } = creatomateMetadata;
+
+            console.log(
+                `Processing completed render for ad: ${baseAdName}, hook: ${hookName}`
+            );
+
+            // Upload to Google Drive using Google Apps Script
+            const googleAppsScriptUrl =
+                'https://script.google.com/macros/s/AKfycbxPuQnHXVEzU0o_8iLxcAaM45VPhE98t6w0eTKMN6sVWyegRqy1cSYT34O5QV4DT6MZCQ/exec';
+
+            const uploadUrl = `${googleAppsScriptUrl}?fileUrl=${encodeURIComponent(
+                creatomateUrl
+            )}&baseAdName=${encodeURIComponent(
+                baseAdName
+            )}&hookName=${encodeURIComponent(hookName)}`;
+
+            console.log(`Uploading to Google Drive: ${uploadUrl}`);
+
+            const response = await fetch(uploadUrl, {
+                method: 'GET',
+                headers: {
+                    'User-Agent': 'Mozilla/5.0',
+                },
+                redirect: 'follow',
+            });
+
+            if (!response.ok) {
+                throw new Error(
+                    `Google Apps Script failed with status: ${response.status}`
+                );
+            }
+
+            const responseText = await response.text();
+            let uploadResult;
+
+            try {
+                uploadResult = JSON.parse(responseText);
+            } catch (parseError) {
+                console.error(
+                    'Failed to parse Google Apps Script response:',
+                    parseError
+                );
+                throw new Error(
+                    `Invalid response from Google Apps Script: ${responseText}`
+                );
+            }
+
+            if (uploadResult.status === 'success') {
+                console.log(
+                    `Successfully uploaded to Google Drive. File ID: ${uploadResult.fileId}`
+                );
+
+                // Update AdPerformance document with the new hook info
+                let adPerformance = null;
+
+                // First try to get by fbAdId
+                if (fbAdId) {
+                    console.log(
+                        `Looking up AdPerformance by fbAdId: ${fbAdId}`
+                    );
+                    adPerformance = await getAdPerformanceFirestoreById(fbAdId);
+                }
+
+                // If not found by fbAdId, try by baseAdName
+                if (!adPerformance && baseAdName) {
+                    console.log(
+                        `AdPerformance not found by fbAdId, trying baseAdName: ${baseAdName}`
+                    );
+                    adPerformance = await getAdPerformanceFirestoreById(
+                        baseAdName
+                    );
+                }
+
+                if (adPerformance) {
+                    // Initialize hooksCreated array if it doesn't exist
+                    if (!adPerformance.hooksCreated) {
+                        adPerformance.hooksCreated = [];
+                    }
+
+                    // Add the new hook name to the array (hooksCreated is string[])
+                    adPerformance.hooksCreated.push(hookName);
+
+                    // Save back to Firestore using the document ID that worked
+                    const documentId =
+                        fbAdId && (await getAdPerformanceFirestoreById(fbAdId))
+                            ? fbAdId
+                            : baseAdName;
+                    await saveAdPerformanceFirestore(documentId, adPerformance);
+
+                    console.log(
+                        `Updated AdPerformance document (${documentId}) with new hook: ${hookName}`
+                    );
+                } else {
+                    console.warn(
+                        `AdPerformance document not found for fbAdId: ${fbAdId} or baseAdName: ${baseAdName}`
+                    );
+                }
+            } else {
+                throw new Error(
+                    `Google Apps Script upload failed: ${uploadResult.message}`
+                );
+            }
+
+            console.log(
+                `Successfully processed Creatomate render completion for event: ${eventId}`
+            );
+        } catch (error) {
+            console.error(
+                `Error processing Creatomate render completion for event ${eventId}:`,
                 error
             );
             throw error;
@@ -510,6 +683,7 @@ export const createFbAdHttp = onRequest(
                 performanceMetrics: {},
                 fbIsActive,
                 mediaBuyer,
+                hooksCreated: [],
             };
 
             await saveAdPerformanceFirestore(adName, adPerformance);
@@ -607,33 +781,31 @@ export const createFbAdHttp = onRequest(
 
 // Called when the Creatomate render is finished
 export const handleCreatomateWebhookHttp = onRequest(async (req, res) => {
-    const {
-        id: creatomateRenderId,
-        status,
-        url: creatomateUrl,
-        metadata: metadataJSON,
-    } = req.body;
-    const metadata: CreatomateMetadata = JSON.parse(metadataJSON);
+    try {
+        const creatomateService = await CreatomateService.create(
+            process.env.CREATOMATE_API_KEY || ''
+        );
 
-    if (status !== 'succeeded') {
-        console.log(`Creatomate render ${creatomateRenderId} failed`);
+        const result = await creatomateService.handleWebhookCompletion(
+            req.body
+        );
+
+        if (!result.success) {
+            res.status(500).json({
+                success: false,
+                error: result.error || 'Creatomate webhook processing failed',
+            });
+            return;
+        }
+
+        res.status(200).json({ success: true });
+    } catch (error) {
+        console.error('Error in handleCreatomateWebhookHttp:', error);
         res.status(500).json({
             success: false,
-            error: 'Creatomate render failed',
+            error: 'Internal server error',
         });
-        return;
     }
-
-    await setEventFirestore(
-        `creatomate_render:${creatomateRenderId}`,
-        'SUCCESS',
-        {
-            creatomateMetadata: metadata,
-            creatomateUrl,
-        }
-    );
-
-    res.status(200).json({ success: true });
 });
 
 export const generateScriptHttp = onRequest(async (req, res) => {
@@ -852,3 +1024,28 @@ export const redirectToGoogleAppscriptMoveCreativeToArchiveFolder = onRequest(
         }
     }
 );
+
+/* TESTING */
+// export const handleCreatomateRequestHttp_TEST = onRequest(async (req, res) => {
+//     console.log('creatomate request received');
+
+//     const creatomateService = await CreatomateService.create(
+//         process.env.CREATOMATE_API_KEY || ''
+//     );
+
+//     // const baseVideoViewUrl_square =
+//     //     'https://drive.google.com/file/d/1_Ez_g2aPLE-PhLXAaXsL-g9y8wa4NX5D/view';
+
+//     const baseViewUrl_vertical =
+//         'https://drive.google.com/file/d/1_0ANVjkIFc80N0K3zPiKEcmToLbyJY3n/view';
+
+//     const baseAdName = '103-R-AZ-AZ-AZ';
+
+//     const fbAdId = '120227504353870364';
+//     const result = await creatomateService.uploadToCreatomateWithHooksAll(
+//         baseViewUrl_vertical,
+//         baseAdName,
+//         fbAdId
+//     );
+//     res.status(200).json({ success: true, result });
+// });

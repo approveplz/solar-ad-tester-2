@@ -35,4 +35,5 @@ export interface AdPerformance {
     performanceMetrics: PerformanceMetrics;
     fbIsActive: boolean;
     mediaBuyer?: MediaBuyerCodes | string;
+    hooksCreated?: string[];
 }

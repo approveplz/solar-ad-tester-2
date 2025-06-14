@@ -1,4 +1,9 @@
-import { invariant } from '../helpers.js';
+import {
+    getAdName,
+    getDownloadUrlFromGdriveViewUrl,
+    invariant,
+    MediaBuyerCodes,
+} from '../helpers.js';
 import { getAllFilesInFolderWithSignedUrls } from '../firebaseStorageCloud.js';
 import ffmpeg from 'fluent-ffmpeg';
 
@@ -53,6 +58,19 @@ enum AspectRatio {
     Square = 'square',
 }
 // const creatomateService = await CreatomateService.create(apiKey);
+
+export interface CreatomateWebhookResult {
+    success: boolean;
+    error?: string;
+}
+
+export interface CreatomateWebhookPayload {
+    id: string;
+    status: string;
+    url: string;
+    metadata: string;
+}
+
 export class CreatomateService {
     private readonly apiKey: string;
     private readonly hooks: Hook[];
@@ -84,7 +102,7 @@ export class CreatomateService {
     }
 
     async uploadToCreatomateWithHooksAll(
-        baseVideoUrl: string,
+        baseVideoViewUrl: string,
         baseAdName: string,
         fbAdId: string
     ): Promise<
@@ -93,8 +111,10 @@ export class CreatomateService {
             creatomateRenderResponse: CreatomateRenderResponse;
         }[]
     > {
+        const baseVideoDownloadUrl =
+            getDownloadUrlFromGdriveViewUrl(baseVideoViewUrl);
         // Get video dimensions first
-        const dimensions = await this.getVideoDimensions(baseVideoUrl);
+        const dimensions = await this.getVideoDimensions(baseVideoDownloadUrl);
         console.log(
             `Video dimensions: ${dimensions.width}x${dimensions.height}`
         );
@@ -103,7 +123,7 @@ export class CreatomateService {
             try {
                 const creatomateRenderResponse: CreatomateRenderResponse =
                     await this.uploadToCreatomateWithHookSingle(
-                        baseVideoUrl,
+                        baseVideoDownloadUrl,
                         hook.url,
                         baseAdName,
                         hook.name,
@@ -212,17 +232,14 @@ export class CreatomateService {
         if (aspectRatio === AspectRatio.Vertical) {
             creatomateTemplate = {
                 output_format: 'mp4',
-                width: 720,
-                height: 1280,
+                width: 1080,
+                height: 1920,
                 elements: [
                     {
                         name: 'hook-video',
                         type: 'video',
                         track: 1,
                         time: 0,
-                        y: '46.0351%',
-                        width: '113.7266%',
-                        height: '37.0663%',
                         dynamic: true,
                     },
                     {
@@ -236,16 +253,14 @@ export class CreatomateService {
         } else if (aspectRatio === AspectRatio.Square) {
             creatomateTemplate = {
                 output_format: 'mp4',
-                width: 720,
-                height: 720,
+                width: 1080,
+                height: 1080,
                 elements: [
                     {
                         name: 'hook-video',
                         type: 'video',
                         track: 1,
                         time: 0,
-                        y: '45.1481%',
-                        height: '57.7421%',
                         dynamic: true,
                     },
                     {
@@ -259,8 +274,8 @@ export class CreatomateService {
         } else if (aspectRatio === AspectRatio.Horizontal) {
             creatomateTemplate = {
                 output_format: 'mp4',
-                width: 1280,
-                height: 720,
+                width: 1920,
+                height: 1080,
                 elements: [
                     {
                         name: 'hook-video',
@@ -307,5 +322,64 @@ export class CreatomateService {
                 });
             });
         });
+    }
+
+    /**
+     * Processes Creatomate webhook payload and handles the render completion
+     * @param payload The webhook payload from Creatomate
+     * @returns Result indicating success or failure
+     */
+    async handleWebhookCompletion(
+        payload: CreatomateWebhookPayload
+    ): Promise<CreatomateWebhookResult> {
+        const {
+            id: creatomateRenderId,
+            status,
+            url: creatomateUrl,
+            metadata: metadataJSON,
+        } = payload;
+
+        try {
+            const metadata: CreatomateMetadata = JSON.parse(metadataJSON);
+
+            if (status !== 'succeeded') {
+                console.log(
+                    `Creatomate render ${creatomateRenderId} failed with status: ${status}`
+                );
+                return {
+                    success: false,
+                    error: 'Creatomate render failed',
+                };
+            }
+
+            // Import setEventFirestore here to avoid circular dependencies
+            const { setEventFirestore } = await import('../firestoreCloud.js');
+
+            await setEventFirestore(
+                `creatomate_render:${creatomateRenderId}`,
+                'SUCCESS',
+                {
+                    creatomateMetadata: metadata,
+                    creatomateUrl,
+                }
+            );
+
+            console.log(
+                `Successfully processed Creatomate webhook for render ${creatomateRenderId}`
+            );
+            return { success: true };
+        } catch (error) {
+            console.error(
+                `Error processing Creatomate webhook for render ${creatomateRenderId}:`,
+                error
+            );
+            return {
+                success: false,
+                error:
+                    error instanceof Error
+                        ? error.message
+                        : 'Unknown error occurred',
+            };
+        }
     }
 }

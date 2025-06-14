@@ -40,6 +40,7 @@ export class MediaBuyingService {
     private metAdCreatorServices: Record<string, MetaAdCreatorService> = {};
     private LIFETIME_SPEND_THRESHOLD = 40;
     private LIFETIME_ROI_SCALING_THRESHOLD = 1.5;
+    private LIFETIME_SPEND_THRESHOLD_FOR_HOOKS_USD = 50;
     private LIFETIME_ROI_HOOK_THRESHOLD = 1.3;
     private LIFETIME_TRELLO_CARD_CREATION_THRESHOLD = 1.3;
 
@@ -49,173 +50,6 @@ export class MediaBuyingService {
         private readonly telegramService: TelegramService,
         private readonly trelloService: TrelloService
     ) {}
-
-    // async handleAdPerformanceUpdates() {
-    //     const [
-    //         bqPerformanceLast3Days,
-    //         bqPerformanceLast7Days,
-    //         bqPerformanceLifetime,
-    //         firestoreAdPerformances,
-    //     ] = await Promise.all([
-    //         this.bigQueryService.getAdPerformance('AD_PERFORMANCE_3D'),
-    //         this.bigQueryService.getAdPerformance('AD_PERFORMANCE_7D'),
-    //         this.bigQueryService.getAdPerformance('AD_PERFORMANCE_LIFETIME'),
-    //         getAdPerformanceFirestoreAll(),
-    //     ]);
-
-    //     for (const adPerformance of firestoreAdPerformances) {
-    //         console.log('Processing ad performance:', adPerformance.fbAdId);
-    //         await this.processSingleAdPerformance(
-    //             adPerformance,
-    //             bqPerformanceLast3Days,
-    //             bqPerformanceLast7Days,
-    //             bqPerformanceLifetime
-    //         );
-    //     }
-    // }
-
-    // private async processSingleAdPerformance(
-    //     adPerformance: AdPerformance,
-    //     bqMetrics3d: AdPerformanceDataBigQuery[],
-    //     bqMetrics7d: AdPerformanceDataBigQuery[],
-    //     bqMetricsLifetime: AdPerformanceDataBigQuery[]
-    // ) {
-    //     const fbAdId = adPerformance.fbAdId;
-
-    //     if (!fbAdId) {
-    //         console.log(
-    //             `Ad ${adPerformance.adName} has no fbAdId, skipping processing. It was uploaded manually.`
-    //         );
-    //         return;
-    //     }
-
-    //     console.log(
-    //         `Processing ad - ID: ${fbAdId}, Name: ${
-    //             adPerformance.adName
-    //         }, Active Status: ${
-    //             adPerformance.fbIsActive ? 'Active' : 'Inactive'
-    //         }`
-    //     );
-
-    //     if (!adPerformance.fbIsActive) {
-    //         console.log(
-    //             `Ad ${adPerformance.fbAdId} is not active, skipping processing`
-    //         );
-    //         return;
-    //     }
-    //     console.log(`Processing active ad ${adPerformance.fbAdId}`);
-
-    //     adPerformance.performanceMetrics = this.buildPerformanceMetrics(
-    //         fbAdId,
-    //         bqMetrics3d,
-    //         bqMetrics7d,
-    //         bqMetricsLifetime
-    //     );
-
-    //     await saveAdPerformanceFirestore(fbAdId, adPerformance);
-
-    //     const fbLifetimeSpend =
-    //         adPerformance.performanceMetrics.fb?.lifetime?.spend ?? 0;
-    //     if (fbLifetimeSpend < this.LIFETIME_SPEND_THRESHOLD) {
-    //         console.log(
-    //             `Ad ${fbAdId} below spend threshold. Spend: ${fbLifetimeSpend}`
-    //         );
-    //         return;
-    //     }
-
-    //     const fbAccountId = adPerformance.fbAccountId;
-    //     invariant(fbAccountId, 'fbAccountId must be defined');
-
-    //     const metaService = await this.getMetaAdCreatorService(fbAccountId);
-    //     await this.handlePerformanceBasedActions(
-    //         adPerformance,
-    //         metaService,
-    //         this.telegramService,
-    //         this.trelloService
-    //     );
-    // }
-
-    // async handlePerformanceBasedActions(
-    //     adPerformance: AdPerformance,
-    //     metaAdCreatorService: MetaAdCreatorService,
-    //     telegramService: TelegramService,
-    //     trelloService: TrelloService
-    // ) {
-    //     const fbRoiLifetime =
-    //         adPerformance.performanceMetrics.fb?.lifetime?.revenue /
-    //         adPerformance.performanceMetrics.fb?.lifetime?.spend;
-    //     const fbRoiLast3Days =
-    //         adPerformance.performanceMetrics.fb?.last3Days?.revenue /
-    //         adPerformance.performanceMetrics.fb?.last3Days?.spend;
-
-    //     const leadsLifetime =
-    //         adPerformance.performanceMetrics.fb?.lifetime?.leads ?? 0;
-
-    //     //         // Underperforming ad
-    //     //         if (fbRoiLifetime < 1 || fbRoiLast3Days < 1) {
-    //     //             const message = `
-    //     // Consider pausing this ad because the ROI was under 1.00X
-
-    //     // ${this.createMessageWithAdPerformanceInfo(adPerformance)}`;
-
-    //     //             await telegramService.sendMessage(
-    //     //                 telegramService.mediaBuyerChatIds[mediaBuyer],
-    //     //                 message
-    //     //             );
-    //     //             // TODO: Remove this after testing
-    //     //             await telegramService.sendMessage(
-    //     //                 telegramService.mediaBuyerChatIds['AZ'],
-    //     //                 message
-    //     //             );
-    //     //             return;
-    //     //         }
-
-    //     // Let ad run because its profitable, but dont create hooks, tello card, or scale.
-    //     if (
-    //         fbRoiLifetime < this.LIFETIME_ROI_SCALING_THRESHOLD &&
-    //         leadsLifetime > 1
-    //     ) {
-    //         console.log(
-    //             `Ad ${
-    //                 adPerformance.fbAdId
-    //             } in profitable range (ROI: ${fbRoiLifetime.toFixed(2)}).`
-    //         );
-    //         return;
-    //     }
-    // }
-
-    //     private createMessageWithAdPerformanceInfo(
-    //         adPerformance: AdPerformance
-    //     ): string {
-    //         const lifetimeMetrics = adPerformance.performanceMetrics.fb?.lifetime;
-    //         const last3DaysMetrics = adPerformance.performanceMetrics.fb?.last3Days;
-    //         return `
-    // Ad Name: ${adPerformance.adName}
-    // Ad ID: ${adPerformance.fbAdId}
-    // Ad Set ID: ${adPerformance.fbAdSetId}
-    // Campaign ID: ${adPerformance.fbCampaignId}
-
-    // Last 3 Days:
-    // Spend: $${(last3DaysMetrics?.spend ?? 0).toFixed(2)}
-    // Revenue: $${(last3DaysMetrics?.revenue ?? 0).toFixed(2)}
-
-    // Lifetime:
-    // Spend: $${(lifetimeMetrics?.spend ?? 0).toFixed(2)}
-    // Revenue: $${(lifetimeMetrics?.revenue ?? 0).toFixed(2)}
-    // `;
-    //     }
-
-    // private async pauseUnderperformingAd(
-    //     adPerformance: AdPerformance,
-    //     metaAdCreatorService: MetaAdCreatorService
-    // ) {
-    //     await metaAdCreatorService.updateAdSetStatus(
-    //         adPerformance.fbAdSetId,
-    //         'PAUSED'
-    //     );
-    //     adPerformance.fbIsActive = false;
-    //     await saveAdPerformanceFirestore(adPerformance.fbAdId, adPerformance);
-    // }
 
     public async getFbAdSettings(
         fbAccountId: string,
@@ -452,6 +286,7 @@ export class MediaBuyingService {
      * Updates fbIsActive status for ads based on their current Facebook status
      * Updates performance metrics from BigQuery data
      * Searches across ALL configured ad accounts to find ads by name
+     * Creates hooks if needed
      */
     async handleFbAdSync(): Promise<void> {
         try {
@@ -521,6 +356,9 @@ export class MediaBuyingService {
 
             // Process each Firestore ad
             for (const firestoreAdPerformance of firestoreAdPerformances) {
+                if (firestoreAdPerformance.adName !== '115-O-MA-MA-MA') {
+                    continue;
+                }
                 try {
                     let needsUpdate = false;
                     let needsDocumentMigration = false;
@@ -563,9 +401,6 @@ export class MediaBuyingService {
                     } else if (firestoreAdPerformance.fbAdId) {
                         // Ad exists in Firestore but not found in Facebook - mark as inactive
                         if (firestoreAdPerformance.fbIsActive) {
-                            console.log(
-                                `Ad ${firestoreAdPerformance.adName} (${firestoreAdPerformance.fbAdId}) not found in Facebook, marking as inactive`
-                            );
                             firestoreAdPerformance.fbIsActive = false;
                             needsUpdate = true;
                         }
@@ -587,13 +422,15 @@ export class MediaBuyingService {
                         const newMetrics = JSON.stringify(updatedMetrics);
 
                         if (existingMetrics !== newMetrics) {
-                            console.log(
-                                `Updating performance metrics for ad ${firestoreAdPerformance.adName} (${firestoreAdPerformance.fbAdId})`
-                            );
                             firestoreAdPerformance.performanceMetrics =
                                 updatedMetrics;
                             needsUpdate = true;
                         }
+
+                        // Check if we can create hooks. If we can, create them.
+                        await this.handleCreateHooksIfNeeded(
+                            firestoreAdPerformance
+                        );
                     }
 
                     // Save to Firestore if any updates were made
@@ -638,5 +475,81 @@ export class MediaBuyingService {
             console.error('Error in handleAdStatusSync:', error);
             throw error;
         }
+    }
+
+    async handleCreateHooksIfNeeded(adPerformance: AdPerformance) {
+        const {
+            fbAdId,
+            fbAdSetId,
+            fbCampaignId,
+            fbAccountId,
+            hooksCreated = [],
+            fbIsActive,
+            hookWriter,
+            scriptWriter,
+            ideaWriter,
+            vertical,
+            adName,
+            performanceMetrics,
+        } = adPerformance;
+
+        if (
+            !fbAccountId ||
+            !fbIsActive ||
+            hooksCreated.length > 0 ||
+            !fbAdId ||
+            !fbAdSetId ||
+            hookWriter === MediaBuyerCodes.AZ
+        ) {
+            console.log(
+                `Skipping hook creation for ad ${adName} because it is not active or already has hooks or hook writer is AZ`
+            );
+            return;
+        }
+
+        const lifetimeFbMetrics = performanceMetrics.fb?.lifetime;
+        if (!lifetimeFbMetrics) {
+            console.log(
+                `Skipping hook creation for ad ${adName} because it has no lifetime metrics`
+            );
+            return;
+        }
+
+        const {
+            spend: spendLifetime,
+            revenue: revenueLifetime,
+            leads: leadsLifetime,
+            clicks: clicksLifetime,
+            partials: partialsLifetime,
+            engagements: engagementsLifetime,
+        } = lifetimeFbMetrics;
+        const isSpendSufficient =
+            spendLifetime > this.LIFETIME_SPEND_THRESHOLD_FOR_HOOKS_USD;
+        const aboveRoiThreshold =
+            revenueLifetime / spendLifetime >
+            this.LIFETIME_ROI_SCALING_THRESHOLD;
+
+        console.log({
+            spendLifetime,
+            revenueLifetime,
+            roi: revenueLifetime / spendLifetime,
+            roiThreshold: this.LIFETIME_ROI_SCALING_THRESHOLD,
+            spendThreshold: this.LIFETIME_SPEND_THRESHOLD_FOR_HOOKS_USD,
+            isSpendSufficient,
+            aboveRoiThreshold,
+        });
+
+        if (!isSpendSufficient || !aboveRoiThreshold) {
+            console.log(
+                `Skipping hook creation for ad ${adName} because it does not meet spend or ROI thresholds`
+            );
+            return;
+        }
+        const result =
+            await this.creatomateService.uploadToCreatomateWithHooksAll(
+                adPerformance.gDriveDownloadUrl,
+                adName,
+                fbAdId
+            );
     }
 }

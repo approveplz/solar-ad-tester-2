@@ -77,6 +77,15 @@ export const getViewUrlFromGdriveDownloadUrl = (url: string): string => {
     return `https://drive.google.com/file/d/${fileId}/view?usp=sharing`;
 };
 
+export const getDownloadUrlFromGdriveViewUrl = (url: string): string => {
+    const idMatch = url.match(/\/d\/([a-zA-Z0-9_-]{25,})/);
+    if (!idMatch) {
+        throw new Error('Invalid Google Drive view URL format');
+    }
+    const fileId = idMatch[1];
+    return `https://drive.google.com/uc?id=${fileId}&export=download`;
+};
+
 /**
  * Custom invariant function that preserves error messages in production
  * @param condition The condition to check
