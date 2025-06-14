@@ -4,6 +4,7 @@ import { MediaBuyerCodes, VerticalCodes } from './helpers.js';
 Targeting saved here does not include age or gender
 */
 export interface AdAccountConfigTargeting {
+    age_range?: [number, number];
     geo_locations?: {
         location_types: string[];
         location_cluster_ids?: Array<{ key: string }>;
@@ -20,7 +21,11 @@ export interface AdAccountConfigTargeting {
         custom_audience: number;
     };
     targeting_automation?: {
-        advantage_audience: number;
+        advantage_audience?: number;
+        individual_setting?: {
+            age?: number; // If 1, meta can show ads above your age max
+            gender?: number; // If 1, meta can show ads to other genders
+        };
     };
 }
 
@@ -99,6 +104,7 @@ export const AD_ACCOUNT_DATA: AdAccountConfigData = {
         },
         scalingCampaignId: '',
         targeting: {
+            age_range: [35, 65],
             geo_locations: {
                 countries: ['US'],
                 location_types: ['home', 'recent'],
@@ -127,6 +133,13 @@ export const AD_ACCOUNT_DATA: AdAccountConfigData = {
             targeting_relaxation_types: {
                 lookalike: 0,
                 custom_audience: 0,
+            },
+            targeting_automation: {
+                advantage_audience: 1,
+                individual_setting: {
+                    age: 1,
+                    gender: 0,
+                },
             },
         },
         pageIds: {
@@ -171,6 +184,9 @@ export const AD_ACCOUNT_DATA: AdAccountConfigData = {
                 lookalike: 0,
                 custom_audience: 0,
             },
+            targeting_automation: {
+                advantage_audience: 1,
+            },
         },
     },
     '544026081801735': {
@@ -208,6 +224,9 @@ export const AD_ACCOUNT_DATA: AdAccountConfigData = {
             targeting_relaxation_types: {
                 lookalike: 0,
                 custom_audience: 0,
+            },
+            targeting_automation: {
+                advantage_audience: 1,
             },
         },
     },

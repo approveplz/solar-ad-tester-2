@@ -67,6 +67,7 @@ export interface FbApiGeoLocations {
 export interface FbApiAdSetTargeting {
     age_max: number;
     age_min: number;
+    age_range?: [number, number];
     // 1 for male, 2 for female
     genders?: string[];
     excluded_custom_audiences?: { id: string }[];
@@ -82,7 +83,11 @@ export interface FbApiAdSetTargeting {
     brand_safety_content_filter_levels?: string[];
     targeting_automation?: {
         // 1 for true
-        advantage_audience: number;
+        advantage_audience?: number;
+        individual_setting?: {
+            age?: number; // If 1, meta can show ads above your age max
+            gender?: number; // If 1, meta can show ads to other genders
+        };
     };
     targeting_relaxation_types?: {
         lookalike: number;
