@@ -356,9 +356,6 @@ export class MediaBuyingService {
 
             // Process each Firestore ad
             for (const firestoreAdPerformance of firestoreAdPerformances) {
-                if (firestoreAdPerformance.adName !== '115-O-MA-MA-MA') {
-                    continue;
-                }
                 try {
                     let needsUpdate = false;
                     let needsDocumentMigration = false;
