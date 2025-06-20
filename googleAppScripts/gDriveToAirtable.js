@@ -68,7 +68,9 @@ function main() {
 }
 
 function processFileName(fileName) {
-    const fileParts = fileName.split('-');
+    // Remove file extension first
+    const nameWithoutExtension = fileName.replace(/\.[^/.]+$/, '');
+    const fileParts = nameWithoutExtension.split('-');
     const [vertical, scriptWriter, ideaWriter, hookWriter, other] = fileParts;
     return {
         vertical,
