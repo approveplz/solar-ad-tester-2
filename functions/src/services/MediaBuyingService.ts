@@ -548,5 +548,38 @@ export class MediaBuyingService {
                 adName,
                 fbAdId
             );
+
+        // Send Telegram notification to AZ about hook creation
+        try {
+            const azChatId =
+                this.telegramService.mediaBuyerChatIds[MediaBuyerCodes.AZ];
+            const message = `🎯 **Hook Created Successfully!**
+
+📊 **Ad Details:**
+• Ad Name: ${adName}
+• FB Ad ID: ${fbAdId}
+• Vertical: ${vertical || 'N/A'}
+
+💰 **Performance Metrics:**
+• Lifetime Spend: $${spendLifetime.toFixed(2)}
+• Lifetime Revenue: $${revenueLifetime.toFixed(2)}
+• ROI: ${((revenueLifetime / spendLifetime) * 100).toFixed(1)}%
+• Leads: ${leadsLifetime}
+• Clicks: ${clicksLifetime}
+• Engagements: ${engagementsLifetime}
+
+✅ Hook creation process has been initiated for this high-performing ad!`;
+
+            await this.telegramService.sendMessage(azChatId, message);
+            console.log(
+                `Successfully sent hook creation notification to AZ for ad ${adName}`
+            );
+        } catch (telegramError) {
+            console.error(
+                `Failed to send Telegram notification to AZ for ad ${adName}:`,
+                telegramError
+            );
+            // Don't fail the entire process if Telegram notification fails
+        }
     }
 }
