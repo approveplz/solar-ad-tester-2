@@ -57,7 +57,6 @@ enum AspectRatio {
     Horizontal = 'horizontal',
     Square = 'square',
 }
-// const creatomateService = await CreatomateService.create(apiKey);
 
 export interface CreatomateWebhookResult {
     success: boolean;
@@ -71,6 +70,7 @@ export interface CreatomateWebhookPayload {
     metadata: string;
 }
 
+//Init like this: const creatomateService = await CreatomateService.create(apiKey);
 export class CreatomateService {
     private readonly apiKey: string;
     private readonly hooks: Hook[];

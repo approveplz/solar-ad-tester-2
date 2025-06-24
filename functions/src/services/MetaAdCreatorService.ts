@@ -486,7 +486,6 @@ export default class MetaAdCreatorService {
             adId: string;
             adName: string;
             status: string;
-            mediaBuyer: MediaBuyerCodes | string;
         }>
     > {
         console.log(
@@ -525,7 +524,6 @@ export default class MetaAdCreatorService {
                 adId: ad.id,
                 adName: ad._data.name,
                 status: ad._data.effective_status,
-                mediaBuyer: '',
             }));
 
             console.log(
@@ -633,5 +631,115 @@ export default class MetaAdCreatorService {
             status: { video_status: string };
         };
         return data.status['video_status'];
+    }
+
+    /**
+     * Gets the creative media URL from a Facebook ad
+     * @param fbAdId - The Facebook ad ID
+     * @returns The media URL (video or image)
+     */
+    async getCreativeMediaUrl(fbAdId: string): Promise<string> {
+        const FB_BASE_URL = 'https://www.facebook.com';
+        try {
+            // Get ad details
+            const ad = new Ad(fbAdId);
+            const adData = await ad.read(['creative']);
+
+            if (!adData.creative) {
+                throw new Error(`No creative found for ad ${fbAdId}`);
+            }
+
+            // Get creative details with multiple possible fields
+            const creative = new AdCreative(adData.creative.id);
+            const creativeData = await creative.read([
+                'object_story_spec',
+                'object_type',
+                'object_url',
+                'template_url',
+                'image_url',
+                'video_id',
+                'body',
+                'title',
+                'name',
+            ]);
+
+            console.log(
+                `Creative data structure for ${fbAdId}:`,
+                JSON.stringify(creativeData, null, 2)
+            );
+
+            let rawUrl = '';
+
+            // Check object_story_spec first (most common)
+            if (creativeData.object_story_spec) {
+                const spec = creativeData.object_story_spec;
+
+                // Video ad
+                if (spec.video_data?.video_id) {
+                    const video = new AdVideo(spec.video_data.video_id);
+                    const videoData = await video.read([
+                        'source',
+                        'permalink_url',
+                    ]);
+                    rawUrl = videoData.permalink_url || videoData.source || '';
+                }
+                // Image ad with hash
+                else if (spec.link_data?.image_hash) {
+                    const images = await this.adAccount.getAdImages(
+                        ['url', 'permalink_url'],
+                        { hashes: [spec.link_data.image_hash] }
+                    );
+                    if (images?.[0]) {
+                        rawUrl = images[0].permalink_url || images[0].url || '';
+                    }
+                }
+                // Image ad with direct URL
+                else if (spec.link_data?.image_url) {
+                    rawUrl = spec.link_data.image_url;
+                }
+                // Photo data
+                else if (spec.photo_data?.url) {
+                    rawUrl = spec.photo_data.url;
+                }
+            }
+
+            // Fallback: Check direct video_id field
+            if (!rawUrl && creativeData.video_id) {
+                const video = new AdVideo(creativeData.video_id);
+                const videoData = await video.read(['source', 'permalink_url']);
+                rawUrl = videoData.permalink_url || videoData.source || '';
+            }
+
+            // Fallback: Check other direct fields
+            if (!rawUrl) {
+                rawUrl =
+                    creativeData.image_url ||
+                    creativeData.template_url ||
+                    creativeData.object_url ||
+                    '';
+            }
+
+            if (!rawUrl) {
+                console.warn(
+                    `No media URL found for ad ${fbAdId} with creative ${adData.creative.id}`
+                );
+                console.warn(
+                    `Available creative fields:`,
+                    Object.keys(creativeData)
+                );
+                return '';
+            }
+
+            // Return absolute URL
+            return rawUrl.startsWith('http')
+                ? rawUrl
+                : `${FB_BASE_URL}${rawUrl}`;
+        } catch (error) {
+            console.error(
+                `Error getting creative media URL for ad ${fbAdId}:`,
+                error
+            );
+            return '';
+        }
     }
 }

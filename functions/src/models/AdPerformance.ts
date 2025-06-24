@@ -25,7 +25,7 @@ export interface AdPerformance {
     vertical: string;
     gDriveDownloadUrl: string;
     adName: string;
-    fbAdId?: string;
+    fbAdId: string;
     fbAdSetId?: string;
     fbCampaignId?: string;
     fbAccountId?: string;

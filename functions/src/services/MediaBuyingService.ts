@@ -21,13 +21,19 @@ import {
     setEventFirestore,
     getFbAdSettingFirestore,
 } from '../firestoreCloud.js';
-import { invariant, getAccountIdFromVertical } from '../helpers.js';
+import {
+    invariant,
+    getAccountIdFromVertical,
+    parseAdName,
+    isVideoUrl,
+} from '../helpers.js';
 import { TelegramService } from './TelegramService.js';
 import { TrelloService } from './TrelloService.js';
 import {
     getAdName,
     getNextWeekdayUnixSeconds,
     MediaBuyerCodes,
+    VerticalCodes,
 } from '../helpers.js';
 import { ZipcodeObj } from './ZipcodeService.js';
 import { ZipcodeService } from './ZipcodeService.js';
@@ -290,9 +296,6 @@ export class MediaBuyingService {
      */
     async handleFbAdSync(): Promise<void> {
         try {
-            console.log('Starting ad status and performance synchronization');
-
-            // Get BigQuery performance data and Firestore ad performances in parallel
             const [
                 bqPerformanceLast3Days,
                 bqPerformanceLast7Days,
@@ -307,34 +310,41 @@ export class MediaBuyingService {
                 getAdPerformanceFirestoreAll(),
             ]);
 
-            // Get all configured account IDs
-            const allAccountIds = Object.keys(AD_ACCOUNT_DATA);
-            console.log(
-                `Fetching ads from ${
-                    allAccountIds.length
-                } configured Facebook ad accounts: ${allAccountIds.join(', ')}`
+            const ozempicAccountIds = Object.keys(AD_ACCOUNT_DATA).filter(
+                (accountId) =>
+                    AD_ACCOUNT_DATA[accountId as keyof typeof AD_ACCOUNT_DATA]
+                        .type === 'O'
             );
 
-            // Fetch Facebook ads from all accounts
-            const allFbAds = [];
-            for (const accountId of allAccountIds) {
+            // Pre-create all MetaAdCreatorService instances we'll need
+            const metaServices: Record<string, MetaAdCreatorService> = {};
+            for (const accountId of ozempicAccountIds) {
+                metaServices[accountId] = await this.getMetaAdCreatorService(
+                    accountId
+                );
+            }
+
+            const allOzempicFbAds: {
+                adId: string;
+                adName: string;
+                adSetId: string;
+                campaignId: string;
+                accountId: string;
+                status: string;
+            }[] = [];
+            for (const accountId of ozempicAccountIds) {
                 try {
-                    const metaService = await this.getMetaAdCreatorService(
-                        accountId
-                    );
+                    const metaService = metaServices[accountId];
                     const fbAds = await metaService.getAllAdsForCurrentAccount(
                         false
                     ); // false = get all ads, not just active
-                    console.log(
-                        `Retrieved ${fbAds.length} ads from Facebook account: ${accountId}`
-                    );
 
                     // Add account ID to each ad for reference and add to results
                     const adsWithAccountId = fbAds.map((fbAd) => ({
                         ...fbAd,
                         accountId: accountId,
                     }));
-                    allFbAds.push(...adsWithAccountId);
+                    allOzempicFbAds.push(...adsWithAccountId);
                 } catch (error) {
                     console.error(
                         `Error fetching ads from account ${accountId}:`,
@@ -344,69 +354,35 @@ export class MediaBuyingService {
                 }
             }
 
-            console.log(
-                `Total Facebook ads retrieved across all accounts: ${allFbAds.length}`
-            );
-
-            // Create comprehensive map for Facebook ads by name across all accounts
-            const fbAdsByName: { [adName: string]: any } = {};
-            for (const fbAd of allFbAds) {
-                fbAdsByName[fbAd.adName] = fbAd;
+            // Create comprehensive map for Firestore ads by adName for quick lookup
+            const firestoreAdsById: { [adId: string]: AdPerformance } = {};
+            for (const firestoreAd of firestoreAdPerformances) {
+                firestoreAdsById[firestoreAd.fbAdId] = firestoreAd;
             }
 
-            // Process each Firestore ad
-            for (const firestoreAdPerformance of firestoreAdPerformances) {
+            // Process all Facebook ads - either update existing or create new Firestore entries
+            for (const fbAd of allOzempicFbAds) {
                 try {
-                    let needsUpdate = false;
-                    let needsDocumentMigration = false;
+                    const currentFbIsActive = fbAd.status === 'ACTIVE';
+                    const existingFirestoreAd = firestoreAdsById[fbAd.adId];
 
-                    // Search for Facebook ad by adName across all accounts
-                    const fbAd = fbAdsByName[firestoreAdPerformance.adName];
+                    if (existingFirestoreAd) {
+                        // Update existing Firestore entry
+                        let needsUpdate = false;
 
-                    if (fbAd) {
-                        // Update or populate Facebook details
-                        const currentFbStatus = fbAd.status === 'ACTIVE';
-
-                        if (!firestoreAdPerformance.fbAdId) {
-                            // Populate missing Facebook details
+                        // Update status if changed (for ads that already have fbAdId)
+                        if (
+                            existingFirestoreAd.fbIsActive !== currentFbIsActive
+                        ) {
                             console.log(
-                                `Found Facebook ad for ${firestoreAdPerformance.adName}, populating details: Account: ${fbAd.accountId}, FB Ad ID: ${fbAd.adId}, FB Ad Set ID: ${fbAd.adSetId}, FB Campaign ID: ${fbAd.campaignId}`
+                                `Updating is active status for ad ${existingFirestoreAd.adName} (${existingFirestoreAd.fbAdId}): ${existingFirestoreAd.fbIsActive} -> ${currentFbIsActive}`
                             );
-
-                            firestoreAdPerformance.fbAccountId = fbAd.accountId;
-                            firestoreAdPerformance.fbAdId = fbAd.adId;
-                            firestoreAdPerformance.fbAdSetId = fbAd.adSetId;
-                            firestoreAdPerformance.fbCampaignId =
-                                fbAd.campaignId;
-                            firestoreAdPerformance.fbIsActive = currentFbStatus;
-                            needsUpdate = true;
-                            needsDocumentMigration = true;
-                        } else {
-                            // Update status if changed (for ads that already have fbAdId)
-                            if (
-                                firestoreAdPerformance.fbIsActive !==
-                                currentFbStatus
-                            ) {
-                                console.log(
-                                    `Updating status for ad ${firestoreAdPerformance.adName} (${firestoreAdPerformance.fbAdId}): ${firestoreAdPerformance.fbIsActive} -> ${currentFbStatus}`
-                                );
-                                firestoreAdPerformance.fbIsActive =
-                                    currentFbStatus;
-                                needsUpdate = true;
-                            }
-                        }
-                    } else if (firestoreAdPerformance.fbAdId) {
-                        // Ad exists in Firestore but not found in Facebook - mark as inactive
-                        if (firestoreAdPerformance.fbIsActive) {
-                            firestoreAdPerformance.fbIsActive = false;
+                            existingFirestoreAd.fbIsActive = currentFbIsActive;
                             needsUpdate = true;
                         }
-                    }
 
-                    // Update performance metrics from BigQuery (only if we have fbAdId)
-                    if (firestoreAdPerformance.fbAdId) {
                         const updatedMetrics = this.buildPerformanceMetrics(
-                            firestoreAdPerformance.fbAdId,
+                            existingFirestoreAd.fbAdId,
                             bqPerformanceLast3Days,
                             bqPerformanceLast7Days,
                             bqPerformanceLifetime
@@ -414,53 +390,149 @@ export class MediaBuyingService {
 
                         // Check if performance metrics have changed
                         const existingMetrics = JSON.stringify(
-                            firestoreAdPerformance.performanceMetrics
+                            existingFirestoreAd.performanceMetrics
                         );
                         const newMetrics = JSON.stringify(updatedMetrics);
 
                         if (existingMetrics !== newMetrics) {
-                            firestoreAdPerformance.performanceMetrics =
+                            existingFirestoreAd.performanceMetrics =
                                 updatedMetrics;
                             needsUpdate = true;
                         }
 
                         // Check if we can create hooks. If we can, create them.
-                        await this.handleCreateHooksIfNeeded(
-                            firestoreAdPerformance
-                        );
-                    }
+                        // await this.handleCreateHooksIfNeeded(
+                        //     existingFirestoreAd
+                        // );
 
-                    // Save to Firestore if any updates were made
-                    if (needsUpdate) {
-                        if (
-                            needsDocumentMigration &&
-                            firestoreAdPerformance.fbAdId
-                        ) {
-                            // Migrate document: delete old document with adName ID, create new with fbAdId
-                            console.log(
-                                `Migrating document from ${firestoreAdPerformance.adName} to ${firestoreAdPerformance.fbAdId}`
-                            );
+                        // Save to Firestore if any updates were made
+                        if (needsUpdate) {
+                            // Regular update using fbAdId as document ID
                             await saveAdPerformanceFirestore(
-                                firestoreAdPerformance.fbAdId,
-                                firestoreAdPerformance
-                            );
-                            await deleteAdPerformanceFirestore(
-                                firestoreAdPerformance.adName
-                            );
-                        } else {
-                            // Regular update using existing document ID
-                            const docId =
-                                firestoreAdPerformance.fbAdId ||
-                                firestoreAdPerformance.adName;
-                            await saveAdPerformanceFirestore(
-                                docId,
-                                firestoreAdPerformance
+                                existingFirestoreAd.fbAdId,
+                                existingFirestoreAd
                             );
                         }
+                    } else {
+                        // Create new Firestore entry for Facebook ad that doesn't exist
+                        console.log(
+                            `Creating new Firestore entry for Facebook ad: ${fbAd.adName} (${fbAd.adId}) from account ${fbAd.accountId}`
+                        );
+
+                        // Build performance metrics for this ad
+                        const performanceMetrics = this.buildPerformanceMetrics(
+                            fbAd.adId,
+                            bqPerformanceLast3Days,
+                            bqPerformanceLast7Days,
+                            bqPerformanceLifetime
+                        );
+
+                        // Get vertical from account config instead of parsing ad name
+                        const vertical =
+                            AD_ACCOUNT_DATA[
+                                fbAd.accountId as keyof typeof AD_ACCOUNT_DATA
+                            ]?.type || '';
+
+                        let scriptWriter = '';
+                        let ideaWriter = '';
+                        let hookWriter = '';
+
+                        try {
+                            const parsed = parseAdName(fbAd.adName);
+                            scriptWriter = parsed.scriptWriter;
+                            ideaWriter = parsed.ideaWriter;
+                            hookWriter = parsed.hookWriter;
+                        } catch (error) {
+                            console.log(
+                                `Failed to parse ad name: ${fbAd.adName}`,
+                                error
+                            );
+                        }
+
+                        let gDriveDownloadUrl = '';
+                        try {
+                            const metaService = metaServices[fbAd.accountId];
+                            const mediaUrl =
+                                await metaService.getCreativeMediaUrl(
+                                    fbAd.adId
+                                );
+                            if (mediaUrl) {
+                                gDriveDownloadUrl = mediaUrl;
+                            }
+                        } catch (mediaError) {
+                            console.error(
+                                `Error getting media URL for new ad ${fbAd.adName}:`,
+                                mediaError
+                            );
+                        }
+
+                        // Create new AdPerformance object
+                        const newAdPerformance: AdPerformance = {
+                            adName: fbAd.adName,
+                            fbAdId: fbAd.adId,
+                            fbAdSetId: fbAd.adSetId,
+                            fbCampaignId: fbAd.campaignId,
+                            fbAccountId: fbAd.accountId,
+                            fbIsActive: currentFbIsActive,
+                            vertical: vertical as VerticalCodes,
+                            gDriveDownloadUrl: gDriveDownloadUrl,
+                            ideaWriter: ideaWriter as MediaBuyerCodes,
+                            scriptWriter: scriptWriter as MediaBuyerCodes,
+                            hookWriter: hookWriter as MediaBuyerCodes,
+                            performanceMetrics,
+                            hooksCreated: [],
+                        };
+
+                        // Save to Firestore using fbAdId as document ID
+                        await saveAdPerformanceFirestore(
+                            fbAd.adId,
+                            newAdPerformance
+                        );
+
+                        console.log(
+                            `Successfully created Firestore entry for new ad: ${fbAd.adName} (${fbAd.adId})`
+                        );
                     }
                 } catch (adError) {
                     console.error(
-                        `Error processing ad ${firestoreAdPerformance.adName}:`,
+                        `Error processing Facebook ad ${fbAd.adName} (${fbAd.adId}):`,
+                        adError
+                    );
+                    // Continue with other ads even if one fails
+                }
+            }
+
+            // Handle Firestore ads that no longer exist in Facebook
+            for (const firestoreAd of firestoreAdPerformances) {
+                try {
+                    // All Firestore ads should have fbAdId
+                    if (!firestoreAd.fbAdId) {
+                        console.error(
+                            `ERROR: Firestore ad ${firestoreAd.adName} is missing fbAdId - this should not happen!`
+                        );
+                        continue;
+                    }
+
+                    // Check if this Firestore ad was found in our Facebook ads
+                    const fbAdExists = allOzempicFbAds.some(
+                        (fbAd) => fbAd.adId === firestoreAd.fbAdId
+                    );
+
+                    if (!fbAdExists && firestoreAd.fbIsActive) {
+                        // Ad exists in Firestore but not found in Facebook - mark as inactive
+                        console.log(
+                            `Marking ad ${firestoreAd.adName} (${firestoreAd.fbAdId}) as inactive - not found in Facebook`
+                        );
+                        firestoreAd.fbIsActive = false;
+
+                        await saveAdPerformanceFirestore(
+                            firestoreAd.fbAdId,
+                            firestoreAd
+                        );
+                    }
+                } catch (adError) {
+                    console.error(
+                        `Error checking Firestore ad ${firestoreAd.adName}:`,
                         adError
                     );
                     // Continue with other ads even if one fails
@@ -474,6 +546,28 @@ export class MediaBuyingService {
         }
     }
 
+    /**
+     * HOOK CREATION ASYNCHRONOUS FLOW
+     *
+     * This method initiates an asynchronous hook creation process that involves multiple services and handlers:
+     *
+     * FLOW OVERVIEW:
+     * 1. This method checks if an ad meets the criteria for hook creation (spend threshold, ROI threshold, etc.)
+     * 2. If criteria are met, it calls CreatomateService.uploadToCreatomateWithHooksAll() to start the process
+     * 3. Creatomate processes the video rendering asynchronously (takes several minutes)
+     * 4. When Creatomate finishes, it calls our webhook (handleCreatomateWebhookHttp in index.ts)
+     * 5. The webhook handler calls CreatomateService.handleWebhookCompletion() which creates an event document
+     *    in Firestore with pattern: 'events/creatomate_render:{renderId}'
+     * 6. The Firestore document creation triggers handleCreatomateRenderCompletion() (index.ts)
+     * 7. That handler uploads the completed video to Google Drive and updates this AdPerformance document's
+     *    hooksCreated array with the new hook name
+     *
+     * KEY POINTS:
+     * - This method returns immediately after starting the process - it doesn't wait for completion
+     * - The actual AdPerformance.hooksCreated array is updated later by handleCreatomateRenderCompletion
+     * - Multiple hooks are created in parallel (one for each hook template in Firebase Storage)
+     * - Each completed hook triggers a separate event and gets added to hooksCreated individually
+     */
     async handleCreateHooksIfNeeded(adPerformance: AdPerformance) {
         const {
             fbAdId,
@@ -489,6 +583,20 @@ export class MediaBuyingService {
             adName,
             performanceMetrics,
         } = adPerformance;
+
+        if (!adPerformance.gDriveDownloadUrl) {
+            console.log(
+                `Skipping hook creation for ad ${adName} because it has no media url saved in firestore`
+            );
+            return;
+        }
+
+        if (!isVideoUrl(adPerformance.gDriveDownloadUrl)) {
+            console.log(
+                `Skipping hook creation for ad ${adName} because it is not a video`
+            );
+            return;
+        }
 
         if (
             !fbAccountId ||
@@ -542,6 +650,10 @@ export class MediaBuyingService {
             );
             return;
         }
+
+        // START ASYNC HOOK CREATION PROCESS
+        // This call initiates the Creatomate rendering process but DOES NOT WAIT for completion.
+        // The actual AdPerformance.hooksCreated array will be updated later when the async process completes.
         const result =
             await this.creatomateService.uploadToCreatomateWithHooksAll(
                 adPerformance.gDriveDownloadUrl,
@@ -549,7 +661,8 @@ export class MediaBuyingService {
                 fbAdId
             );
 
-        // Send Telegram notification to AZ about hook creation
+        // Send Telegram notification about hook creation initiation
+        // Note: This notification is sent immediately after starting the process, not after completion
         try {
             const azChatId =
                 this.telegramService.mediaBuyerChatIds[MediaBuyerCodes.AZ];

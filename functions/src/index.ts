@@ -190,7 +190,9 @@ export const syncAdPerformance = onDocumentWritten(
         } catch (error) {
             console.error(
                 `Failed to sync document ${docId} (${data.adName}):`,
-                error
+                error,
+                'Full AdPerformance data structure:',
+                JSON.stringify(data, null, 2)
             );
             throw error;
         }
@@ -667,26 +669,6 @@ export const createFbAdHttp = onRequest(
                 );
             }
 
-            // Save performance data for all automation types
-            const adPerformance: AdPerformance = {
-                scriptId,
-                fbAccountId: accountId,
-                adName,
-                gDriveDownloadUrl: downloadUrl,
-                fbAdId,
-                fbAdSetId,
-                fbCampaignId: campaignId,
-                vertical,
-                ideaWriter,
-                scriptWriter,
-                hookWriter,
-                performanceMetrics: {},
-                fbIsActive,
-                mediaBuyer,
-                hooksCreated: [],
-            };
-
-            await saveAdPerformanceFirestore(adName, adPerformance);
 
             // Handle Airtable operations for all automation types when airtableRecordId is provided
             if (airtableRecordId) {
@@ -766,7 +748,6 @@ export const createFbAdHttp = onRequest(
 
             res.status(200).json({
                 success: true,
-                adPerformance,
             });
         } catch (error) {
             console.error('Error creating Facebook ad:', error);
@@ -1049,3 +1030,132 @@ export const redirectToGoogleAppscriptMoveCreativeToArchiveFolder = onRequest(
 //     );
 //     res.status(200).json({ success: true, result });
 // });
+
+// TEST FUNCTION: Iterate through all Ozempic (VerticalCodes.O) ad accounts and
+// attempt to fetch the creative media URL for a fixed Facebook Ad ID until one succeeds.
+// -------------------------------
+
+export const testGetCreativeMediaUrlHttp = onRequest(
+    { timeoutSeconds: 300 },
+    async (req: Request, res: Response) => {
+        // Extract ad_id from query parameters or request body
+        const fbAdId = (req.query.ad_id as string) || req.body.ad_id;
+
+        // Validate that ad_id is provided
+        if (!fbAdId) {
+            res.status(400).json({
+                success: false,
+                error: 'Missing required parameter: ad_id',
+            });
+            return;
+        }
+
+        console.log(
+            `Testing creative media URL retrieval for Facebook Ad ID: ${fbAdId}`
+        );
+
+        const triedAccounts: Array<{
+            accountId: string;
+            success: boolean;
+            mediaUrl?: string;
+            error?: string;
+        }> = [];
+
+        try {
+            for (const [accountId, config] of Object.entries(AD_ACCOUNT_DATA)) {
+                if (config.type !== VerticalCodes.O) continue; // Only Ozempic accounts
+
+                console.log(`Trying accountId: ${accountId}`);
+
+                try {
+                    const metaAdCreatorService = new MetaAdCreatorService({
+                        appId: process.env.FACEBOOK_APP_ID || '',
+                        appSecret: process.env.FACEBOOK_APP_SECRET || '',
+                        accessToken: process.env.FACEBOOK_ACCESS_TOKEN || '',
+                        accountId,
+                    });
+
+                    console.log(
+                        `Calling getCreativeMediaUrl for fbAdId: ${fbAdId} on account: ${accountId}`
+                    );
+                    const mediaUrl =
+                        await metaAdCreatorService.getCreativeMediaUrl(fbAdId);
+                    console.log(
+                        `getCreativeMediaUrl result for account ${accountId}:`,
+                        mediaUrl
+                    );
+
+                    if (mediaUrl) {
+                        triedAccounts.push({
+                            accountId,
+                            success: true,
+                            mediaUrl,
+                        });
+
+                        res.status(200).json({
+                            success: true,
+                            accountId,
+                            fbAdId,
+                            mediaUrl,
+                            triedAccounts,
+                        });
+                        return;
+                    }
+
+                    // If no media URL returned, record as failure with explanation
+                    triedAccounts.push({
+                        accountId,
+                        success: false,
+                        error: 'getCreativeMediaUrl returned null/undefined - ad may not exist in this account or may not have media attached',
+                    });
+                } catch (innerError) {
+                    console.error(
+                        `Error fetching creative for accountId ${accountId}:`,
+                        innerError
+                    );
+
+                    // Capture detailed error information
+                    let errorDetails = '';
+                    if (innerError instanceof Error) {
+                        errorDetails = `${innerError.name}: ${innerError.message}`;
+                        if (innerError.stack) {
+                            errorDetails += `\nStack: ${innerError.stack}`;
+                        }
+                    } else {
+                        errorDetails = String(innerError);
+                    }
+
+                    triedAccounts.push({
+                        accountId,
+                        success: false,
+                        error: errorDetails,
+                    });
+                }
+            }
+
+            // If we reach here, no account returned a media URL
+            res.status(404).json({
+                success: false,
+                message: 'Unable to retrieve media URL for any Ozempic account',
+                fbAdId,
+                triedAccounts,
+                errorSummary: triedAccounts
+                    .filter((acc) => !acc.success)
+                    .map((acc) => ({
+                        accountId: acc.accountId,
+                        error: acc.error,
+                    })),
+            });
+        } catch (error) {
+            console.error(
+                'Unexpected error in testGetCreativeMediaUrlHttp:',
+                error
+            );
+            res.status(500).json({
+                success: false,
+                error: error instanceof Error ? error.message : String(error),
+                triedAccounts,
+            });
+        }
+    }
+);

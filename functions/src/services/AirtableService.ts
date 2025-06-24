@@ -57,6 +57,7 @@ export class AirtableService {
             REVENUE: totalRevenueLifetime,
             SPEND: totalSpendLifetime,
             VERTICAL: adPerformance.vertical,
+            FB_AD_ID: adPerformance.fbAdId,
         };
     }
 
@@ -91,7 +92,7 @@ export class AirtableService {
             // Check if record exists
             const existingRecords = await this.airtableBase('AD_PERFORMANCE')
                 .select({
-                    filterByFormula: `{AD_NAME} = '${adPerformance.adName}'`,
+                    filterByFormula: `{FB_AD_ID} = '${adPerformance.fbAdId}'`,
                 })
                 .firstPage();
 
@@ -234,13 +235,19 @@ export class AirtableService {
         }
     }
 
-    // Remove undefined values to prevent Airtable errors
+    // Remove empty values to prevent Airtable errors
     private sanitizeFields(fields: object): object {
         console.log('Sanitizing fields:', fields);
         return Object.fromEntries(
-            Object.entries(fields).filter(
-                ([_, v]) => v !== undefined && v !== null
-            )
+            Object.entries(fields).filter(([key, value]) => {
+                // Filter out null, undefined, and empty strings
+                const isValidValue =
+                    value !== undefined &&
+                    value !== null &&
+                    !(typeof value === 'string' && value.trim() === '');
+
+                return isValidValue;
+            })
         );
     }
 }
