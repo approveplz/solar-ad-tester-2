@@ -28,8 +28,17 @@ export function parseAdName(adName: string): {
     }
 
     // Extract components (skip counter at index 0)
-    const [counter, vertical, scriptWriter, ideaWriter, hookWriter, ...rest] =
-        parts;
+    const [
+        counter,
+        vertical,
+        scriptWriter,
+        ideaWriter,
+        hookWriterRaw,
+        ...rest
+    ] = parts;
+
+    // Extract just the code part from hookWriter (ignore any additional text after spaces)
+    const hookWriter = hookWriterRaw.split(' ')[0];
 
     // Validate enum values
     if (!Object.values(VerticalCodes).includes(vertical as VerticalCodes)) {
