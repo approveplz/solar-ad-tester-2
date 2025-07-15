@@ -8,7 +8,8 @@ import {
     VerticalCodes,
     MediaBuyerCodes,
 } from './helpers.js';
-import serviceAccount from './solar-ad-tester-2-firebase-adminsdk-3iokc-bd8ce8732d.json' with { type: 'json' };
+// @ts-ignore: Import assertions are still valid syntax
+import serviceAccount from './solar-ad-tester-2-firebase-adminsdk-3iokc-bd8ce8732d.json' assert { type: 'json' };
 import { config } from 'dotenv';
 import MetaAdCreatorService from './services/MetaAdCreatorService.js';
 
