@@ -12,7 +12,13 @@ import {
     AdPerformanceDataBigQuery,
 } from './BigQueryService.js';
 import { CreatomateMetadata, CreatomateService } from './CreatomateService.js';
-import { AdPerformance, PerformanceMetrics } from '../models/AdPerformance.js';
+import {
+    AdPerformance,
+    PerformanceMetrics,
+    AdPerformanceByAdName,
+    PlatformMetrics,
+    TimeBasedMetrics,
+} from '../models/AdPerformance.js';
 import {
     getAdPerformanceFirestoreAll,
     saveAdPerformanceFirestore,
@@ -41,6 +47,7 @@ import { FbApiAdSetTargeting } from '../models/MetaApiSchema.js';
 import { downloadFileFromStorage } from '../firebaseStorageCloud.js';
 import { FbApiGeoLocations } from '../models/MetaApiSchema.js';
 import { AD_ACCOUNT_DATA } from '../adAccountConfig.js';
+import { saveAdPerformanceByAdNameFirestore } from '../firestoreCloud.js';
 
 export class MediaBuyingService {
     private metAdCreatorServices: Record<string, MetaAdCreatorService> = {};
@@ -310,11 +317,15 @@ export class MediaBuyingService {
                 getAdPerformanceFirestoreAll(),
             ]);
 
-            const ozempicAccountIds = Object.keys(AD_ACCOUNT_DATA).filter(
-                (accountId) =>
-                    AD_ACCOUNT_DATA[accountId as keyof typeof AD_ACCOUNT_DATA]
-                        .type === 'O'
-            );
+            // const ozempicAccountIds = Object.keys(AD_ACCOUNT_DATA).filter(
+            //     (accountId) =>
+            //         AD_ACCOUNT_DATA[accountId as keyof typeof AD_ACCOUNT_DATA]
+            //             .type === VerticalCodes.O
+            // );
+
+            const ozempicAccountIds = ['605772842474773', '822357702553382'];
+
+            console.log('ozempicAccountIds: ', ozempicAccountIds.join(', '));
 
             // Pre-create all MetaAdCreatorService instances we'll need
             const metaServices: Record<string, MetaAdCreatorService> = {};
@@ -443,9 +454,12 @@ export class MediaBuyingService {
                             ideaWriter = parsed.ideaWriter;
                             hookWriter = parsed.hookWriter;
                         } catch (error) {
-                            console.log(
-                                `Failed to parse ad name: ${fbAd.adName}`,
-                                error
+                            console.warn(
+                                `Failed to parse ad name: ${fbAd.adName} - ${
+                                    error instanceof Error
+                                        ? error.message
+                                        : String(error)
+                                }`
                             );
                         }
 
@@ -456,6 +470,7 @@ export class MediaBuyingService {
                                 await metaService.getCreativeMediaUrl(
                                     fbAd.adId
                                 );
+                            console.log('mediaUrl: ', mediaUrl);
                             if (mediaUrl) {
                                 gDriveDownloadUrl = mediaUrl;
                             }
@@ -463,6 +478,12 @@ export class MediaBuyingService {
                             console.error(
                                 `Error getting media URL for new ad ${fbAd.adName}:`,
                                 mediaError
+                            );
+                        }
+
+                        if (!gDriveDownloadUrl) {
+                            console.log(
+                                `No media URL found for ad ${fbAd.adName} - ${fbAd.adId}.`
                             );
                         }
 
@@ -490,7 +511,11 @@ export class MediaBuyingService {
                         );
 
                         console.log(
-                            `Successfully created Firestore entry for new ad: ${fbAd.adName} (${fbAd.adId})`
+                            `Successfully created Firestore entry for new ad: ${
+                                fbAd.adName
+                            } - ${fbAd.adId}. AdPerformance: ${JSON.stringify(
+                                newAdPerformance
+                            )}`
                         );
                     }
                 } catch (adError) {
@@ -693,6 +718,136 @@ export class MediaBuyingService {
                 telegramError
             );
             // Don't fail the entire process if Telegram notification fails
+        }
+    }
+
+    // Aggregates FB performance metrics by ad name and updates Firestore
+    public static async aggregateAdPerformanceByAdName(): Promise<void> {
+        console.log('Running aggregateAdPerformanceByAdName');
+        try {
+            const adPerformances = await getAdPerformanceFirestoreAll();
+            console.log(
+                `Fetched ${adPerformances.length} AdPerformance documents for aggregation`
+            );
+
+            const createEmptyTimeBasedMetrics = (): TimeBasedMetrics => ({
+                spend: 0,
+                revenue: 0,
+                leads: 0,
+                clicks: 0,
+                partials: 0,
+                engagements: 0,
+            });
+
+            interface AggregatedEntry extends AdPerformanceByAdName {
+                _docCount: number;
+            }
+
+            const aggregatedMap: Record<string, AggregatedEntry> = {};
+
+            const accumulateMetrics = (
+                dest: PlatformMetrics,
+                src?: PlatformMetrics
+            ) => {
+                if (!src) return;
+
+                // Accumulate last3Days
+                dest.last3Days.spend += src.last3Days?.spend || 0;
+                dest.last3Days.revenue += src.last3Days?.revenue || 0;
+                dest.last3Days.leads += src.last3Days?.leads || 0;
+                dest.last3Days.clicks += src.last3Days?.clicks || 0;
+                dest.last3Days.partials += src.last3Days?.partials || 0;
+                dest.last3Days.engagements += src.last3Days?.engagements || 0;
+
+                // Accumulate last7Days
+                dest.last7Days.spend += src.last7Days?.spend || 0;
+                dest.last7Days.revenue += src.last7Days?.revenue || 0;
+                dest.last7Days.leads += src.last7Days?.leads || 0;
+                dest.last7Days.clicks += src.last7Days?.clicks || 0;
+                dest.last7Days.partials += src.last7Days?.partials || 0;
+                dest.last7Days.engagements += src.last7Days?.engagements || 0;
+
+                // Accumulate lifetime
+                dest.lifetime.spend += src.lifetime?.spend || 0;
+                dest.lifetime.revenue += src.lifetime?.revenue || 0;
+                dest.lifetime.leads += src.lifetime?.leads || 0;
+                dest.lifetime.clicks += src.lifetime?.clicks || 0;
+                dest.lifetime.partials += src.lifetime?.partials || 0;
+                dest.lifetime.engagements += src.lifetime?.engagements || 0;
+            };
+
+            // Build aggregation
+            for (const adPerf of adPerformances) {
+                const { adName } = adPerf;
+                if (!adName) continue;
+
+                let entry = aggregatedMap[adName];
+                if (!entry) {
+                    entry = {
+                        adName,
+                        gDriveDownloadUrl: '',
+                        ideaWriter: '',
+                        scriptWriter: '',
+                        hookWriter: '',
+                        fbIsActive: false,
+                        performanceMetrics: {
+                            fb: {
+                                last3Days: createEmptyTimeBasedMetrics(),
+                                last7Days: createEmptyTimeBasedMetrics(),
+                                lifetime: createEmptyTimeBasedMetrics(),
+                            },
+                        },
+                        mediaBuyer: '',
+                        hooksCreated: [],
+                        _docCount: 0,
+                    } as AggregatedEntry;
+                    aggregatedMap[adName] = entry;
+                }
+
+                entry._docCount += 1;
+
+                // Capture metadata fields (first non-empty wins)
+                if (!entry.gDriveDownloadUrl && adPerf.gDriveDownloadUrl) {
+                    entry.gDriveDownloadUrl = adPerf.gDriveDownloadUrl;
+                }
+                if (!entry.ideaWriter && adPerf.ideaWriter) {
+                    entry.ideaWriter = adPerf.ideaWriter;
+                }
+                if (!entry.scriptWriter && adPerf.scriptWriter) {
+                    entry.scriptWriter = adPerf.scriptWriter;
+                }
+                if (!entry.hookWriter && adPerf.hookWriter) {
+                    entry.hookWriter = adPerf.hookWriter;
+                }
+
+                // OR logic for fbIsActive
+                entry.fbIsActive = entry.fbIsActive || !!adPerf.fbIsActive;
+
+                // Aggregate metrics
+                accumulateMetrics(
+                    entry.performanceMetrics.fb!,
+                    adPerf.performanceMetrics?.fb
+                );
+            }
+
+            // Persist to Firestore
+            const savePromises: Promise<unknown>[] = [];
+            for (const [adName, aggregated] of Object.entries(aggregatedMap)) {
+                delete (aggregated as Partial<AggregatedEntry>)._docCount;
+                savePromises.push(
+                    saveAdPerformanceByAdNameFirestore(adName, aggregated)
+                );
+            }
+
+            await Promise.all(savePromises);
+            console.log(
+                `Aggregated ${
+                    Object.keys(aggregatedMap).length
+                } ad names and updated Firestore`
+            );
+        } catch (error) {
+            console.error('Error in aggregateAdPerformanceByAdName:', error);
+            throw error;
         }
     }
 }

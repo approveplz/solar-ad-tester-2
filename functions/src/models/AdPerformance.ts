@@ -37,3 +37,15 @@ export interface AdPerformance {
     mediaBuyer?: MediaBuyerCodes | string;
     hooksCreated?: string[];
 }
+
+export interface AdPerformanceByAdName {
+    adName: string;
+    gDriveDownloadUrl: string;
+    ideaWriter: string;
+    scriptWriter: string;
+    hookWriter: string;
+    fbIsActive: boolean;
+    performanceMetrics: PerformanceMetrics;
+    mediaBuyer?: MediaBuyerCodes | string;
+    hooksCreated?: string[];
+}

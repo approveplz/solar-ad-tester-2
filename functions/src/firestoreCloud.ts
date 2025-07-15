@@ -2,7 +2,10 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { FbAdSettings } from './models/FbAdSettings.js';
 import { CreatedFbAdInfo } from './models/CreatedFbAdInfo.js';
 import { ParsedFbAdInfo } from './models/ParsedFbAdInfo.js';
-import { AdPerformance } from './models/AdPerformance.js';
+import {
+    AdPerformance,
+    AdPerformanceByAdName,
+} from './models/AdPerformance.js';
 import { ScrapedAdDataFirestore } from './models/ScrapedAdDataFirestore.js';
 import { VerticalCodes } from './helpers.js';
 
@@ -25,6 +28,8 @@ export const AD_PERFORMANCE_COLLECTION = 'ad-performance';
 export const TELEGRAM_SCRIPTS_COLLECTION = 'telegram-scripts';
 
 const EVENTS_COLLECTION = 'events';
+
+const AD_PERFORMANCE_BY_AD_NAME_COLLECTION = 'ad-performance-by-ad-name';
 
 // Interface for the script data
 export interface TelegramScriptData {
@@ -343,4 +348,64 @@ export async function saveFbAdFirestore(
         .collection(collectionName)
         .doc(scrapedFbAdInfo.adArchiveId)
         .set(data);
+}
+
+const AdPerformanceByAdNameDocConverter = {
+    toFirestore: (data: AdPerformanceByAdName) => data,
+    fromFirestore: (snap: FirebaseFirestore.QueryDocumentSnapshot) =>
+        snap.data() as AdPerformanceByAdName,
+};
+
+export async function getAdPerformanceByAdNameFirestoreById(
+    adName: string
+): Promise<AdPerformanceByAdName | null> {
+    try {
+        const db = getFirestore();
+        const docSnap = await db
+            .collection(AD_PERFORMANCE_BY_AD_NAME_COLLECTION)
+            .withConverter(AdPerformanceByAdNameDocConverter)
+            .doc(adName)
+            .get();
+
+        return docSnap.data() || null;
+    } catch (error) {
+        console.error(`Error getting ad performance by ad name for: ${adName}`);
+        console.error(error);
+        return null;
+    }
+}
+
+export async function getAdPerformanceByAdNameFirestoreAll(): Promise<
+    AdPerformanceByAdName[]
+> {
+    const db = getFirestore();
+    const snapshot = await db
+        .collection(AD_PERFORMANCE_BY_AD_NAME_COLLECTION)
+        .withConverter(AdPerformanceByAdNameDocConverter)
+        .get();
+
+    return snapshot.docs.map((doc) => doc.data());
+}
+
+export async function saveAdPerformanceByAdNameFirestore(
+    adName: string,
+    adPerformanceByAdName: AdPerformanceByAdName
+) {
+    console.log(`Saving ad performance by ad name for: ${adName}`);
+    const db = getFirestore();
+    return await db
+        .collection(AD_PERFORMANCE_BY_AD_NAME_COLLECTION)
+        .doc(adName)
+        .set(adPerformanceByAdName, { merge: true });
+}
+
+export async function deleteAdPerformanceByAdNameFirestore(adName: string) {
+    console.log(
+        `Deleting ad performance by ad name document with adName: ${adName}`
+    );
+    const db = getFirestore();
+    return await db
+        .collection(AD_PERFORMANCE_BY_AD_NAME_COLLECTION)
+        .doc(adName)
+        .delete();
 }

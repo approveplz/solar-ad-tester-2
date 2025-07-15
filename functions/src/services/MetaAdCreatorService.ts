@@ -61,7 +61,9 @@ export default class MetaAdCreatorService {
 
         this.adAccount = new AdAccount(`act_${this.accountId}`);
 
-        console.log('Initialized MetaAdCreatorService');
+        console.log(
+            `Initialized MetaAdCreatorService for account: ${this.accountId}`
+        );
     }
 
     async createCampaign(params: {
@@ -474,7 +476,7 @@ export default class MetaAdCreatorService {
 
     /**
      * Gets all ads for the current ad account with optional filter for active ads only
-     * using direct account-level API call (much more efficient - 1 API call vs dozens)
+     * using direct account-level API call with pagination to get ALL ads
      * @param onlyActive When true, returns only active ads; when false, returns all ads
      * @returns Array of ads with their campaign and ad set information
      */
@@ -495,12 +497,14 @@ export default class MetaAdCreatorService {
         );
 
         try {
-            // Use direct account-level API call to get all ads in 1 request
             const statusFilter = onlyActive
                 ? { effective_status: ['ACTIVE'] }
                 : {};
 
-            const ads = await this.adAccount.getAds(
+            const allAds: any[] = [];
+
+            // Get the first page of ads - Facebook SDK returns a Cursor object
+            let adsCursor = await this.adAccount.getAds(
                 [
                     'id',
                     'name',
@@ -509,15 +513,23 @@ export default class MetaAdCreatorService {
                     'adset_id',
                     'campaign_id',
                 ],
-                statusFilter
+                { limit: 100, ...statusFilter }
             );
 
+            allAds.push(...adsCursor);
+
+            // Paginate through remaining pages using the SDK's built-in pagination
+            while (adsCursor.hasNext()) {
+                adsCursor = await adsCursor.next();
+                allAds.push(...adsCursor);
+            }
+
             console.log(
-                `Retrieved ${ads.length} ads directly from account: ${this.accountId}`
+                `Retrieved total of ${allAds.length} ads from account: ${this.accountId}`
             );
 
             // Transform to expected format
-            const result = ads.map((ad) => ({
+            const result = allAds.map((ad) => ({
                 campaignId: ad._data.campaign_id,
                 adSetId: ad._data.adset_id,
                 adSetName: ad._data.adset_name,
@@ -663,11 +675,6 @@ export default class MetaAdCreatorService {
                 'name',
             ]);
 
-            console.log(
-                `Creative data structure for ${fbAdId}:`,
-                JSON.stringify(creativeData, null, 2)
-            );
-
             let rawUrl = '';
 
             // Check object_story_spec first (most common)
@@ -723,9 +730,9 @@ export default class MetaAdCreatorService {
                 console.warn(
                     `No media URL found for ad ${fbAdId} with creative ${adData.creative.id}`
                 );
-                console.warn(
-                    `Available creative fields:`,
-                    Object.keys(creativeData)
+                console.log(
+                    `Creative data structure for ${fbAdId}:`,
+                    creativeData
                 );
                 return '';
             }
@@ -735,7 +742,7 @@ export default class MetaAdCreatorService {
                 ? rawUrl
                 : `${FB_BASE_URL}${rawUrl}`;
         } catch (error) {
-            console.error(
+            console.warn(
                 `Error getting creative media URL for ad ${fbAdId}:`,
                 error
             );

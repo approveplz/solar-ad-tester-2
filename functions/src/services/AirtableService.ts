@@ -1,10 +1,21 @@
 import Airtable from 'airtable';
-import { AdPerformance, PlatformMetrics } from '../models/AdPerformance.js';
+import {
+    AdPerformance,
+    AdPerformanceByAdName,
+    PlatformMetrics,
+} from '../models/AdPerformance.js';
+
+interface FilterConfig {
+    field: string;
+    value: string;
+}
 
 export class AirtableService {
     private airtableBase: Airtable.Base;
     private apiKey: string;
     private baseId: string;
+    private AD_PERFORMANCE_TABLE_NAME = 'AD_PERFORMANCE';
+    private AD_PERFORMANCE_BY_AD_NAME_TABLE_NAME = 'AD_PERFORMANCE_BY_NAME';
 
     constructor(apiKey: string, baseId: string) {
         if (!apiKey || !baseId) {
@@ -18,6 +29,120 @@ export class AirtableService {
         this.airtableBase = new Airtable({
             apiKey: this.apiKey,
         }).base(this.baseId);
+    }
+
+    /**
+     * Generic method to update a record in any Airtable table
+     */
+    private async updateRecord(
+        tableName: string,
+        recordId: string,
+        fields: object
+    ): Promise<void> {
+        console.log(
+            `Attempting to update ${tableName} record with ID: ${recordId}`
+        );
+        try {
+            await this.airtableBase(tableName).update([
+                {
+                    id: recordId,
+                    fields: this.sanitizeFields(fields),
+                },
+            ]);
+            console.log(
+                `Successfully updated ${tableName} record: ${recordId}`
+            );
+        } catch (error) {
+            console.error(`Error updating ${tableName} record:`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * Generic method to create a record in any Airtable table
+     */
+    private async createRecord(
+        tableName: string,
+        fields: object
+    ): Promise<string> {
+        console.log(`Creating new record in ${tableName} table`);
+        try {
+            const sanitizedFields = this.sanitizeFields(fields);
+            const records = await this.airtableBase(tableName).create([
+                { fields: sanitizedFields },
+            ]);
+
+            if (!records || records.length === 0) {
+                throw new Error(
+                    `Failed to create ${tableName} record: No record returned`
+                );
+            }
+
+            const recordId = records[0].id;
+            console.log(
+                `Successfully created ${tableName} record with ID: ${recordId}`
+            );
+            return recordId;
+        } catch (error) {
+            console.error(`Error creating ${tableName} record:`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * Generic method to find existing records based on filter criteria
+     */
+    private async findExistingRecord(
+        tableName: string,
+        filterConfig: FilterConfig
+    ): Promise<Airtable.Record<any> | null> {
+        try {
+            const existingRecords = await this.airtableBase(tableName)
+                .select({
+                    filterByFormula: `{${filterConfig.field}} = '${filterConfig.value}'`,
+                })
+                .firstPage();
+
+            return existingRecords.length > 0 ? existingRecords[0] : null;
+        } catch (error) {
+            console.error(
+                `Error finding existing record in ${tableName}:`,
+                error
+            );
+            throw error;
+        }
+    }
+
+    /**
+     * Generic method to create or update a record based on existence
+     */
+    private async createOrUpdateRecord(
+        tableName: string,
+        fields: object,
+        filterConfig: FilterConfig,
+        itemName: string
+    ): Promise<void> {
+        try {
+            const existingRecord = await this.findExistingRecord(
+                tableName,
+                filterConfig
+            );
+
+            if (existingRecord) {
+                console.log(
+                    `Record found. Updating ${tableName} record for: ${itemName}`
+                );
+                await this.updateRecord(tableName, existingRecord.id, fields);
+            } else {
+                console.log(
+                    `No existing ${tableName} record found. Creating a new record for: ${itemName}`
+                );
+                await this.createRecord(tableName, fields);
+            }
+        } catch (error) {
+            console.error(`Error syncing to ${tableName}:`, error);
+            throw error;
+        }
     }
 
     public mapAdPerformanceToAirtableFieldsAdPerformance(
@@ -61,61 +186,83 @@ export class AirtableService {
         };
     }
 
-    public async updateRecordAdPerformance(
-        recordId: string,
-        fields: object
-    ): Promise<void> {
-        console.log(
-            `Attempting to update Airtable record with ID: ${recordId}`
-        );
-        try {
-            await this.airtableBase('AD_PERFORMANCE').update([
-                {
-                    id: recordId,
-                    fields: this.sanitizeFields(fields),
-                },
-            ]);
-            console.log(`Successfully updated Airtable record: ${recordId}`);
-        } catch (error) {
-            console.error('Error updating Airtable record:', error);
-            throw error;
-        }
-    }
-
     public async createOrUpdateRecordAdPerformance(
         adPerformance: AdPerformance
     ): Promise<void> {
         const fields =
             this.mapAdPerformanceToAirtableFieldsAdPerformance(adPerformance);
+        const filterConfig: FilterConfig = {
+            field: 'FB_AD_ID',
+            value: adPerformance.fbAdId,
+        };
 
-        try {
-            // Check if record exists
-            const existingRecords = await this.airtableBase('AD_PERFORMANCE')
-                .select({
-                    filterByFormula: `{FB_AD_ID} = '${adPerformance.fbAdId}'`,
-                })
-                .firstPage();
+        await this.createOrUpdateRecord(
+            this.AD_PERFORMANCE_TABLE_NAME,
+            fields,
+            filterConfig,
+            adPerformance.adName
+        );
+    }
 
-            if (existingRecords.length > 0) {
-                console.log(
-                    `Record found (${existingRecords.length} records). Updating Airtable record for ad name: ${adPerformance.adName}`
-                );
-                await this.updateRecordAdPerformance(
-                    existingRecords[0].id,
-                    fields
-                );
-            } else {
-                console.log(
-                    `No existing Airtable record found. Creating a new record for ad name: ${adPerformance.adName}`
-                );
-                await this.airtableBase('AD_PERFORMANCE').create([
-                    { fields: this.sanitizeFields(fields) },
-                ]);
-            }
-        } catch (error) {
-            console.error('Error syncing to Airtable:', error);
-            throw error;
-        }
+    public mapAdPerformanceByAdNameToAirtableFields(
+        adPerformanceByAdName: AdPerformanceByAdName
+    ): object {
+        console.log(
+            `Mapping AdPerformanceByAdName fields for ad: ${adPerformanceByAdName.adName}`
+        );
+
+        // Extract FB metrics
+        const fbMetrics: PlatformMetrics | undefined =
+            adPerformanceByAdName.performanceMetrics.fb;
+
+        const defaultMetrics = {
+            revenue: 0,
+            spend: 0,
+            clicks: 0,
+            engagements: 0,
+            partials: 0,
+            leads: 0,
+        };
+
+        const fbLifetime = fbMetrics?.lifetime || defaultMetrics;
+
+        // Compute totals for Lifetime (FB only)
+        const totalRevenueLifetime = fbLifetime.revenue;
+        const totalSpendLifetime = fbLifetime.spend;
+
+        return {
+            AD_NAME: adPerformanceByAdName.adName,
+            FB_IS_ACTIVE: adPerformanceByAdName.fbIsActive,
+            CLICKS: fbLifetime.clicks,
+            ENGAGEMENTS: fbLifetime.engagements,
+            PARTIALS: fbLifetime.partials,
+            AQUISITIONS: fbLifetime.leads,
+            VIEW_URL: adPerformanceByAdName.gDriveDownloadUrl,
+            REVENUE: totalRevenueLifetime,
+            SPEND: totalSpendLifetime,
+            IDEA_WRITER: adPerformanceByAdName.ideaWriter,
+            SCRIPT_WRITER: adPerformanceByAdName.scriptWriter,
+            HOOK_WRITER: adPerformanceByAdName.hookWriter,
+        };
+    }
+
+    public async createOrUpdateRecordAdPerformanceByAdName(
+        adPerformanceByAdName: AdPerformanceByAdName
+    ): Promise<void> {
+        const fields = this.mapAdPerformanceByAdNameToAirtableFields(
+            adPerformanceByAdName
+        );
+        const filterConfig: FilterConfig = {
+            field: 'AD_NAME',
+            value: adPerformanceByAdName.adName,
+        };
+
+        await this.createOrUpdateRecord(
+            this.AD_PERFORMANCE_BY_AD_NAME_TABLE_NAME,
+            fields,
+            filterConfig,
+            adPerformanceByAdName.adName
+        );
     }
 
     /**
@@ -133,43 +280,14 @@ export class AirtableService {
         vertical: string,
         script: string
     ): Promise<string> {
-        console.log(
-            `Creating new script record in SCRIPTS table with ScriptID: ${scriptId}`
-        );
+        const fields = {
+            ScriptID: scriptId,
+            Writer: writer,
+            Vertical: vertical,
+            Script: script,
+        };
 
-        try {
-            const fields = {
-                ScriptID: scriptId,
-                Writer: writer,
-                Vertical: vertical,
-                Script: script,
-            };
-
-            const sanitizedFields = this.sanitizeFields(fields);
-
-            const records = await this.airtableBase('SCRIPTS').create([
-                { fields: sanitizedFields },
-            ]);
-
-            if (!records || records.length === 0) {
-                throw new Error(
-                    'Failed to create Airtable record: No record returned'
-                );
-            }
-
-            const recordId = records[0].id;
-            console.log(
-                `Successfully created script record in SCRIPTS with ScriptID: ${scriptId}`
-            );
-
-            return recordId;
-        } catch (error) {
-            console.error(
-                `Error creating script record in Airtable SCRIPTS:`,
-                error
-            );
-            throw error;
-        }
+        return await this.createRecord('SCRIPTS', fields);
     }
 
     /**
@@ -192,47 +310,18 @@ export class AirtableService {
         viewUrl: string,
         originalFileName: string
     ): Promise<string> {
-        console.log(
-            `Creating new AD_AUTOMATION record with downloadUrl: ${downloadUrl}`
-        );
+        const fields = {
+            DOWNLOAD_URL: downloadUrl,
+            VERTICAL: vertical,
+            SCRIPT_WRITER: scriptWriter,
+            IDEA_WRITER: ideaWriter,
+            HOOK_WRITER: hookWriter,
+            MEDIA_TYPE: mediaType,
+            VIEW_URL: viewUrl,
+            ORIGINAL_FILE_NAME: originalFileName,
+        };
 
-        try {
-            const fields = {
-                DOWNLOAD_URL: downloadUrl,
-                VERTICAL: vertical,
-                SCRIPT_WRITER: scriptWriter,
-                IDEA_WRITER: ideaWriter,
-                HOOK_WRITER: hookWriter,
-                MEDIA_TYPE: mediaType,
-                VIEW_URL: viewUrl,
-                ORIGINAL_FILE_NAME: originalFileName,
-            };
-
-            const sanitizedFields = this.sanitizeFields(fields);
-
-            const records = await this.airtableBase('AD_AUTOMATION').create([
-                { fields: sanitizedFields },
-            ]);
-
-            if (!records || records.length === 0) {
-                throw new Error(
-                    'Failed to create Airtable record: No record returned'
-                );
-            }
-
-            const recordId = records[0].id;
-            console.log(
-                `Successfully created new AD_AUTOMATION record with ID: ${recordId}`
-            );
-
-            return recordId;
-        } catch (error) {
-            console.error(
-                `Error creating AD_AUTOMATION record in Airtable:`,
-                error
-            );
-            throw error;
-        }
+        return await this.createRecord('AD_AUTOMATION', fields);
     }
 
     // Remove empty values to prevent Airtable errors

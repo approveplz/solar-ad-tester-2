@@ -74,7 +74,7 @@ export const AD_ACCOUNT_DATA: AdAccountConfigData = {
         name: 'Vincent x Digitsolution CC 2 New', // Marcus, Roofing
         type: VerticalCodes.R,
         campaignIds: {
-            [MediaBuyerCodes.MA]: '120217711802790271',
+            [MediaBuyerCodes.MA]: '120230809787570271',
         },
         scalingCampaignId: '',
         targeting: {
@@ -143,8 +143,8 @@ export const AD_ACCOUNT_DATA: AdAccountConfigData = {
             },
         },
         pageIds: {
-            [MediaBuyerCodes.MA]: '586354434572150',
-            [MediaBuyerCodes.AZ]: '586354434572150',
+            [MediaBuyerCodes.MA]: '712444578616088',
+            [MediaBuyerCodes.AZ]: '712444578616088',
             [MediaBuyerCodes.VB]: '617365471459541',
         },
     },

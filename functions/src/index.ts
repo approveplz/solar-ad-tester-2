@@ -8,7 +8,7 @@ import {
     VerticalCodes,
     MediaBuyerCodes,
 } from './helpers.js';
-import serviceAccount from './solar-ad-tester-2-firebase-adminsdk-3iokc-bd8ce8732d.json' assert { type: 'json' };
+import serviceAccount from './solar-ad-tester-2-firebase-adminsdk-3iokc-bd8ce8732d.json' with { type: 'json' };
 import { config } from 'dotenv';
 import MetaAdCreatorService from './services/MetaAdCreatorService.js';
 
@@ -31,7 +31,10 @@ import {
     TelegramScriptData,
 } from './firestoreCloud.js';
 
-import { AdPerformance } from './models/AdPerformance.js';
+import {
+    AdPerformance,
+    AdPerformanceByAdName,
+} from './models/AdPerformance.js';
 import { BigQueryService } from './services/BigQueryService.js';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import {
@@ -94,6 +97,27 @@ export const fetchAdsScheduled = onSchedule(
             await mediaBuyingService.handleFbAdSync();
         } catch (error) {
             console.error('Error in fetchAdsScheduled:', error);
+            throw error;
+        }
+    }
+);
+
+// Aggregates FB performance metrics by ad name every 4 hours and stores them in ad-performance-by-ad-name collection
+export const aggregateAdPerformanceByAdNameScheduled = onSchedule(
+    {
+        schedule: '0 */4 * * *', // Every 4 hours
+        timeZone: 'America/Chicago',
+        timeoutSeconds: 300,
+        memory: '1GiB',
+    },
+    async () => {
+        try {
+            await MediaBuyingService.aggregateAdPerformanceByAdName();
+        } catch (error) {
+            console.error(
+                'Error running aggregateAdPerformanceByAdNameScheduled:',
+                error
+            );
             throw error;
         }
     }
@@ -192,6 +216,54 @@ export const syncAdPerformance = onDocumentWritten(
                 `Failed to sync document ${docId} (${data.adName}):`,
                 error,
                 'Full AdPerformance data structure:',
+                JSON.stringify(data, null, 2)
+            );
+            throw error;
+        }
+    }
+);
+
+// This function keeps ad-performance-by-ad-name collection in sync with Airtable by automatically syncing any changes
+// (creates, updates, NOT deletes) from the ad-performance-by-ad-name collection in Firestore to the
+// corresponding records in the AD_PERFORMANCE_2 table in Airtable
+export const syncAdPerformanceByAdName = onDocumentWritten(
+    'ad-performance-by-ad-name/{docId}',
+    async (event) => {
+        console.log('syncAdPerformanceByAdName function triggered');
+
+        const airtableService = new AirtableService(
+            process.env.AIRTABLE_API_KEY || '',
+            process.env.AIRTABLE_BASE_ID || ''
+        );
+
+        const docId = event.params.docId;
+        console.log(`Processing document change for docId: ${docId}`);
+
+        // If the document was deleted, event.data?.after will be undefined.
+        if (!event.data?.after.exists) {
+            console.log(`Document ${docId} was deleted. Skipping sync.`);
+            return;
+        }
+
+        // "event.data.after" is a DocumentSnapshot which contains both metadata and the actual data.
+        // We use ".data()" to extract only the plain object holding the document's fields.
+        const data = event.data.after.data() as AdPerformanceByAdName;
+        console.log(
+            `Extracted AdPerformanceByAdName data for ad: ${data.adName}`
+        );
+
+        try {
+            await airtableService.createOrUpdateRecordAdPerformanceByAdName(
+                data
+            );
+            console.log(
+                `Successfully synced document ${docId} (${data.adName}) to Airtable AD_PERFORMANCE_2`
+            );
+        } catch (error) {
+            console.error(
+                `Failed to sync document ${docId} (${data.adName}):`,
+                error,
+                'Full AdPerformanceByAdName data structure:',
                 JSON.stringify(data, null, 2)
             );
             throw error;
@@ -668,7 +740,6 @@ export const createFbAdHttp = onRequest(
                     `Invalid automation type: ${automationType}. Only AUTOUPLOAD and MANUAL are supported.`
                 );
             }
-
 
             // Handle Airtable operations for all automation types when airtableRecordId is provided
             if (airtableRecordId) {
