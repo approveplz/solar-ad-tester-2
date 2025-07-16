@@ -745,19 +745,19 @@ export const createFbAdHttp = onRequest(
             // Handle Airtable operations for all automation types when airtableRecordId is provided
             if (airtableRecordId) {
                 try {
-                    // Call Google Apps Script to move to archive folder
-                    const appsScriptUrl =
-                        'https://script.google.com/macros/s/AKfycbxcnLWBkRRxrnWNMyO9Si2EhWW2HFQQTrLuBmYtOMCLApCUJH0qVLf5Huj4kY8_xxF4/exec';
+                    // Call Firebase Function endpoint to move to archive folder
+                    const firebaseFunctionUrl =
+                        'https://redirecttogoogleappscriptmovecreativetoarchivefol-txyabkufvq-uc.a.run.app';
 
-                    const fullAppScriptUrl = `${appsScriptUrl}?fileUrl=${encodeURIComponent(
+                    const fullFirebaseFunctionUrl = `${firebaseFunctionUrl}?fileUrl=${encodeURIComponent(
                         downloadUrl
                     )}&adName=${encodeURIComponent(adName)}`;
 
                     console.log(
-                        `Making request to Google Apps Script URL: ${fullAppScriptUrl}`
+                        `Making request to Firebase Function URL: ${fullFirebaseFunctionUrl} for record ID: ${airtableRecordId} to move ${adName} to archive folder`
                     );
 
-                    const response = await fetch(fullAppScriptUrl, {
+                    const response = await fetch(fullFirebaseFunctionUrl, {
                         headers: {
                             'User-Agent': 'Mozilla/5.0',
                         },
@@ -766,15 +766,15 @@ export const createFbAdHttp = onRequest(
 
                     if (response.ok) {
                         console.log(
-                            `Successfully called Google Apps Script URL: ${fullAppScriptUrl} for record ID: ${airtableRecordId} to move ${adName} to archive folder`
+                            `Successfully called Firebase Function URL: ${fullFirebaseFunctionUrl} for record ID: ${airtableRecordId} to move ${adName} to archive folder`
                         );
                     } else {
                         console.error(
-                            `Google Apps Script URL failed with status: ${response.status} for record ID: ${airtableRecordId} to move ${adName} to archive folder`,
+                            `Firebase Function URL failed with status: ${response.status} for record ID: ${airtableRecordId} to move ${adName} to archive folder`,
                             await response.text()
                         );
                         throw new Error(
-                            `Google Apps Script URL failed with status: ${response.status} for record ID: ${airtableRecordId} to move ${adName} to archive folder`
+                            `Firebase Function URL failed with status: ${response.status} for record ID: ${airtableRecordId} to move ${adName} to archive folder`
                         );
                     }
 
