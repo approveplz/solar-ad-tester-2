@@ -1,4 +1,10 @@
 {
-  "indexes": [],
-  "fieldOverrides": []
+    "indexes": [],
+    "fieldOverrides": [
+        {
+            "collectionGroup": "fb-ad-settings",
+            "fieldPath": "adSetParams.adSetTargeting.geo_locations.zips",
+            "indexes": []
+        }
+    ]
 }
