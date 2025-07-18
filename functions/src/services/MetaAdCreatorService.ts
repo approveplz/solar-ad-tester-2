@@ -185,7 +185,7 @@ export default class MetaAdCreatorService {
         const promotedObject: PromotedObject = {
             pixel_id: pixelId,
             custom_event_type: customEventType,
-            custom_event_str: customEventStr,
+            ...(customEventStr && { custom_event_str: customEventStr }),
         };
 
         // const startTimeUnixSeconds = getNextWeekdayUnixSeconds(now).toString();
